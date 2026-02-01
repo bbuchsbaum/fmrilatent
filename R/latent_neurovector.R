@@ -1,4 +1,4 @@
-#' @include latent_neurovec_materialize.R
+#' @include all_generic.R latent_neurovec_materialize.R
 #' @importFrom neuroim2 matricized_access concat axes indices space origin spacing trans
 #' @importFrom neuroim2 NeuroSpace LogicalNeuroVol SparseNeuroVol IndexLookupVol NeuroVecSeq
 #' @importFrom neuroim2 drop_dim lookup series linear_access
