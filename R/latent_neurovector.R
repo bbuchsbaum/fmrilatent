@@ -9,7 +9,7 @@
 NULL
 
 # Ensure generics exist (defensive in case Collate order is bypassed)
-if (!isGeneric("map")) {
+if (!isGeneric("map", where = topenv(parent.frame()))) {
   setGeneric("map", function(x, ...) standardGeneric("map"))
 }
 

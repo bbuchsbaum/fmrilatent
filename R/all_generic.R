@@ -71,7 +71,7 @@ NULL
 # Note: stats::offset exists with signature function(object).
 # Calling setGeneric("offset", ...) will create an S4 generic using that signature
 # (and will print a message); we then provide an S4 method for LatentNeuroVec.
-if (!isGeneric("offset")) {
+if (!isGeneric("offset", where = topenv(parent.frame()))) {
   setGeneric("offset", function(object) standardGeneric("offset"))
 }
 
@@ -91,7 +91,7 @@ if (!isGeneric("offset")) {
 NULL
 
 # Provide generics when not already available
-if (!isGeneric("map")) {
+if (!isGeneric("map", where = topenv(parent.frame()))) {
   setGeneric("map", function(x, ...) standardGeneric("map"))
 }
 
