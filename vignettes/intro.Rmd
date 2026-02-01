@@ -65,21 +65,16 @@ The choice depends on your analysis goals:
 | Wavelet active (space) | Fast lifting; touches only in-mask voxels | Large masks, speed-critical pipelines |
 | Separable (time + space) | Compact core; partial decoding | Full 4D compression with selective reconstruction |
 
-## Cheat sheet: storage, speed, accuracy (extensible tibble)
+## Cheat sheet: storage, speed, accuracy
 
-```r
-if (requireNamespace("tibble", quietly = TRUE)) {
-  tibble::tribble(
-    ~family,              ~stored,                                 ~implicit,                          ~accuracy,                       ~speed_notes,
-    "slepian_space",      "basis (time x k), loadings (vox x k)",   "none (explicit)",                  "exact on span; orthogonal per cluster", "fast; lift per cluster; sparse loadings",
-    "hrbf",               "basis (time x atoms), loadings (vox x atoms)", "none (explicit)",            "improves as atoms↑ (levels)",       "moderate; dense atoms; no graph build",
-    "wavelet_active",     "coeff (time x vox)",                     "decoder (active pencils)",         "exact (biorthogonal 5/3)",        "very fast; mask-aware lifting",
-    "bspline_hrbf_st",    "core (kt x ks), B_t, L_s",               "decoder (separable)",              "approx -> better with atoms",    "fast; separable; HRBF once",
-    "slepian_st",         "core (kt x ks), B_t, L_s",               "decoder (separable)",              "exact on span of bases",          "fast; sparse spatial loadings",
-    "heat_space",         "basis, loadings",                        "none (explicit)",                  "approx (thresholded)",            "graph build cost; sparse"
-  ) |> knitr::kable()
-}
-```
+| Family | Stored | Implicit | Accuracy | Speed |
+|--------|--------|----------|----------|-------|
+| slepian_space | basis (time × k), loadings (vox × k) | none (explicit) | exact on span; orthogonal per cluster | fast; sparse loadings |
+| hrbf | basis (time × atoms), loadings (vox × atoms) | none (explicit) | improves as atoms ↑ | moderate; dense atoms |
+| wavelet_active | coeff (time × vox) | decoder (active pencils) | exact (biorthogonal 5/3) | very fast; mask-aware |
+| bspline_hrbf_st | core (kt × ks), B_t, L_s | decoder (separable) | approx → better with atoms | fast; separable |
+| slepian_st | core (kt × ks), B_t, L_s | decoder (separable) | exact on span of bases | fast; sparse spatial |
+| heat_space | basis, loadings | none (explicit) | approx (thresholded) | graph build cost; sparse |
 
 ## Reconstruction and partial access
 
