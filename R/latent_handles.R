@@ -28,20 +28,44 @@ setClass(
 setClassUnion("MatrixOrBasisHandle",    c("Matrix", "matrix", "BasisHandle"))
 setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
 
-# Simple registry to share materialized dictionaries across objects/sessions
-.fmrilatent_registry <- new.env(parent = emptyenv())
-.fmrilatent_registry$basis    <- new.env(parent = emptyenv())
-.fmrilatent_registry$loadings <- new.env(parent = emptyenv())
+# Encapsulated cache for materialized dictionaries.
+# NOTE: This is intentionally not a top-level mutable registry object. The cache
+# is only accessible through helper functions and can be disabled via option.
+.fmrilatent_cache_env <- local({
+  basis_env <- NULL
+  loadings_env <- NULL
+
+  init <- function() {
+    basis_env <<- new.env(parent = emptyenv())
+    loadings_env <<- new.env(parent = emptyenv())
+    invisible(TRUE)
+  }
+
+  function(type = c("basis", "loadings"), reset = FALSE) {
+    type <- match.arg(type)
+    if (reset || is.null(basis_env) || is.null(loadings_env)) {
+      init()
+    }
+    if (type == "basis") basis_env else loadings_env
+  }
+})
+
+.latent_registry_enabled <- function() {
+  isTRUE(getOption("fmrilatent.registry.enabled", TRUE))
+}
 
 .latent_get_registry_env <- function(type = c("basis", "loadings")) {
   type <- match.arg(type)
-  .fmrilatent_registry[[type]]
+  .fmrilatent_cache_env(type)
 }
 
 .latent_register_matrix <- function(id, value, type = c("basis", "loadings"),
                                     overwrite = FALSE) {
   stopifnot(is.character(id), length(id) == 1L)
   type <- match.arg(type)
+  if (!.latent_registry_enabled()) {
+    return(invisible(FALSE))
+  }
   env  <- .latent_get_registry_env(type)
   if (!overwrite && exists(id, env, inherits = FALSE)) {
     warning("Object with id '", id, "' already registered in ", type,
@@ -55,6 +79,9 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
 .latent_get_matrix <- function(id, type = c("basis", "loadings")) {
   stopifnot(is.character(id), length(id) == 1L)
   type <- match.arg(type)
+  if (!.latent_registry_enabled()) {
+    return(NULL)
+  }
   env  <- .latent_get_registry_env(type)
   if (exists(id, env, inherits = FALSE)) {
     get(id, envir = env, inherits = FALSE)
@@ -185,6 +212,39 @@ fmrilatent_registry_stats <- function(type = c("all", "basis", "loadings")) {
   }
 
   result
+}
+
+#' Enable or disable the fmrilatent handle registry
+#'
+#' The handle registry caches materialized matrices for \code{BasisHandle} and
+#' \code{LoadingsHandle} objects. This can improve performance and reduce memory
+#' duplication when multiple \code{LatentNeuroVec} objects share the same handle
+#' IDs.
+#'
+#' Set \code{fmrilatent_registry_disable()} to turn off caching (useful for
+#' deterministic benchmarking or to avoid retaining large matrices).
+#'
+#' @return Invisibly, \code{TRUE}.
+#' @export
+#' @examples
+#' fmrilatent_registry_disable()
+#' fmrilatent_registry_enable()
+fmrilatent_registry_enable <- function() {
+  options(fmrilatent.registry.enabled = TRUE)
+  invisible(TRUE)
+}
+
+#' @rdname fmrilatent_registry_enable
+#' @export
+fmrilatent_registry_disable <- function() {
+  options(fmrilatent.registry.enabled = FALSE)
+  invisible(TRUE)
+}
+
+#' @rdname fmrilatent_registry_enable
+#' @export
+fmrilatent_registry_enabled <- function() {
+  .latent_registry_enabled()
 }
 
 # Utility: safe NULL coalesce
