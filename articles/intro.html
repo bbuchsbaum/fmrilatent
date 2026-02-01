@@ -184,20 +184,68 @@ no 6 × 16 dense matrix is kept in memory.</p>
 </table>
 </div>
 <div class="section level2">
-<h2 id="cheat-sheet-storage-speed-accuracy-extensible-tibble">Cheat sheet: storage, speed, accuracy (extensible tibble)<a class="anchor" aria-label="anchor" href="#cheat-sheet-storage-speed-accuracy-extensible-tibble"></a>
+<h2 id="cheat-sheet-storage-speed-accuracy">Cheat sheet: storage, speed, accuracy<a class="anchor" aria-label="anchor" href="#cheat-sheet-storage-speed-accuracy"></a>
 </h2>
-<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="kw">if</span> <span class="op">(</span><span class="fu"><a href="https://rdrr.io/r/base/ns-load.html" class="external-link">requireNamespace</a></span><span class="op">(</span><span class="st">"tibble"</span>, quietly <span class="op">=</span> <span class="cn">TRUE</span><span class="op">)</span><span class="op">)</span> <span class="op">{</span></span>
-<span>  <span class="fu">tibble</span><span class="fu">::</span><span class="fu"><a href="https://tibble.tidyverse.org/reference/tribble.html" class="external-link">tribble</a></span><span class="op">(</span></span>
-<span>    <span class="op">~</span><span class="va">family</span>,              <span class="op">~</span><span class="va">stored</span>,                                 <span class="op">~</span><span class="va">implicit</span>,                          <span class="op">~</span><span class="va">accuracy</span>,                       <span class="op">~</span><span class="va">speed_notes</span>,</span>
-<span>    <span class="st">"slepian_space"</span>,      <span class="st">"basis (time x k), loadings (vox x k)"</span>,   <span class="st">"none (explicit)"</span>,                  <span class="st">"exact on span; orthogonal per cluster"</span>, <span class="st">"fast; lift per cluster; sparse loadings"</span>,</span>
-<span>    <span class="st">"hrbf"</span>,               <span class="st">"basis (time x atoms), loadings (vox x atoms)"</span>, <span class="st">"none (explicit)"</span>,            <span class="st">"improves as atoms↑ (levels)"</span>,       <span class="st">"moderate; dense atoms; no graph build"</span>,</span>
-<span>    <span class="st">"wavelet_active"</span>,     <span class="st">"coeff (time x vox)"</span>,                     <span class="st">"decoder (active pencils)"</span>,         <span class="st">"exact (biorthogonal 5/3)"</span>,        <span class="st">"very fast; mask-aware lifting"</span>,</span>
-<span>    <span class="st">"bspline_hrbf_st"</span>,    <span class="st">"core (kt x ks), B_t, L_s"</span>,               <span class="st">"decoder (separable)"</span>,              <span class="st">"approx -&gt; better with atoms"</span>,    <span class="st">"fast; separable; HRBF once"</span>,</span>
-<span>    <span class="st">"slepian_st"</span>,         <span class="st">"core (kt x ks), B_t, L_s"</span>,               <span class="st">"decoder (separable)"</span>,              <span class="st">"exact on span of bases"</span>,          <span class="st">"fast; sparse spatial loadings"</span>,</span>
-<span>    <span class="st">"heat_space"</span>,         <span class="st">"basis, loadings"</span>,                        <span class="st">"none (explicit)"</span>,                  <span class="st">"approx (thresholded)"</span>,            <span class="st">"graph build cost; sparse"</span></span>
-<span>  <span class="op">)</span> <span class="op">|&gt;</span> <span class="fu">knitr</span><span class="fu">::</span><span class="fu"><a href="https://rdrr.io/pkg/knitr/man/kable.html" class="external-link">kable</a></span><span class="op">(</span><span class="op">)</span></span>
-<span><span class="op">}</span></span></code></pre></div>
+<table class="table">
+<colgroup>
+<col width="18%">
+<col width="18%">
+<col width="23%">
+<col width="23%">
+<col width="16%">
+</colgroup>
+<thead><tr class="header">
+<th>Family</th>
+<th>Stored</th>
+<th>Implicit</th>
+<th>Accuracy</th>
+<th>Speed</th>
+</tr></thead>
+<tbody>
+<tr class="odd">
+<td>slepian_space</td>
+<td>basis (time × k), loadings (vox × k)</td>
+<td>none (explicit)</td>
+<td>exact on span; orthogonal per cluster</td>
+<td>fast; sparse loadings</td>
+</tr>
+<tr class="even">
+<td>hrbf</td>
+<td>basis (time × atoms), loadings (vox × atoms)</td>
+<td>none (explicit)</td>
+<td>improves as atoms ↑</td>
+<td>moderate; dense atoms</td>
+</tr>
+<tr class="odd">
+<td>wavelet_active</td>
+<td>coeff (time × vox)</td>
+<td>decoder (active pencils)</td>
+<td>exact (biorthogonal 5/3)</td>
+<td>very fast; mask-aware</td>
+</tr>
+<tr class="even">
+<td>bspline_hrbf_st</td>
+<td>core (kt × ks), B_t, L_s</td>
+<td>decoder (separable)</td>
+<td>approx → better with atoms</td>
+<td>fast; separable</td>
+</tr>
+<tr class="odd">
+<td>slepian_st</td>
+<td>core (kt × ks), B_t, L_s</td>
+<td>decoder (separable)</td>
+<td>exact on span of bases</td>
+<td>fast; sparse spatial</td>
+</tr>
+<tr class="even">
+<td>heat_space</td>
+<td>basis, loadings</td>
+<td>none (explicit)</td>
+<td>approx (thresholded)</td>
+<td>graph build cost; sparse</td>
+</tr>
+</tbody>
+</table>
 </div>
 <div class="section level2">
 <h2 id="reconstruction-and-partial-access">Reconstruction and partial access<a class="anchor" aria-label="anchor" href="#reconstruction-and-partial-access"></a>
@@ -223,7 +271,7 @@ region of interest, without paying the cost of full reconstruction.</p>
 <p>The helper <code><a href="../reference/benchmark_roundtrip.html">benchmark_roundtrip()</a></code> times the encode-decode
 cycle and reports reconstruction error. This lets you compare families
 on your own data and hardware:</p>
-<div class="sourceCode" id="cb4"><pre class="downlit sourceCode r">
+<div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="va">res</span> <span class="op">&lt;-</span> <span class="fu"><a href="../reference/benchmark_roundtrip.html">benchmark_roundtrip</a></span><span class="op">(</span></span>
 <span>  mask_dims <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="fl">16</span>, <span class="fl">16</span>, <span class="fl">8</span><span class="op">)</span>,</span>
 <span>  n_time <span class="op">=</span> <span class="fl">100</span>,</span>
