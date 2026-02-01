@@ -1,0 +1,86 @@
+Package: fmrilatent
+Type: Package
+Title: Latent Space Representations of fMRI Data
+Version: 0.1.0
+Authors@R:
+    person(given = "Bradley",
+           family = "Buchsbaum",
+           role = c("aut", "cre"),
+           email = "brad.buchsbaum@gmail.com",
+           comment = c(ORCID = "0000-0002-1108-4866"))
+Author: Bradley Buchsbaum [aut, cre]
+Maintainer: Bradley Buchsbaum <brad.buchsbaum@gmail.com>
+Description: Provides S4 classes and methods for representing neuroimaging data
+    in latent spaces. The LatentNeuroVec class offers a memory-efficient
+    representation using matrix factorization (basis x loadings), enabling
+    compact storage and efficient computation for dimensionality-reduced
+    fMRI data such as PCA or ICA decompositions. Integrates with the neuroim2
+    package for standard neuroimaging data structures.
+License: GPL (>= 3)
+URL: https://github.com/bbuchsbaum/fmrilatent
+BugReports: https://github.com/bbuchsbaum/fmrilatent/issues
+Encoding: UTF-8
+LazyData: false
+RoxygenNote: 7.3.3
+Imports:
+    crayon,
+    Matrix,
+    methods,
+    digest,
+    neuroim2,
+    utils,
+    Rcpp
+Suggests:
+    knitr,
+    rmarkdown,
+    testthat (>= 3.0.0),
+    RSpectra,
+    neuroatlas,
+    neurosurf,
+    rgsp,
+    bench,
+    ggplot2
+VignetteBuilder: knitr
+Config/testthat/edition: 3
+Remotes:
+    bbuchsbaum/neuroim2
+LinkingTo:
+    Rcpp,
+    RcppEigen
+SystemRequirements: OpenMP (optional)
+Collate:
+    'RcppExports.R'
+    'latent_handles.R'
+    'all_class.R'
+    'all_generic.R'
+    'benchmark_roundtrip.R'
+    'bspline_basis.R'
+    'dct_basis.R'
+    'reduction.R'
+    'diffusion_wavelet.R'
+    'diffusion_wavelet_handle.R'
+    'encode.R'
+    'fmrilatent-package.R'
+    'graph_bridge.R'
+    'haar_wavelet.R'
+    'heat_wavelet.R'
+    'heat_wavelet_handle.R'
+    'hierarchical_helpers.R'
+    'hierarchical_template.R'
+    'hrbf.R'
+    'implicit_latent.R'
+    'latent_dct_heatwavelet.R'
+    'slepian_handles.R'
+    'latent_neurovec_materialize.R'
+    'latent_neurovector.R'
+    'latent_indexing.R'
+    'latent_methods.R'
+    'searchlight_utils.R'
+    'slepian_plot.R'
+    'slepian_spatial.R'
+    'slepian_spatiotemporal.R'
+    'slepian_temporal.R'
+    'spatial_plot.R'
+    'wavelet_active.R'
+    'zzz_haar_aliases.R'
+Config/Needs/website: albersdown

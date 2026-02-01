@@ -1,0 +1,20 @@
+.Rhistory
+.RData
+..Rcheck/
+*.Rcheck/
+*.tar.gz
+
+# pkgdown / docs
+docs/
+pkgdown/
+
+# compiled artifacts
+src/*.o
+src/*.so
+src/*.dll
+src/*.gcda
+src/*.gcno
+
+# local editor / misc
+.DS_Store
+.albersdown.bak/
