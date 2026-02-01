@@ -1,0 +1,222 @@
+# Encoding API reference
+
+``` r
+library(fmrilatent)
+```
+
+This vignette documents [`encode()`](../reference/encode.md) and
+[`latent_factory()`](../reference/latent_factory.md) in detail. For
+conceptual background, see the [Introduction](intro.md).
+
+## encode()
+
+[`encode()`](../reference/encode.md) is the primary entry point. It
+takes:
+
+- `x`: a data matrix (time × voxels in mask order), or a `NeuroVec`
+  object
+- `spec`: a spec object describing the basis family
+- `mask`: a `LogicalNeuroVol` or logical array (required for spatial and
+  spatiotemporal specs)
+- `reduction`: an optional `GraphReduction` for spatial specs (built
+  automatically if omitted)
+- `materialize`: `"handle"` (lazy, default) or `"matrix"` (eager)
+- `label`: an optional string label
+
+The function dispatches on both `x` and `spec`, selecting the
+appropriate encoding algorithm.
+
+## Spec constructors
+
+### Temporal specs
+
+These reduce the time dimension. The data matrix `X` is projected onto a
+temporal basis `B`, yielding loadings `L = t(X) %*% B` (voxels × k).
+
+**Slepian/DPSS** — Discrete prolate spheroidal sequences concentrate
+energy in a frequency band while minimizing spectral leakage.
+
+``` r
+spec_time_slepian(tr = 2, bandwidth = 0.08, k = 4)
+```
+
+- `tr`: repetition time in seconds
+- `bandwidth`: half-bandwidth in Hz (default 0.1)
+- `k`: number of tapers (default: `floor(2 * n * bandwidth * tr) - 1`)
+- `backend`: `"tridiag"` (default) or `"dense"`
+
+**DCT** — The discrete cosine transform provides orthogonal frequency
+components.
+
+``` r
+spec_time_dct(k = 10, norm = "ortho")
+```
+
+- `k`: number of components
+- `norm`: `"ortho"` (default) or `"none"`
+
+**B-spline** — Smooth, localized basis functions with controllable
+flexibility.
+
+``` r
+spec_time_bspline(k = 8, degree = 3, orthonormalize = TRUE)
+```
+
+- `k`: number of basis functions (degrees of freedom)
+- `degree`: spline degree (default 3, i.e., cubic)
+- `include_intercept`: include a constant term (default FALSE)
+- `orthonormalize`: orthonormalize columns via QR (default TRUE)
+
+### Spatial specs
+
+These reduce the voxel dimension. The loadings matrix `L` (voxels × k)
+defines spatial atoms; the basis becomes `B = X %*% L` (time × k).
+
+**Graph Slepian** — Eigenvectors of the graph Laplacian, concentrated on
+spatial regions.
+
+``` r
+spec_space_slepian(k = 3, k_neighbors = 6)
+```
+
+- `k`: components per cluster
+- `k_neighbors`: neighbors for k-NN graph construction
+
+**Heat wavelet** — Polynomial approximation to heat diffusion on the
+voxel graph.
+
+``` r
+spec_space_heat(scales = c(1, 2, 4, 8), order = 30, threshold = 1e-6, k_neighbors = 6)
+```
+
+- `scales`: diffusion time scales
+- `order`: Chebyshev polynomial order
+- `threshold`: coefficient truncation threshold
+
+**HRBF** — Hierarchical radial basis functions with Gaussian or other
+kernels.
+
+``` r
+spec_space_hrbf(params = list(sigma0 = 2, levels = 1, radius_factor = 2.5, kernel_type = "gaussian"))
+```
+
+- `params`: a list controlling atom placement and shape (see
+  [`?hrbf_generate_basis`](../reference/hrbf_generate_basis.md))
+
+**Wavelet active** — CDF 5/3 lifting wavelets that operate only on
+in-mask voxels.
+
+``` r
+spec_space_wavelet_active(levels_space = 2, levels_time = 0, threshold = 0)
+```
+
+- `levels_space`: spatial decomposition levels
+- `levels_time`: optional temporal lifting levels
+- `threshold`: coefficient thresholding
+
+### Spatiotemporal specs
+
+[`spec_st()`](../reference/spec_st.md) combines a temporal and spatial
+spec into a separable representation. Instead of storing the full
+reconstructed matrix, it stores a core tensor and decodes on demand.
+
+``` r
+spec_st(
+ time = spec_time_bspline(k = 5),
+ space = spec_space_hrbf(params = list(sigma0 = 2, levels = 1))
+)
+```
+
+The result is an `ImplicitLatent` object. Call its decoder with
+`time_idx` and/or `roi_mask` for partial reconstruction.
+
+## Example: temporal encoding
+
+``` r
+mask <- array(TRUE, dim = c(4, 4, 1))
+mask_vol <- neuroim2::LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
+X <- matrix(rnorm(6 * sum(mask)), nrow = 6)
+
+spec_t <- spec_time_slepian(tr = 2, bandwidth = 0.08, k = 4)
+lat_t <- encode(X, spec_t, mask = mask_vol)
+
+dim(basis(lat_t))   # 6 x 4
+dim(loadings(lat_t)) # 16 x 4
+```
+
+## Example: spatial encoding
+
+``` r
+spec_s <- spec_space_slepian(k = 3, k_neighbors = 6)
+lat_s <- encode(X, spec_s, mask = mask_vol)
+```
+
+Here the roles are reversed: `basis(lat_s)` is time × k, and
+`loadings(lat_s)` is voxels × k.
+
+## Example: separable spatiotemporal
+
+``` r
+spec_st <- spec_st(
+ time = spec_time_bspline(k = 4, degree = 3),
+ space = spec_space_hrbf(params = list(sigma0 = 2, levels = 0, radius_factor = 2.5))
+)
+lat_st <- encode(X, spec_st, mask = mask_vol)
+
+# Partial decode: first 3 time points only
+partial <- lat_st$decoder(time_idx = 1:3)
+```
+
+## latent_factory()
+
+For quick exploration,
+[`latent_factory()`](../reference/latent_factory.md) builds the spec and
+calls [`encode()`](../reference/encode.md) in one step:
+
+``` r
+lat <- latent_factory("slepian_time", x = X, mask = mask_vol, tr = 2, bandwidth = 0.08, k = 4)
+```
+
+Available family strings:
+
+| Family string | Underlying spec |
+|----|----|
+| `"slepian_time"` | [`spec_time_slepian()`](../reference/spec_time_slepian.md) |
+| `"dct_time"` | [`spec_time_dct()`](../reference/spec_time_dct.md) |
+| `"slepian_space"` | [`spec_space_slepian()`](../reference/spec_space_slepian.md) |
+| `"heat_space"` | [`spec_space_heat()`](../reference/spec_space_heat.md) |
+| `"slepian_st"` | [`spec_st()`](../reference/spec_st.md) with Slepian time + Slepian space |
+| `"bspline_hrbf_st"` | [`spec_st()`](../reference/spec_st.md) with B-spline time + HRBF space |
+| `"wavelet_active"` | [`spec_space_wavelet_active()`](../reference/spec_space_wavelet_active.md) |
+
+Additional arguments in `...` are forwarded to the spec constructor.
+
+## Materialization
+
+The `materialize` argument controls how bases are stored:
+
+- `"handle"` (default): a lazy object that generates basis columns on
+  demand. Useful when the basis is large or when you only need partial
+  reconstruction.
+- `"matrix"`: an explicit dense matrix. Faster for repeated full
+  reconstructions.
+
+Both produce the same numerical results; the choice is about
+memory/compute tradeoffs.
+
+## Benchmarking
+
+Compare encode-decode performance across families:
+
+``` r
+res <- benchmark_roundtrip(
+ mask_dims = c(8, 8, 4),
+ n_time = 50,
+ methods = c("slepian_space", "wavelet_active", "heat_space")
+)
+res
+plot_benchmark_roundtrip(res)
+```
+
+The output includes timing and reconstruction RMSE. Use this to find the
+best family for your data size and accuracy requirements.

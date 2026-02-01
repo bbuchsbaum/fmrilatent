@@ -1,0 +1,185 @@
+# Package index
+
+## All functions
+
+- [`ClusterReduction-class`](ClusterReduction-class.md) : Cluster-based
+  reduction (e.g., supervoxels or atlas)
+- [`CoarsenedReduction-class`](CoarsenedReduction-class.md) : Coarsened
+  graph reduction (e.g., prolongation from coarse to fine)
+- [`GraphReduction-class`](GraphReduction-class.md) : Graph reduction
+  scaffolds (abstract)
+- [`HierarchicalBasisTemplate-class`](HierarchicalBasisTemplate-class.md)
+  : HierarchicalBasisTemplate Class
+- [`LatentNeuroVec-class`](LatentNeuroVec-class.md) : LatentNeuroVec
+  Class
+- [`LatentNeuroVec()`](LatentNeuroVec.md) : Create a Latent Space
+  Representation of Neuroimaging Data
+- [`as.matrix(`*`<HaarLatent>`*`)`](as.matrix.HaarLatent.md) : Convert
+  HaarLatent to matrix
+- [`as_haar_latent()`](as_haar_latent.md) : Convert to HaarLatent class
+- [`as_hrbf_latent()`](as_hrbf_latent.md) : Attach HRBF metadata to an
+  existing LatentNeuroVec
+- [`basis()`](basis-methods.md) : Get the basis matrix (temporal
+  components)
+- [`basis_diffusion_wavelet()`](basis_diffusion_wavelet.md) : Diffusion
+  wavelet basis specification
+- [`basis_slepian()`](basis_slepian.md)
+  [`basis_pca()`](basis_slepian.md) [`basis_flat()`](basis_slepian.md) :
+  Basis specifications (lightweight descriptors)
+- [`benchmark_roundtrip()`](benchmark_roundtrip.md) : Benchmark
+  encode/decode round-trips
+- [`bspline_basis_handle()`](bspline_basis_handle.md) : Create a
+  BasisHandle for a B-spline temporal basis
+- [`build_hierarchical_template()`](build_hierarchical_template.md) :
+  Build a hierarchical Laplacian template (offline)
+- [`build_schaefer_hierarchical_template()`](build_schaefer_hierarchical_template.md)
+  : Build hierarchical template from Schaefer surface atlas
+- [`build_schaefer_levels()`](build_schaefer_levels.md) : Build
+  hierarchical parcellation levels from Schaefer surface atlas
+- [`compute_local_gram()`](compute_local_gram.md) : Compute local Gram
+  matrices for neighborhoods
+- [`concat(`*`<LatentNeuroVec>`*`,`*`<LatentNeuroVec>`*`)`](concat-methods.md)
+  : Concatenate LatentNeuroVec Objects
+- [`cut_hclust_nested()`](cut_hclust_nested.md) : Cut an hclust into
+  nested label vectors
+- [`dct_basis_handle()`](dct_basis_handle.md) : Create a BasisHandle for
+  a DCT temporal basis
+- [`diffusion_wavelet_latent()`](diffusion_wavelet_latent.md) :
+  Diffusion wavelet latent constructor (explicit basis)
+- [`diffusion_wavelet_loadings_handle()`](diffusion_wavelet_loadings_handle.md)
+  : Construct a shared LoadingsHandle via diffusion-wavelet lifting
+- [`dpss_time_basis()`](dpss_time_basis.md) : DPSS temporal basis
+  (Slepian sequences)
+- [`encode()`](encode.md) : Encode data into a latent representation
+  using a spec
+- [`encode_hierarchical()`](encode_hierarchical.md) : Encode data using
+  a hierarchical template
+- [`` `[[`( ``*`<LatentNeuroVec>`*`,`*`<numeric>`*`)`](extract-methods.md)
+  [`` `[`( ``*`<LatentNeuroVec>`*`,`*`<numeric>`*`,`*`<numeric>`*`,`*`<ANY>`*`)`](extract-methods.md)
+  [`` `[`( ``*`<LatentNeuroVec>`*`,`*`<ANY>`*`,`*`<ANY>`*`,`*`<ANY>`*`)`](extract-methods.md)
+  : Extract Elements from LatentNeuroVec
+- [`fmrilatent_registry_clear()`](fmrilatent_registry_clear.md) : Clear
+  the fmrilatent handle registry
+- [`fmrilatent_registry_list()`](fmrilatent_registry_list.md) : List
+  entries in the fmrilatent handle registry
+- [`fmrilatent_registry_stats()`](fmrilatent_registry_stats.md) : Get
+  registry statistics
+- [`generate_dpss_basis_rcpp()`](generate_dpss_basis_rcpp.md) : Generate
+  DPSS (Slepian) basis via dense prolate matrix eigen-decomposition
+- [`generate_dpss_tridiag_rcpp()`](generate_dpss_tridiag_rcpp.md) :
+  Generate DPSS via tridiagonal prolate matrix (O(n^2))
+- [`haar_latent()`](haar_latent.md) : Build Haar latent representation
+- [`haar_meta()`](haar_meta.md) : Get metadata from Haar latent object
+- [`haar_wavelet_forward()`](haar_wavelet_forward.md) : Forward Haar
+  wavelet transform (mask-adaptive, Morton order)
+- [`haar_wavelet_inverse()`](haar_wavelet_inverse.md) : Inverse Haar
+  wavelet transform
+- [`heat_wavelet_latent()`](heat_wavelet_latent.md) : Heat wavelet
+  latent constructor (explicit basis)
+- [`heat_wavelet_loadings_handle()`](heat_wavelet_loadings_handle.md) :
+  Construct a shared LoadingsHandle via heat-wavelet lifting
+- [`hrbf_generate_basis()`](hrbf_generate_basis.md)
+  [`hrbf_project_matrix()`](hrbf_generate_basis.md)
+  [`hrbf_reconstruct_matrix()`](hrbf_generate_basis.md) : Hierarchical
+  radial basis functions (HRBF) for latent fMRI
+- [`hrbf_latent()`](hrbf_latent.md) : Build a LatentNeuroVec using an
+  HRBF basis
+- [`hrbf_meta()`](hrbf_meta.md) : Retrieve HRBF metadata if present
+- [`hrbf_reconstruct_partial()`](hrbf_reconstruct_partial.md) :
+  Partially reconstruct selected voxels/timepoints
+- [`implicit_latent()`](implicit_latent.md) : Construct an
+  ImplicitLatent object
+- [`implicit_meta()`](implicit_meta.md) : Get metadata from
+  ImplicitLatent object
+- [`is_haar_latent()`](is_haar_latent.md) : Test if object is a Haar
+  latent representation
+- [`is_hierarchical_template()`](is_hierarchical_template.md) : Check
+  whether an object is a HierarchicalBasisTemplate
+- [`is_hrbf_latent()`](is_hrbf_latent.md) : Check if latent object
+  carries HRBF metadata
+- [`is_implicit_latent()`](is_implicit_latent.md) : Test if object is an
+  ImplicitLatent
+- [`latent_dct_heatwavelet()`](latent_dct_heatwavelet.md) : Create a
+  LatentNeuroVec with heat-wavelet spatial dictionary
+- [`latent_factory()`](latent_factory.md) : Simple factory to build a
+  spec and encode in one call
+- [`latent_searchlight()`](latent_searchlight.md) : Apply a user-defined
+  function in latent space over neighborhoods
+- [`lift(`*`<ClusterReduction>`*`,`*`<spec_diffusion_wavelet>`*`)`](lift-ClusterReduction-spec_diffusion_wavelet-method.md)
+  : Lift diffusion wavelets for clustered reduction
+- [`lift(`*`<ClusterReduction>`*`,`*`<spec_heat_wavelet>`*`)`](lift-ClusterReduction-spec_heat_wavelet-method.md)
+  : Lift heat wavelets for clustered reduction
+- [`lift(`*`<ClusterReduction>`*`,`*`<spec_slepian>`*`)`](lift-ClusterReduction-spec_slepian-method.md)
+  : Lift spatial Slepians for clustered reduction
+- [`lift(`*`<GraphReduction>`*`,`*`<ANY>`*`)`](lift-GraphReduction-ANY-method.md)
+  : Default lift method (placeholder)
+- [`lift()`](lift.md) : Lift reduced bases back to voxel space (abstract
+  generic)
+- [`linear_access(`*`<LatentNeuroVec>`*`,`*`<numeric>`*`)`](linear_access-methods.md)
+  [`linear_access(`*`<LatentNeuroVec>`*`,`*`<integer>`*`)`](linear_access-methods.md)
+  : Linear access to LatentNeuroVec elements
+- [`load_hierarchical_template()`](load_hierarchical_template.md) : Load
+  a hierarchical template from disk
+- [`loadings()`](loadings-methods.md) : Get the loadings matrix (spatial
+  components)
+- [`map(`*`<LatentNeuroVec>`*`)`](map-methods.md) : Get the map object
+- [`mask(`*`<LatentNeuroVec>`*`)`](mask-methods.md) : Get the mask
+- [`offset(`*`<LatentNeuroVec>`*`)`](offset-methods.md) : Get the offset
+  vector
+- [`parcel_similarity_matrix()`](parcel_similarity_matrix.md) : Build a
+  similarity matrix for parcel clustering (Schaefer-like)
+- [`parent_maps_from_levels()`](parent_maps_from_levels.md) : Derive
+  parent maps for a nested set of parcellations
+- [`plot_basis_gram()`](plot_basis_gram.md) : Plot Gram matrix of a
+  basis (orthogonality check)
+- [`plot_benchmark_roundtrip()`](plot_benchmark_roundtrip.md) : Plot
+  benchmark results
+- [`plot_slepian_temporal()`](plot_slepian_temporal.md) : Plot temporal
+  Slepians (DPSS)
+- [`plot_spatial_atom()`](plot_spatial_atom.md) : Plot a spatial atom
+  (loading vector) on a mask
+- [`predict(`*`<HaarLatent>`*`)`](predict.HaarLatent.md) : Predict
+  method for HaarLatent
+- [`predict(`*`<ImplicitLatent>`*`)`](predict.ImplicitLatent.md) :
+  Predict method for ImplicitLatent
+- [`project_hierarchical()`](project_hierarchical.md) : Project
+  coefficients only (no LatentNeuroVec wrapper)
+- [`save_hierarchical_template()`](save_hierarchical_template.md) : Save
+  a hierarchical template to disk
+- [`series(`*`<LatentNeuroVec>`*`,`*`<integer>`*`)`](series-methods.md)
+  [`series(`*`<LatentNeuroVec>`*`,`*`<numeric>`*`)`](series-methods.md)
+  [`series(`*`<LatentNeuroVec>`*`,`*`<ANY>`*`)`](series-methods.md) :
+  Extract time series from LatentNeuroVec
+- [`show(`*`<LatentNeuroVec>`*`)`](show-methods.md) : Display a
+  LatentNeuroVec object
+- [`slepian_spatial_latent()`](slepian_spatial_latent.md) : Slepian
+  spatial latent constructor (explicit basis)
+- [`slepian_spatial_loadings_handle()`](slepian_spatial_loadings_handle.md)
+  : Create a LoadingsHandle for spatial Slepians (graph Laplacian)
+- [`slepian_spatiotemporal_latent()`](slepian_spatiotemporal_latent.md)
+  : Spatiotemporal Slepian latent (implicit, separable)
+- [`slepian_temporal_handle()`](slepian_temporal_handle.md) : Create a
+  BasisHandle for temporal Slepians (DPSS)
+- [`slepian_temporal_latent()`](slepian_temporal_latent.md) :
+  LatentNeuroVec using a temporal DPSS basis
+- [`spec_hierarchical_template()`](spec_hierarchical_template.md) :
+  Create hierarchical template spec
+- [`spec_space_heat()`](spec_space_heat.md) : Spatial heat-wavelet spec
+  (graph diffusion)
+- [`spec_space_hrbf()`](spec_space_hrbf.md) : Spatial HRBF spec
+- [`spec_space_slepian()`](spec_space_slepian.md) : Spatial Slepian spec
+- [`spec_space_wavelet_active()`](spec_space_wavelet_active.md) :
+  Spatial wavelet (active pencil) spec
+- [`spec_st()`](spec_st.md) : Spatiotemporal spec (separable)
+- [`spec_time_bspline()`](spec_time_bspline.md) : Temporal B-spline spec
+- [`spec_time_dct()`](spec_time_dct.md) : Temporal DCT spec
+- [`spec_time_slepian()`](spec_time_slepian.md) : Temporal Slepian/DPSS
+  spec
+- [`spectral_ward_hclust()`](spectral_ward_hclust.md) : Run
+  spectral+Ward hierarchical clustering on a parcel graph
+- [`validate_nested_parcellations()`](validate_nested_parcellations.md)
+  : Validate that parcellation levels are nested
+- [`voxel_subset_to_gsp()`](voxel_subset_to_gsp.md) : Convert voxel
+  subset to an rgsp graph
+- [`wavelet_active_latent()`](wavelet_active_latent.md) : Active-pencil
+  wavelet latent (CDF 5/3)
