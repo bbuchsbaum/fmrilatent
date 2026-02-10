@@ -131,8 +131,6 @@ is_hrbf_latent <- function(x) {
 
 # ---- Internal helpers ----------------------------------------------------
 
-`%||%` <- function(x, y) if (is.null(x)) y else x
-
 use_hrbf_rcpp <- function() {
   isTRUE(getOption("fmrilatent.hrbf.use_rcpp", FALSE))
 }

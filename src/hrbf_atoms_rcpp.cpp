@@ -19,6 +19,17 @@ Eigen::SparseMatrix<double> hrbf_atoms_rcpp(
     if (sigma_vec_mm.size() != K) {
         Rcpp::stop("sigma_vec_mm length must match centres rows");
     }
+    if (mask_xyz_world.cols() != 3) {
+        Rcpp::stop("mask_xyz_world must have exactly 3 columns");
+    }
+    if (centres_xyz_world.cols() != 3) {
+        Rcpp::stop("centres_xyz_world must have exactly 3 columns");
+    }
+    for (int k = 0; k < K; ++k) {
+        if (sigma_vec_mm[k] <= 0.0) {
+            Rcpp::stop("All sigma values must be positive; sigma_vec_mm[%d] = %g", k, sigma_vec_mm[k]);
+        }
+    }
     const bool gaussian = (kernel_type == "gaussian");
 
     std::vector< Eigen::Triplet<double> > triplets;

@@ -24,10 +24,12 @@ LazyData: false
 RoxygenNote: 7.3.3
 Imports:
     crayon,
+    graphics,
     Matrix,
     methods,
     digest,
     neuroim2,
+    stats,
     utils,
     Rcpp
 Suggests:
@@ -42,8 +44,6 @@ Suggests:
     ggplot2
 VignetteBuilder: knitr
 Config/testthat/edition: 3
-Remotes:
-    bbuchsbaum/neuroim2
 LinkingTo:
     Rcpp,
     RcppEigen

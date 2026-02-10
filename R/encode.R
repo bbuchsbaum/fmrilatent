@@ -1,7 +1,5 @@
 # High-level encoding API and specs
 
-`%||%` <- function(x, y) if (is.null(x)) y else x
-
 # Robust Gram matrix solve with ridge regularization
 # Adds a small ridge to the diagonal if solve fails
 .robust_gram_solve <- function(gram, rhs, ridge = 1e-8) {
@@ -173,8 +171,8 @@ encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
                             label = "", ...) {
   materialize <- match.arg(materialize)
   X <- t(neuroim2::series(x, mask != 0))  # series returns voxels x time, transpose to time x voxels
-  encode.matrix(X, spec, mask = mask, reduction = reduction,
-                materialize = materialize, label = label, ...)
+  encode(X, spec, mask = mask, reduction = reduction,
+         materialize = materialize, label = label, ...)
 }
 
 # --- Factory helper -----------------------------------------------------------
@@ -218,7 +216,13 @@ latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize =
   )
   encode(x, spec, mask = mask, reduction = reduction, materialize = materialize, label = label)
 }
-# Internal dispatcher on spec
+#' Dispatch encoding based on spec type
+#'
+#' @param x Data matrix.
+#' @param spec Spec object.
+#' @param ... Additional arguments passed to methods.
+#' @return Encoded representation.
+#' @export
 encode_spec <- function(x, spec, ...) UseMethod("encode_spec", spec)
 
 #' @exportS3Method
@@ -413,8 +417,10 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
     B_sel <- B_t[t_sel, , drop = FALSE]
     rec <- B_sel %*% core %*% t(L_s)
     if (!is.null(roi_mask)) {
-      idx <- which(as.logical(roi_mask))
-      rec <- rec[, idx, drop = FALSE]
+      global_idx <- which(as.logical(mask_arr))
+      roi_global <- which(as.logical(roi_mask))
+      col_keep <- which(global_idx %in% roi_global)
+      rec <- rec[, col_keep, drop = FALSE]
     }
     rec
   }

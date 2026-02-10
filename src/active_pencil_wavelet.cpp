@@ -106,7 +106,16 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
   int total_vol = nx * ny * nz;
   int n_vox = coords.nrow();
   if (data_voxels.size() != n_vox) stop("Data size mismatch");
-
+  if (coords.ncol() != 3) stop("coords must have exactly 3 columns");
+  for (int i = 0; i < n_vox; ++i) {
+    int x = coords(i, 0) - 1;
+    int y = coords(i, 1) - 1;
+    int z = coords(i, 2) - 1;
+    if (x < 0 || x >= nx || y < 0 || y >= ny || z < 0 || z >= nz) {
+      stop("coords row %d out of bounds: (%d,%d,%d) for dims (%d,%d,%d)",
+           i + 1, x + 1, y + 1, z + 1, nx, ny, nz);
+    }
+  }
   std::vector<int> grid(total_vol, -1);
   for (int i = 0; i < n_vox; ++i) {
     int x = coords(i, 0) - 1;

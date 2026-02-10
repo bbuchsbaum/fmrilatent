@@ -63,8 +63,10 @@ wavelet_active_latent <- function(X, mask, levels_space = 2L, levels_time = 0L, 
       rec_mat <- rec_mat[as.integer(time_idx), , drop = FALSE]
     }
     if (!is.null(roi_mask)) {
-      idx <- which(as.logical(roi_mask))
-      rec_mat <- rec_mat[, idx, drop = FALSE]
+      global_idx <- which(as.logical(mask_arr))
+      roi_global <- which(as.logical(roi_mask))
+      col_keep <- which(global_idx %in% roi_global)
+      rec_mat <- rec_mat[, col_keep, drop = FALSE]
     }
     rec_mat
   }

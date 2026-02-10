@@ -50,8 +50,10 @@ slepian_spatiotemporal_latent <- function(X, mask, tr,
     rec_mat <- B_sel %*% core %*% t(L_s_mat)  # time x vox
 
     if (!is.null(roi_mask)) {
-      roi_idx <- which(as.logical(roi_mask))
-      rec_mat <- rec_mat[, roi_idx, drop = FALSE]
+      global_idx <- which(as.logical(mask_arr))
+      roi_global <- which(as.logical(roi_mask))
+      col_keep <- which(global_idx %in% roi_global)
+      rec_mat <- rec_mat[, col_keep, drop = FALSE]
     }
     rec_mat
   }

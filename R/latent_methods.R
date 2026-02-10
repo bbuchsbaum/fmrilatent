@@ -302,7 +302,7 @@ setMethod(
 #' @name show-methods
 NULL
 
-#' @importFrom crayon bold red green blue yellow silver
+#' @importFrom crayon bold green blue yellow silver
 #' @importFrom utils object.size
 #' @importMethodsFrom methods show
 #' @rdname show-methods

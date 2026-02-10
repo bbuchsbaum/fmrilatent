@@ -144,11 +144,7 @@ encode_hierarchical <- function(X, template, label = NULL) {
 
   proj <- Matrix::crossprod(B, Matrix::t(X_mat))  # atoms x time
 
-  coeff <- if (inherits(G_factor, "sparseQR")) {
-    Matrix::solve(G_factor, proj)
-  } else {
-    Matrix::solve(G_factor, proj)
-  }
+  coeff <- Matrix::solve(G_factor, proj)
 
   coeff_t <- Matrix::t(coeff)  # time x atoms
 

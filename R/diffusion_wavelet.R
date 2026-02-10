@@ -3,8 +3,6 @@
 #' @include reduction.R
 NULL
 
-`%||%` <- function(x, y) if (is.null(x)) y else x
-
 #' Diffusion wavelet basis specification
 #'
 #' @param target_rank Cap on retained components per scale (keeps runtime bounded).
@@ -89,7 +87,10 @@ diffusion_wavelet_loadings <- function(T_mat, spec) {
 
     current_dim <- ncol(step$T_compressed)
     if (current_dim < 2L) break
-    current_op <- function(X) step$T_compressed %*% X
+    current_op <- local({
+      tc <- step$T_compressed
+      function(X) tc %*% X
+    })
     phi_global_prev <- phi_global
   }
 

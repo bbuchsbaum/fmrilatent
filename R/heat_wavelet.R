@@ -1,5 +1,12 @@
 # Heat / diffusion graph wavelets (rgsp-backed)
 
+#' Heat wavelet basis specification
+#'
+#' @param scales Numeric vector of heat diffusion scales.
+#' @param order Polynomial approximation order.
+#' @param threshold Threshold for small coefficients.
+#' @return A `spec_heat_wavelet` object for `lift()`.
+#' @export
 basis_heat_wavelet <- function(scales = c(1, 2, 4, 8), order = 30, threshold = 1e-6) {
   structure(list(scales = scales, order = order, threshold = threshold),
             class = "spec_heat_wavelet")
@@ -55,7 +62,7 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_h
           j_list[[length(j_list) + 1L]] <- col_offset + sp@j + 1L
           x_list[[length(x_list) + 1L]] <- sp@x
         }
-        col_offset <- col_offset + nrow(mat)
+        col_offset <- col_offset + ncol(mat)
       }
     }
 

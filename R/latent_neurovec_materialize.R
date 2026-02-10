@@ -41,6 +41,26 @@ setMethod(
   }
 )
 
+# --- Methods for base matrix class ---
+
+setMethod(
+  "basis_mat", "matrix",
+  function(x, i = NULL, j = NULL, ...) {
+    i <- i %||% seq_len(nrow(x))
+    j <- j %||% seq_len(ncol(x))
+    x[i, j, drop = FALSE]
+  }
+)
+
+setMethod(
+  "loadings_mat", "matrix",
+  function(x, i = NULL, j = NULL, ...) {
+    i <- i %||% seq_len(nrow(x))
+    j <- j %||% seq_len(ncol(x))
+    x[i, j, drop = FALSE]
+  }
+)
+
 # --- Materialization from spec ---
 
 #' Materialize a BasisHandle into a concrete matrix
@@ -95,9 +115,11 @@ materialize_loadings_from_spec <- function(handle) {
   spec <- handle@spec
 
   if (identical(kind, "lifted")) {
-    lift(spec$reduction, spec$basis_spec, data = spec$data)
+    lift(spec$reduction, spec$basis_spec, data = spec$data,
+         k_neighbors = spec$k_neighbors %||% 6L)
   } else if (identical(kind, "slepian_spatial")) {
-    lift(spec$reduction, spec$basis_spec, data = spec$data)
+    lift(spec$reduction, spec$basis_spec, data = spec$data,
+         k_neighbors = spec$k_neighbors %||% 6L)
   } else if (identical(kind, "explicit")) {
     if (!is.null(spec$matrix)) {
       Matrix::Matrix(spec$matrix)

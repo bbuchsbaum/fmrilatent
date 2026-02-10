@@ -52,9 +52,7 @@ slepian_temporal_latent <- function(X, mask, tr, bandwidth = 0.1, k = NULL,
 
   W <- bandwidth * tr
   NW <- n_time * W
-  if (is.null(k) && denoise) {
-    k_use <- floor(2 * NW) - 1
-  } else if (is.null(k)) {
+  if (is.null(k)) {
     k_use <- floor(2 * NW) - 1
   } else {
     k_use <- k

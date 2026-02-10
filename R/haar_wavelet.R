@@ -4,9 +4,6 @@
 # user-facing helpers to run forward/inverse transforms and a light
 # latent wrapper.
 
-# Internal null-coalescing helper (kept local to avoid namespace noise)
-`%||%` <- function(x, y) if (is.null(x)) y else x
-
 use_haar_rcpp <- function() {
   opt_new <- getOption("fmrilatent.haar.use_rcpp", NULL)
   opt_old <- getOption("fmrilatent.hwt.use_rcpp", NULL)
@@ -49,6 +46,9 @@ get_morton_ordered_indices <- function(mask_3d_array, z_order_seed = 42L) {
 
   max_dim <- max(dims)
   bits <- ceiling(log2(max_dim))
+  if (3L * (bits - 1L) + 2L > 30L) {
+    stop("Mask dimensions too large for 32-bit Morton codes (max ~1024 per axis)", call. = FALSE)
+  }
   codes <- integer(nrow(vox_coords))
   for (b in seq_len(bits)) {
     shift <- b - 1L
