@@ -10,6 +10,18 @@
 #' @export
 implicit_latent <- function(coeff, decoder, meta, mask) {
   if (is.null(meta$family)) stop("meta$family required for implicit_latent", call. = FALSE)
+  if (!is.function(decoder)) {
+    stop("decoder must be a function, got ", paste(class(decoder), collapse = "/"),
+         call. = FALSE)
+  }
+  fmls <- names(formals(decoder))
+  has_dots <- "..." %in% fmls
+  missing <- setdiff(c("time_idx", "roi_mask"), fmls)
+  if (length(missing) > 0L && !has_dots) {
+    stop("decoder must accept formals 'time_idx' and 'roi_mask' ",
+         "(or use '...'). Missing: ", paste(missing, collapse = ", "),
+         call. = FALSE)
+  }
   structure(list(coeff = coeff, decoder = decoder, meta = meta, mask = mask),
             class = "ImplicitLatent")
 }
@@ -42,3 +54,28 @@ implicit_meta <- function(x) {
   x$meta %||% NULL
 }
 
+#' Subset reconstruction matrix columns by ROI mask
+#'
+#' Extracts columns from a reconstruction matrix that correspond to voxels
+#' inside an ROI mask. This is a shared utility used by decoder functions
+#' to handle ROI subsetting consistently.
+#'
+#' @param rec_mat Numeric matrix (time x voxels-in-mask) to subset.
+#' @param mask_arr Logical array (the full brain mask).
+#' @param roi_mask Logical array (the ROI mask), or \code{NULL} to return
+#'   \code{rec_mat} unchanged.
+#' @return The subsetted matrix, or \code{rec_mat} unchanged when
+#'   \code{roi_mask} is \code{NULL}.
+#' @export
+#' @examples
+#' mask <- array(c(TRUE, TRUE, FALSE, TRUE), dim = c(2, 2, 1))
+#' rec  <- matrix(1:9, nrow = 3, ncol = 3)  # 3 time x 3 masked voxels
+#' roi  <- array(c(TRUE, FALSE, FALSE, TRUE), dim = c(2, 2, 1))
+#' roi_subset_columns(rec, mask, roi)  # keeps columns 1 and 3
+roi_subset_columns <- function(rec_mat, mask_arr, roi_mask = NULL) {
+  if (is.null(roi_mask)) return(rec_mat)
+  global_idx <- which(as.logical(mask_arr))
+  roi_global <- which(as.logical(roi_mask))
+  col_keep   <- which(global_idx %in% roi_global)
+  rec_mat[, col_keep, drop = FALSE]
+}

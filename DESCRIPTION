@@ -60,6 +60,7 @@ Collate:
     'diffusion_wavelet.R'
     'diffusion_wavelet_handle.R'
     'encode.R'
+    'encoder_registry.R'
     'fmrilatent-package.R'
     'graph_bridge.R'
     'haar_wavelet.R'
@@ -82,5 +83,6 @@ Collate:
     'slepian_temporal.R'
     'spatial_plot.R'
     'wavelet_active.R'
+    'zzz.R'
     'zzz_haar_aliases.R'
 Config/Needs/website: albersdown

@@ -250,9 +250,16 @@ fmrilatent_registry_enabled <- function() {
 # Utility: safe NULL coalesce
 `%||%` <- function(x, y) if (is.null(x)) y else x
 
-# Helper to convert mask to array with informative error messages
-#' @keywords internal
-.mask_to_array <- function(mask, location = "unknown function") {
+#' Convert mask to array
+#'
+#' Safely converts a \code{LogicalNeuroVol} or array-like mask to a plain
+#' logical array, with informative error messages on failure.
+#'
+#' @param mask A \code{LogicalNeuroVol} or logical array.
+#' @param location Character string used in error messages to identify the caller.
+#' @return A logical array.
+#' @export
+mask_to_array <- function(mask, location = "unknown function") {
   result <- tryCatch(
     as.array(mask),
     error = function(e) {
@@ -271,6 +278,11 @@ fmrilatent_registry_enabled <- function() {
     )
   }
   result
+}
+
+# Internal alias so existing callers don't break
+.mask_to_array <- function(mask, location = "unknown function") {
+  mask_to_array(mask, location)
 }
 
 # Dimension helpers that avoid materializing handles
