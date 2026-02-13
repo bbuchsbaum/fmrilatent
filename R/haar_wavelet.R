@@ -4,11 +4,24 @@
 # user-facing helpers to run forward/inverse transforms and a light
 # latent wrapper.
 
-use_haar_rcpp <- function() {
-  opt_new <- getOption("fmrilatent.haar.use_rcpp", NULL)
-  opt_old <- getOption("fmrilatent.hwt.use_rcpp", NULL)
-  flag <- opt_new %||% opt_old %||% TRUE
+use_haar_rcpp <- function(compat_profile = NULL) {
+  flag <- fmrilatent_option_alias(
+    "fmrilatent.haar.use_rcpp",
+    aliases = c("fmrilatent.hwt.use_rcpp", "lna.hwt.use_rcpp"),
+    default = TRUE,
+    compat_profile = compat_profile
+  )
   isTRUE(flag) && exists("forward_lift_rcpp", mode = "function")
+}
+
+use_haar_rcpp_batch <- function(compat_profile = NULL) {
+  flag <- fmrilatent_option_alias(
+    "fmrilatent.haar.use_rcpp_batch",
+    aliases = c("fmrilatent.hwt.use_rcpp_batch", "lna.hwt.use_rcpp_batch"),
+    default = TRUE,
+    compat_profile = compat_profile
+  )
+  isTRUE(flag)
 }
 
 as_logical_mask <- function(arr, location = "haar_wavelet:mask") {
@@ -243,6 +256,132 @@ inverse_lift_R <- function(root_coeff,
     current <- next_data
   }
   current
+}
+
+#' Low-level compatibility wrapper for matrix forward lifting
+#'
+#' Mirrors neuroarchive matrix-batch forward-lift API.
+#'
+#' @param data_morton Numeric matrix (`time x masked_voxels`) in Morton order.
+#' @param mask_flat_morton Logical full-grid mask in Morton order.
+#' @param mask_dims Integer vector of length 3.
+#' @param levels Integer decomposition levels.
+#' @param scalings Precomputed scaling structure from `precompute_haar_scalings`.
+#' @param compat_profile Optional compatibility profile override.
+#'
+#' @return List with `root_coeff` and `detail_coeffs_by_level`.
+#' @export
+lna_forward_lift_matrix <- function(data_morton,
+                                    mask_flat_morton,
+                                    mask_dims,
+                                    levels,
+                                    scalings,
+                                    compat_profile = NULL) {
+  if (!is.matrix(data_morton)) {
+    stop("data_morton must be a matrix", call. = FALSE)
+  }
+  n_time <- nrow(data_morton)
+  if (n_time == 0L) {
+    return(list(root_coeff = matrix(0, nrow = 0, ncol = 0),
+                detail_coeffs_by_level = lapply(seq_len(levels), function(...) matrix(0, 0, 0))))
+  }
+
+  use_rcpp <- use_haar_rcpp(compat_profile = compat_profile)
+  use_batch <- use_haar_rcpp_batch(compat_profile = compat_profile)
+  if (use_batch && exists("forward_lift_matrix_rcpp", mode = "function")) {
+    out <- tryCatch(
+      forward_lift_matrix_rcpp(data_morton, mask_flat_morton, mask_dims, levels, scalings),
+      error = function(e) NULL
+    )
+    if (!is.null(out)) return(out)
+  }
+
+  probe <- if (use_rcpp) {
+    forward_lift_rcpp(data_morton[1, ], mask_flat_morton, mask_dims, levels, scalings)
+  } else {
+    forward_lift_R(data_morton[1, ], mask_flat_morton, mask_dims, levels, scalings)
+  }
+  root_probe <- as.numeric(probe$root_coeff)
+  root_coeff <- matrix(0, nrow = n_time, ncol = length(root_probe))
+  detail_widths <- vapply(probe$detail_coeffs_by_level, length, integer(1))
+  detail_coeffs <- lapply(detail_widths, function(w) matrix(0, nrow = n_time, ncol = w))
+
+  root_coeff[1, ] <- root_probe
+  for (lvl in seq_len(levels)) {
+    detail_coeffs[[lvl]][1, ] <- probe$detail_coeffs_by_level[[lvl]]
+  }
+  if (n_time > 1L) {
+    for (tt in 2:n_time) {
+      res <- if (use_rcpp) {
+        forward_lift_rcpp(data_morton[tt, ], mask_flat_morton, mask_dims, levels, scalings)
+      } else {
+        forward_lift_R(data_morton[tt, ], mask_flat_morton, mask_dims, levels, scalings)
+      }
+      root_coeff[tt, ] <- as.numeric(res$root_coeff)
+      for (lvl in seq_len(levels)) {
+        detail_coeffs[[lvl]][tt, ] <- res$detail_coeffs_by_level[[lvl]]
+      }
+    }
+  }
+  list(root_coeff = root_coeff, detail_coeffs_by_level = detail_coeffs)
+}
+
+#' Low-level compatibility wrapper for matrix inverse lifting
+#'
+#' Mirrors neuroarchive matrix-batch inverse-lift API.
+#'
+#' @param root_coeff Numeric matrix (`time x n_root`).
+#' @param detail_coeffs_by_level List of detail coefficient matrices by level.
+#' @param mask_flat_morton Logical full-grid mask in Morton order.
+#' @param mask_dims Integer vector of length 3.
+#' @param levels Integer decomposition levels.
+#' @param scalings Precomputed scaling structure from `precompute_haar_scalings`.
+#' @param compat_profile Optional compatibility profile override.
+#'
+#' @return Numeric matrix (`time x masked_voxels`) in Morton order.
+#' @export
+lna_inverse_lift_matrix <- function(root_coeff,
+                                    detail_coeffs_by_level,
+                                    mask_flat_morton,
+                                    mask_dims,
+                                    levels,
+                                    scalings,
+                                    compat_profile = NULL) {
+  if (is.vector(root_coeff)) {
+    root_coeff <- matrix(root_coeff, nrow = 1L)
+  }
+  if (!is.matrix(root_coeff)) {
+    stop("root_coeff must be a matrix", call. = FALSE)
+  }
+  if (!is.list(detail_coeffs_by_level) || length(detail_coeffs_by_level) < levels) {
+    stop("detail_coeffs_by_level must be a list of length >= levels", call. = FALSE)
+  }
+
+  n_time <- nrow(root_coeff)
+  if (n_time == 0L) {
+    return(matrix(0, nrow = 0, ncol = 0))
+  }
+
+  use_rcpp <- use_haar_rcpp(compat_profile = compat_profile)
+  use_batch <- use_haar_rcpp_batch(compat_profile = compat_profile)
+  if (use_rcpp && use_batch && exists("inverse_lift_matrix_rcpp", mode = "function")) {
+    out <- tryCatch(
+      inverse_lift_matrix_rcpp(root_coeff, detail_coeffs_by_level, mask_flat_morton, mask_dims, levels, scalings),
+      error = function(e) NULL
+    )
+    if (!is.null(out)) return(out)
+  }
+
+  reco <- vector("list", n_time)
+  for (tt in seq_len(n_time)) {
+    detail_vecs <- lapply(seq_len(levels), function(lvl) detail_coeffs_by_level[[lvl]][tt, ])
+    reco[[tt]] <- if (use_rcpp) {
+      inverse_lift_rcpp(root_coeff[tt, ], detail_vecs, mask_flat_morton, mask_dims, levels, scalings)
+    } else {
+      inverse_lift_R(root_coeff[tt, ], detail_vecs, mask_flat_morton, mask_dims, levels, scalings)
+    }
+  }
+  do.call(rbind, lapply(reco, function(v) matrix(v, nrow = 1L)))
 }
 
 #' Perform forward Haar lifting analysis

@@ -55,6 +55,7 @@ Collate:
     'all_generic.R'
     'benchmark_roundtrip.R'
     'bspline_basis.R'
+    'compat_profile.R'
     'dct_basis.R'
     'reduction.R'
     'diffusion_wavelet.R'

@@ -131,8 +131,14 @@ is_hrbf_latent <- function(x) {
 
 # ---- Internal helpers ----------------------------------------------------
 
-use_hrbf_rcpp <- function() {
-  isTRUE(getOption("fmrilatent.hrbf.use_rcpp", FALSE))
+use_hrbf_rcpp <- function(compat_profile = NULL) {
+  opt <- fmrilatent_option_alias(
+    "fmrilatent.hrbf.use_rcpp",
+    aliases = "lna.hrbf.use_rcpp_helpers",
+    default = FALSE,
+    compat_profile = compat_profile
+  )
+  isTRUE(opt)
 }
 
 extract_mask_array_logical <- function(mask_neurovol, location = "mask") {
@@ -265,6 +271,84 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
   selected
 }
 
+poisson_disk_sample_neuroim2_compat <- function(mask_neurovol, radius_mm, seed,
+                                                component_id_for_seed_offset = 0) {
+  mask_arr <- extract_mask_array_logical(mask_neurovol, "poisson_disk_sample_neuroim2_compat")
+  so <- extract_spacing_origin(mask_neurovol, length(dim(mask_arr)),
+                               "poisson_disk_sample_neuroim2_compat")
+  spacing_vec <- so$spacing
+  comp_info <- label_components(mask_arr)
+  radius_vox <- radius_mm / mean(spacing_vec)
+  r2 <- radius_vox^2
+
+  old_rng <- if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+    get(".Random.seed", envir = globalenv())
+  } else {
+    NULL
+  }
+  on.exit({
+    if (is.null(old_rng)) {
+      if (exists(".Random.seed", envir = globalenv(), inherits = FALSE)) {
+        rm(".Random.seed", envir = globalenv())
+      }
+    } else {
+      assign(".Random.seed", old_rng, envir = globalenv())
+    }
+  }, add = TRUE)
+
+  sample_component <- function(coords, base_seed) {
+    set.seed(as.integer(base_seed))
+    remaining <- coords[sample(nrow(coords)), , drop = FALSE]
+    selected <- matrix(numeric(0), ncol = 3)
+    while (nrow(remaining) > 0) {
+      cand <- remaining[1, , drop = FALSE]
+      remaining <- remaining[-1, , drop = FALSE]
+      if (nrow(selected) == 0) {
+        selected <- rbind(selected, cand)
+      } else {
+        d2 <- rowSums((selected - matrix(cand, nrow = nrow(selected), ncol = 3,
+                                         byrow = TRUE))^2)
+        if (all(d2 >= r2)) selected <- rbind(selected, cand)
+      }
+    }
+    if (nrow(selected) == 0 && nrow(coords) < 150) {
+      selected <- matrix(round(colMeans(coords)), nrow = 1)
+    }
+    selected
+  }
+
+  gather <- function(coords, seed_val) {
+    out <- sample_component(coords, seed_val)
+    if (nrow(out) == 0 && nrow(coords) < 150) {
+      out <- matrix(round(colMeans(coords)), nrow = 1)
+    }
+    out
+  }
+
+  if (comp_info$count > 1L && component_id_for_seed_offset == 0L) {
+    centres <- lapply(seq_len(comp_info$count), function(id) {
+      coords <- which(comp_info$labels == id, arr.ind = TRUE)
+      if (nrow(coords) == 0) return(matrix(numeric(0), ncol = 3))
+      gather(coords, as.integer(seed) + id)
+    })
+    res <- do.call(rbind, centres)
+    if (is.null(res)) {
+      res <- matrix(numeric(0), ncol = 3)
+    }
+    colnames(res) <- c("i", "j", "k")
+    return(res)
+  }
+
+  vox_coords <- which(mask_arr, arr.ind = TRUE)
+  if (nrow(vox_coords) == 0) {
+    return(matrix(integer(0), ncol = 3, dimnames = list(NULL, c("i", "j", "k"))))
+  }
+
+  out <- gather(vox_coords, as.integer(seed) + as.integer(component_id_for_seed_offset))
+  colnames(out) <- c("i", "j", "k")
+  out
+}
+
 generate_hrbf_atom <- function(mask_coords_world, mask_linear_indices,
                                centre_coord_world, sigma_mm,
                                current_level_j, total_levels, params,
@@ -300,10 +384,362 @@ generate_hrbf_atom <- function(mask_coords_world, mask_linear_indices,
   list(values = phi, indices = mask_linear_indices)
 }
 
+# Internal helper to resolve HRBF centres/sigmas for compat/native paths.
+lna_hrbf_centres_from_params <- function(params,
+                                         mask,
+                                         centres = NULL,
+                                         sigmas = NULL,
+                                         compat_profile = NULL) {
+  profile <- fmrilatent_compat_profile(compat_profile)
+  compat_neuroarchive <- fmrilatent_is_neuroarchive_compat(profile)
+
+  sigma0 <- params$sigma0 %||% 6
+  levels <- params$levels %||% 3L
+  radius_factor <- params$radius_factor %||% 2.5
+  num_extra_fine_levels <- params$num_extra_fine_levels %||% 0L
+  seed <- params$seed
+
+  voxel_to_world <- function(vox_mat) {
+    so <- extract_spacing_origin(mask, ncol(vox_mat),
+                                 "lna_hrbf_centres_from_params:mask_space")
+    sweep(vox_mat - 1, 2, so$spacing, `*`) +
+      matrix(so$origin, nrow(vox_mat), ncol(vox_mat), byrow = TRUE)
+  }
+
+  centres_given <- !is.null(centres) || !is.null(sigmas)
+  if (centres_given && (is.null(centres) || is.null(sigmas))) {
+    stop("Both centres and sigmas must be supplied together", call. = FALSE)
+  }
+  if (centres_given) {
+    C_total <- as.matrix(centres)
+    sigma_vec <- as.numeric(sigmas)
+    if (ncol(C_total) != 3L) {
+      stop("centres must be a matrix with 3 columns", call. = FALSE)
+    }
+    if (nrow(C_total) != length(sigma_vec)) {
+      stop("length(sigmas) must equal nrow(centres)", call. = FALSE)
+    }
+    level_vec <- as.integer(round(log2(sigma0 / sigma_vec)))
+    level_vec[!is.finite(level_vec)] <- 0L
+    return(list(
+      centres = C_total,
+      sigmas = sigma_vec,
+      level_vec = level_vec,
+      centres_stored = TRUE
+    ))
+  }
+
+  if (is.null(seed)) {
+    stop("lna_hrbf_centres_from_params requires centres/sigmas or seed",
+         call. = FALSE)
+  }
+
+  centres_list <- list()
+  sigs <- numeric()
+  level_vec <- integer()
+  for (j in seq_len(levels + 1L) - 1L) {
+    sigma_j <- sigma0 / (2^j)
+    r_j <- radius_factor * sigma_j
+    component_offset <- if (compat_neuroarchive) 0L else j
+    vox_centres <- if (compat_neuroarchive) {
+      poisson_disk_sample_neuroim2_compat(
+        mask,
+        r_j,
+        seed + j,
+        component_id_for_seed_offset = component_offset
+      )
+    } else {
+      poisson_disk_sample_neuroim2(
+        mask,
+        r_j,
+        seed + j,
+        component_id_for_seed_offset = component_offset
+      )
+    }
+    if (nrow(vox_centres) > 0) {
+      centres_list[[length(centres_list) + 1L]] <- voxel_to_world(vox_centres)
+      n_new <- nrow(vox_centres)
+      sigs <- c(sigs, rep(sigma_j, n_new))
+      level_vec <- c(level_vec, rep(j, n_new))
+    }
+  }
+  if (num_extra_fine_levels > 0L) {
+    for (j_extra in seq_len(num_extra_fine_levels)) {
+      j_level <- levels + j_extra
+      sigma_new <- sigma0 / (2^(levels + j_extra))
+      r_new <- radius_factor * sigma_new
+      component_offset <- if (compat_neuroarchive) 0L else j_level
+      vox_centres <- if (compat_neuroarchive) {
+        poisson_disk_sample_neuroim2_compat(
+          mask,
+          r_new,
+          seed + levels + j_extra,
+          component_id_for_seed_offset = component_offset
+        )
+      } else {
+        poisson_disk_sample_neuroim2(
+          mask,
+          r_new,
+          seed + levels + j_extra,
+          component_id_for_seed_offset = component_offset
+        )
+      }
+      if (nrow(vox_centres) > 0) {
+        centres_list[[length(centres_list) + 1L]] <- voxel_to_world(vox_centres)
+        n_new <- nrow(vox_centres)
+        sigs <- c(sigs, rep(sigma_new, n_new))
+        level_vec <- c(level_vec, rep(j_level, n_new))
+      }
+    }
+  }
+
+  C_total <- if (length(centres_list) > 0) {
+    do.call(rbind, centres_list)
+  } else {
+    matrix(numeric(0), ncol = 3)
+  }
+  list(
+    centres = C_total,
+    sigmas = sigs,
+    level_vec = level_vec,
+    centres_stored = FALSE
+  )
+}
+
+#' Build an HRBF Basis with Optional Neuroarchive Compatibility Semantics
+#'
+#' Compatibility entry point for external callers that need explicit control
+#' over centre/sigma inputs and output column-space semantics.
+#'
+#' @param params HRBF parameter list.
+#' @param mask `LogicalNeuroVol` mask defining voxel locations.
+#' @param centres Optional numeric matrix (`K x 3`) of world-space centres.
+#' @param sigmas Optional numeric vector (`K`) of sigma values for `centres`.
+#' @param full_grid Logical. If `TRUE`, basis columns index the full mask grid
+#'   (`length(as.array(mask))`); if `FALSE`, columns index active mask voxels.
+#' @param compat_profile Optional explicit compatibility profile identifier.
+#' @param mask_world_coords Optional precomputed active-voxel world coords.
+#' @param mask_arr Optional precomputed logical mask array.
+#' @param mask_linear_indices Optional precomputed active-voxel linear indices.
+#'
+#' @return Sparse matrix with one row per HRBF atom.
+#' @export
+lna_hrbf_basis_from_params <- function(params,
+                                       mask,
+                                       centres = NULL,
+                                       sigmas = NULL,
+                                       full_grid = TRUE,
+                                       compat_profile = NULL,
+                                       mask_world_coords = NULL,
+                                       mask_arr = NULL,
+                                       mask_linear_indices = NULL) {
+  profile <- fmrilatent_compat_profile(compat_profile)
+  compat_neuroarchive <- fmrilatent_is_neuroarchive_compat(profile)
+
+  sigma0 <- params$sigma0 %||% 6
+  levels <- params$levels %||% 3L
+  radius_factor <- params$radius_factor %||% 2.5
+  kernel_type <- params$kernel_type %||% "gaussian"
+  if (identical(kernel_type, "wendland_c4")) kernel_type <- "wendland_c6"
+  num_extra_fine_levels <- params$num_extra_fine_levels %||% 0L
+  seed <- params$seed
+
+  voxel_to_world <- function(vox_mat) {
+    so <- extract_spacing_origin(mask, ncol(vox_mat),
+                                 "lna_hrbf_basis_from_params:mask_space")
+    sweep(vox_mat - 1, 2, so$spacing, `*`) +
+      matrix(so$origin, nrow(vox_mat), ncol(vox_mat), byrow = TRUE)
+  }
+
+  if (is.null(mask_arr)) {
+    mask_arr <- extract_mask_array_logical(mask, "lna_hrbf_basis_from_params")
+  }
+  if (is.null(mask_world_coords)) {
+    mask_coords_vox <- which(mask_arr, arr.ind = TRUE)
+    mask_world_coords <- voxel_to_world(mask_coords_vox)
+  }
+  if (is.null(mask_linear_indices)) {
+    mask_linear_indices <- as.integer(which(mask_arr))
+  }
+
+  mask_coords_world <- as.matrix(mask_world_coords)
+  active_linear_idx <- as.integer(mask_linear_indices)
+  n_active <- nrow(mask_coords_world)
+  n_total_vox <- if (isTRUE(full_grid)) length(mask_arr) else n_active
+
+  if (n_active == 0L) {
+    return(Matrix::sparseMatrix(i = integer(), j = integer(), x = numeric(),
+                                dims = c(0, n_total_vox)))
+  }
+
+  atom_col_indices <- if (isTRUE(full_grid)) active_linear_idx else seq_len(n_active)
+
+  centres_given <- !is.null(centres) || !is.null(sigmas)
+  if (centres_given && (is.null(centres) || is.null(sigmas))) {
+    stop("Both centres and sigmas must be supplied together", call. = FALSE)
+  }
+
+  # Native fallback only: identity-like tiny-mask basis for exact reconstruction.
+  if (!compat_neuroarchive && !centres_given && !is.null(seed) && n_active <= 64L) {
+    centres_all <- mask_coords_world
+    small_sigma <- max(1e-3, sigma0 / 100)
+    use_rcpp <- use_hrbf_rcpp(compat_profile = profile) &&
+      exists("hrbf_atoms_rcpp", mode = "function")
+    if (use_rcpp) {
+      B_try <- tryCatch(
+        hrbf_atoms_rcpp(
+          as.matrix(mask_coords_world),
+          as.matrix(centres_all),
+          rep_len(small_sigma, n_active),
+          kernel_type,
+          value_threshold = 1e-12
+        ),
+        error = function(e) NULL
+      )
+      if (!is.null(B_try)) {
+        norms <- sqrt(Matrix::rowSums(B_try^2))
+        norms[norms == 0] <- 1
+        B_try <- Matrix::Diagonal(x = 1 / norms) %*% B_try
+        if (isTRUE(full_grid)) {
+          tri <- as(B_try, "dgTMatrix")
+          B_try <- Matrix::sparseMatrix(
+            i = tri@i + 1L,
+            j = atom_col_indices[tri@j + 1L],
+            x = tri@x,
+            dims = c(n_active, n_total_vox)
+          )
+        }
+        return(B_try)
+      }
+    }
+
+    triplet_i_list <- vector("list", n_active)
+    triplet_j_list <- vector("list", n_active)
+    triplet_x_list <- vector("list", n_active)
+    for (kk in seq_len(n_active)) {
+      atom <- generate_hrbf_atom(
+        mask_coords_world,
+        atom_col_indices,
+        centres_all[kk, ],
+        small_sigma,
+        0L, 0L, params
+      )
+      nz <- which(abs(atom$values) > 1e-12)
+      if (length(nz) > 0) {
+        triplet_i_list[[kk]] <- rep.int(kk, length(nz))
+        triplet_j_list[[kk]] <- atom$indices[nz]
+        triplet_x_list[[kk]] <- atom$values[nz]
+      } else {
+        triplet_i_list[[kk]] <- integer()
+        triplet_j_list[[kk]] <- integer()
+        triplet_x_list[[kk]] <- numeric()
+      }
+    }
+    i_idx <- unlist(triplet_i_list, use.names = FALSE)
+    j_idx <- unlist(triplet_j_list, use.names = FALSE)
+    x_val <- unlist(triplet_x_list, use.names = FALSE)
+    return(Matrix::sparseMatrix(i = i_idx, j = j_idx, x = x_val,
+                                dims = c(n_active, n_total_vox)))
+  }
+
+  centre_spec <- lna_hrbf_centres_from_params(
+    params = params,
+    mask = mask,
+    centres = centres,
+    sigmas = sigmas,
+    compat_profile = profile
+  )
+  C_total <- centre_spec$centres
+  sigma_vec <- centre_spec$sigmas
+  level_vec <- centre_spec$level_vec
+
+  k_actual <- nrow(C_total)
+  if (k_actual == 0L) {
+    return(Matrix::sparseMatrix(i = integer(), j = integer(), x = numeric(),
+                                dims = c(0, n_total_vox)))
+  }
+
+  use_rcpp <- use_hrbf_rcpp(compat_profile = profile) &&
+    exists("hrbf_atoms_rcpp", mode = "function")
+  if (use_rcpp) {
+    B_try <- tryCatch(
+      hrbf_atoms_rcpp(
+        as.matrix(mask_coords_world),
+        as.matrix(C_total),
+        as.numeric(sigma_vec),
+        kernel_type,
+        value_threshold = 1e-8
+      ),
+      error = function(e) NULL
+    )
+    if (!is.null(B_try)) {
+      if (nrow(B_try) == n_active && ncol(B_try) == k_actual) {
+        B_try <- Matrix::t(B_try)
+      }
+      if (isTRUE(full_grid) && ncol(B_try) == n_active) {
+        tri <- as(B_try, "dgTMatrix")
+        B_try <- Matrix::sparseMatrix(
+          i = tri@i + 1L,
+          j = atom_col_indices[tri@j + 1L],
+          x = tri@x,
+          dims = c(k_actual, n_total_vox)
+        )
+      }
+      norms <- sqrt(Matrix::rowSums(B_try^2))
+      norms[norms == 0] <- 1
+      B_try <- Matrix::Diagonal(x = 1 / norms) %*% B_try
+      return(B_try)
+    }
+  }
+
+  triplet_i_list <- vector("list", k_actual)
+  triplet_j_list <- vector("list", k_actual)
+  triplet_x_list <- vector("list", k_actual)
+  value_threshold <- if (compat_neuroarchive) 0 else 1e-8
+  for (kk in seq_len(k_actual)) {
+    atom <- generate_hrbf_atom(
+      mask_coords_world,
+      atom_col_indices,
+      C_total[kk, ],
+      sigma_vec[kk],
+      level_vec[kk], levels, params
+    )
+    keep <- abs(atom$values) >= value_threshold
+    if (any(keep)) {
+      triplet_i_list[[kk]] <- rep.int(kk, sum(keep))
+      triplet_j_list[[kk]] <- atom$indices[keep]
+      triplet_x_list[[kk]] <- atom$values[keep]
+    } else {
+      triplet_i_list[[kk]] <- integer()
+      triplet_j_list[[kk]] <- integer()
+      triplet_x_list[[kk]] <- numeric()
+    }
+  }
+  i_idx <- unlist(triplet_i_list, use.names = FALSE)
+  j_idx <- unlist(triplet_j_list, use.names = FALSE)
+  x_val <- unlist(triplet_x_list, use.names = FALSE)
+  Matrix::sparseMatrix(i = i_idx, j = j_idx, x = x_val,
+                       dims = c(k_actual, n_total_vox))
+}
+
 hrbf_basis_from_params <- function(params, mask_neurovol,
                                    mask_world_coords = NULL,
                                    mask_arr = NULL,
                                    mask_linear_indices = NULL) {
+  if (fmrilatent_is_neuroarchive_compat()) {
+    return(lna_hrbf_basis_from_params(
+      params = params,
+      mask = mask_neurovol,
+      centres = params$centres %||% NULL,
+      sigmas = params$sigmas %||% NULL,
+      full_grid = TRUE,
+      compat_profile = fmrilatent_compat_profile(),
+      mask_world_coords = mask_world_coords,
+      mask_arr = mask_arr,
+      mask_linear_indices = mask_linear_indices
+    ))
+  }
+
   sigma0 <- params$sigma0 %||% 6
   levels <- params$levels %||% 3L
   radius_factor <- params$radius_factor %||% 2.5
