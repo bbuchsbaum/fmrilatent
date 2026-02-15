@@ -8,7 +8,6 @@ Authors@R:
            role = c("aut", "cre"),
            email = "brad.buchsbaum@gmail.com",
            comment = c(ORCID = "0000-0002-1108-4866"))
-Author: Bradley Buchsbaum [aut, cre]
 Maintainer: Bradley Buchsbaum <brad.buchsbaum@gmail.com>
 Description: Provides S4 classes and methods for representing neuroimaging data
     in latent spaces. The LatentNeuroVec class offers a memory-efficient
@@ -41,7 +40,8 @@ Suggests:
     neurosurf,
     rgsp,
     bench,
-    ggplot2
+    ggplot2,
+    albersdown
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 LinkingTo:
@@ -77,6 +77,7 @@ Collate:
     'latent_neurovector.R'
     'latent_indexing.R'
     'latent_methods.R'
+    'pca_spatial.R'
     'searchlight_utils.R'
     'slepian_plot.R'
     'slepian_spatial.R'

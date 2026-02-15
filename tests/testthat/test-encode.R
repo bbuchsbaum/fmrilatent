@@ -84,6 +84,23 @@ test_that("spec_space_slepian uses default values", {
   expect_equal(spec$k_neighbors, 6L)
 })
 
+test_that("spec_space_pca creates correct spec object", {
+  spec <- spec_space_pca(k = 4, center = FALSE, whiten = TRUE, backend = "svd")
+  expect_s3_class(spec, "spec_space_pca")
+  expect_equal(spec$k, 4L)
+  expect_false(spec$center)
+  expect_true(spec$whiten)
+  expect_equal(spec$backend, "svd")
+})
+
+test_that("spec_space_pca uses default values", {
+  spec <- spec_space_pca()
+  expect_equal(spec$k, 3L)
+  expect_true(spec$center)
+  expect_false(spec$whiten)
+  expect_equal(spec$backend, "auto")
+})
+
 test_that("spec_space_heat creates correct spec object", {
   spec <- spec_space_heat(scales = c(1, 2, 4), order = 20, threshold = 1e-5, k_neighbors = 4)
   expect_s3_class(spec, "spec_space_heat")

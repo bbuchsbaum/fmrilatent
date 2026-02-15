@@ -23,3 +23,9 @@
 ^src/.*\.o$
 ^src/.*\.o\.tmp$
 ^src/.*\.so$
+^\.covr_result\.rds$
+^\.rcmdcheck_result\.rds$
+^\.omc($|/)
+^\.planning($|/)
+^src/AGENTS\.md$
+^vignettes/AGENTS\.md$

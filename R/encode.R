@@ -79,6 +79,33 @@ spec_space_slepian <- function(k = 3L, k_neighbors = 6L) {
   structure(list(k = k, k_neighbors = k_neighbors), class = "spec_space_slepian")
 }
 
+#' Spatial PCA spec (cluster-local)
+#'
+#' Computes PCA eigenvectors within each cluster/parcel specified by a
+#' `ClusterReduction` and returns a block-sparse spatial dictionary.
+#'
+#' @param k Components per cluster.
+#' @param center Logical; center voxels before PCA (default TRUE). When TRUE,
+#'   voxel means are stored in `LatentNeuroVec@offset`.
+#' @param whiten Logical; if TRUE, return whitened scores (unit-variance) and
+#'   rescaled loadings such that reconstruction is unchanged.
+#' @param backend SVD backend: "auto" (default), "svds" (RSpectra), or "svd" (base).
+#' @return A `spec_space_pca` object.
+#' @export
+spec_space_pca <- function(k = 3L, center = TRUE, whiten = FALSE,
+                           backend = c("auto", "svds", "svd")) {
+  backend <- match.arg(backend)
+  structure(
+    list(
+      k = as.integer(k),
+      center = isTRUE(center),
+      whiten = isTRUE(whiten),
+      backend = backend
+    ),
+    class = "spec_space_pca"
+  )
+}
+
 #' Spatial heat-wavelet spec (graph diffusion)
 #'
 #' @param scales Heat scales.
@@ -189,12 +216,13 @@ encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
 #' @return A LatentNeuroVec or ImplicitLatent object.
 #' @export
 latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize = "handle", label = "") {
-  family <- match.arg(family, c("dct_time", "slepian_time", "slepian_space", "heat_space", "slepian_st", "bspline_hrbf_st", "wavelet_active", "hierarchical"))
+  family <- match.arg(family, c("dct_time", "slepian_time", "slepian_space", "pca_space", "heat_space", "slepian_st", "bspline_hrbf_st", "wavelet_active", "hierarchical"))
   spec <- switch(
     family,
     dct_time = spec_time_dct(...),
     slepian_time = spec_time_slepian(...),
     slepian_space = spec_space_slepian(...),
+    pca_space = spec_space_pca(...),
     heat_space = spec_space_heat(...),
     bspline_hrbf_st = {
       args <- list(...)
@@ -351,6 +379,70 @@ encode_spec.spec_space_hrbf <- function(x, spec, mask, reduction, materialize, l
   basis <- Matrix::Matrix(coeff, sparse = FALSE) # time x atoms
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
   LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+}
+
+#' @exportS3Method
+encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, label, ...) {
+  mask_arr <- .mask_to_array(mask, "encode_spec.spec_space_pca")
+  n_time <- nrow(x)
+  n_vox <- sum(mask_arr)
+
+  if (is.null(reduction)) {
+    reduction <- make_cluster_reduction(mask, rep.int(1L, n_vox))
+  }
+
+  offset <- numeric(0)
+  if (isTRUE(spec$center)) {
+    offset <- colMeans(x)
+  }
+
+  loadings <- lift(
+    reduction,
+    basis_pca(k = spec$k, whiten = isTRUE(spec$whiten)),
+    data = x,
+    center = isTRUE(spec$center),
+    offset = if (length(offset) > 0) offset else NULL,
+    backend = spec$backend %||% "auto",
+    ...
+  )
+
+  basis <- x %*% loadings
+  if (length(offset) > 0) {
+    mu_scores <- as.matrix(crossprod(offset, loadings))
+    basis <- basis - matrix(1, nrow = n_time, ncol = 1) %*% mu_scores
+  }
+
+  if (isTRUE(spec$whiten)) {
+    d <- attr(loadings, "fmrilatent.singular_values")
+    if (is.null(d) || length(d) != ncol(loadings)) {
+      stop("PCA whitening requested, but singular values were not returned by lift().", call. = FALSE)
+    }
+    if (any(!is.finite(d)) || any(d <= 0)) {
+      stop("PCA whitening requires strictly positive finite singular values.", call. = FALSE)
+    }
+    scale_fac <- sqrt(max(1, n_time - 1))
+    basis <- sweep(as.matrix(basis), 2, d, "/") * scale_fac
+    loadings <- loadings %*% Matrix::Diagonal(x = d / scale_fac)
+  }
+
+  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), n_time))
+  meta <- list(
+    family = "pca_spatial",
+    k = spec$k,
+    center = isTRUE(spec$center),
+    whiten = isTRUE(spec$whiten),
+    backend = spec$backend %||% "auto"
+  )
+
+  LatentNeuroVec(
+    basis = Matrix::Matrix(basis, sparse = FALSE),
+    loadings = loadings,
+    space = spc,
+    mask = mask,
+    offset = offset,
+    label = label,
+    meta = meta
+  )
 }
 
 #' @exportS3Method

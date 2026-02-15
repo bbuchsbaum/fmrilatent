@@ -1,8 +1,10 @@
 ---
 title: Encoding workflows
 output: rmarkdown::html_vignette
-vignette: |
-  %\VignetteIndexEntry{Encoding workflows} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+vignette: >
+  %\VignetteIndexEntry{Encoding workflows}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 css: albers.css
 resource_files:
 - albers.css

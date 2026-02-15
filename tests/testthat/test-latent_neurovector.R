@@ -3599,3 +3599,83 @@ test_that("[,ANY,ANY] with drop=FALSE preserves dimensions", {
   val <- lvec[1, 1, 1, 1, drop = FALSE]
   expect_equal(dim(val), c(1, 1, 1, 1))
 })
+
+# --- Bug fix tests: matrix indexing, logical indexing, matricized_access numeric ---
+
+test_that("[,ANY,ANY] handles 4-column matrix indexing correctly", {
+  lvec <- create_indexing_lvec()
+  arr <- methods::getMethod("as.array", "LatentNeuroVec")(lvec)
+
+  # Single row matrix
+  mat <- matrix(c(1, 1, 1, 1), nrow = 1)
+  val <- lvec[mat]
+  expect_equal(val, arr[1, 1, 1, 1], tolerance = 1e-10)
+
+  # Multi-row matrix
+  mat <- rbind(
+    c(1, 1, 1, 1),
+    c(2, 2, 2, 2),
+    c(1, 1, 1, 5),
+    c(2, 2, 2, 10)
+  )
+  vals <- lvec[mat]
+  expected <- c(arr[1, 1, 1, 1], arr[2, 2, 2, 2], arr[1, 1, 1, 5], arr[2, 2, 2, 10])
+  expect_equal(vals, expected, tolerance = 1e-10)
+})
+
+test_that("[,ANY,ANY] matrix indexing returns 0 for out-of-mask voxels", {
+  lvec <- create_indexing_lvec()
+
+  mat <- matrix(c(1, 1, 2, 1), nrow = 1)
+  val <- lvec[mat]
+  expect_equal(val, 0)
+})
+
+test_that("[,ANY,ANY] matrix indexing with mixed mask membership", {
+  lvec <- create_indexing_lvec()
+  arr <- methods::getMethod("as.array", "LatentNeuroVec")(lvec)
+
+  mat <- rbind(
+    c(1, 1, 1, 1),  # in mask
+    c(1, 1, 2, 1),  # out of mask
+    c(2, 2, 2, 3)   # in mask
+  )
+  vals <- lvec[mat]
+  expect_equal(vals[1], arr[1, 1, 1, 1], tolerance = 1e-10)
+  expect_equal(vals[2], 0)
+  expect_equal(vals[3], arr[2, 2, 2, 3], tolerance = 1e-10)
+})
+
+test_that("[,ANY,ANY] handles logical indexing for dimensions", {
+  lvec <- create_indexing_lvec()
+  arr <- methods::getMethod("as.array", "LatentNeuroVec")(lvec)
+
+  # Logical vector for first dimension
+  i_log <- c(TRUE, FALSE, TRUE)
+  val <- lvec[i_log, 1:3, 1:3, 1]
+  ref <- arr[which(i_log), 1:3, 1:3, 1]
+  expect_equal(val, ref, tolerance = 1e-10)
+})
+
+test_that("[,ANY,ANY] handles logical indexing for time dimension", {
+  lvec <- create_indexing_lvec()
+  arr <- methods::getMethod("as.array", "LatentNeuroVec")(lvec)
+
+  l_log <- c(TRUE, FALSE, TRUE, FALSE, FALSE, FALSE, FALSE, FALSE, FALSE, TRUE)
+  val <- lvec[1, 1, 1, l_log]
+  ref <- arr[1, 1, 1, which(l_log)]
+  expect_equal(as.numeric(val), as.numeric(ref), tolerance = 1e-10)
+})
+
+test_that("matricized_access numeric method works without callNextMethod error", {
+  lvec <- create_indexing_lvec()
+
+  # This should not error - numeric indices are converted to integer internally
+  result <- neuroim2::matricized_access(lvec, 1.0)
+  expect_true(is.matrix(result) || is.array(result))
+  expect_equal(nrow(result), 10)
+
+  # Should match the integer path
+  result_int <- neuroim2::matricized_access(lvec, 1L)
+  expect_equal(result, result_int, tolerance = 1e-10)
+})

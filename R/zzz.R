@@ -11,6 +11,9 @@
   register_encoder("space_slepian", spec_space_slepian,
                    description = "Spatial Slepian eigenvectors on clustered reduction",
                    package = pkgname)
+  register_encoder("space_pca", spec_space_pca,
+                   description = "Spatial PCA eigenvectors within clusters/parcels",
+                   package = pkgname)
   register_encoder("space_heat", spec_space_heat,
                    description = "Spatial graph diffusion heat-wavelet basis",
                    package = pkgname)

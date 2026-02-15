@@ -20,5 +20,8 @@ utils::globalVariables(c(
   "method", "median_ms",              # plot_benchmark_roundtrip
 
   "time", "value", "component",       # plot_slepian_temporal
-  "x", "y"                            # plot_spatial_atom
+  "x", "y",                           # plot_spatial_atom
+
+  "forward_lift_matrix_rcpp",          # haar_wavelet Rcpp (conditional)
+  "inverse_lift_matrix_rcpp"           # haar_wavelet Rcpp (conditional)
 ))

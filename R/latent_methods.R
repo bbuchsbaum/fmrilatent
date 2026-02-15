@@ -411,6 +411,13 @@ setMethod(
 
 # --- Conversions ---
 
+#' Reconstruct LatentNeuroVec as a matrix (time x voxels)
+#'
+#' @param x A \code{LatentNeuroVec} object.
+#' @param ... Ignored.
+#' @return A numeric matrix with rows = time points, columns = mask voxels.
+#' @export
+#' @rdname as.matrix-LatentNeuroVec-method
 setMethod(
   f = "as.matrix",
   signature = signature(x = "LatentNeuroVec"),
@@ -425,6 +432,13 @@ setMethod(
   }
 )
 
+#' Reconstruct LatentNeuroVec as a 4D array
+#'
+#' @param x A \code{LatentNeuroVec} object.
+#' @param ... Ignored.
+#' @return A 4D numeric array with dimensions (x, y, z, time).
+#' @export
+#' @rdname as.array-LatentNeuroVec-method
 setMethod(
   f = "as.array",
   signature = signature(x = "LatentNeuroVec"),

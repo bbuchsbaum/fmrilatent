@@ -1,8 +1,10 @@
 ---
 title: Getting started with fmrilatent
 output: rmarkdown::html_vignette
-vignette: |
-  %\VignetteIndexEntry{Getting started with fmrilatent} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+vignette: >
+  %\VignetteIndexEntry{Getting started with fmrilatent}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 css: albers.css
 resource_files:
 - albers.css

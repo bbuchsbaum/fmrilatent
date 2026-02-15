@@ -111,7 +111,7 @@ setMethod(
   f = "matricized_access",
   signature = signature(x = "LatentNeuroVec", i = "numeric"),
   definition = function(x, i) {
-    callNextMethod(x = x, i = as.integer(i))
+    matricized_access(x, as.integer(i))
   }
 )
 
@@ -136,7 +136,7 @@ setMethod(
   f = "linear_access",
   signature = signature(x = "LatentNeuroVec", i = "numeric"),
   definition = function(x, i) {
-    callNextMethod(x = x, i = as.integer(i))
+    linear_access(x, as.integer(i))
   }
 )
 
@@ -284,6 +284,12 @@ setMethod(
     if (missing(k)) k <- seq_len(dims_full[3])
     if (missing(l)) l <- seq_len(dims_full[4])
 
+    # Convert logical indices to positions
+    if (is.logical(i)) i <- which(i)
+    if (is.logical(j)) j <- which(j)
+    if (is.logical(k)) k <- which(k)
+    if (is.logical(l)) l <- which(l)
+
     if (any(i < 1 | i > dims_full[1]) || any(j < 1 | j > dims_full[2]) ||
       any(k < 1 | k > dims_full[3]) || any(l < 1 | l > dims_full[4])) {
       stop("Subscript out of range for LatentNeuroVec.")
@@ -353,10 +359,31 @@ setMethod(
   definition = function(x, i, j, k, l, ..., drop = TRUE) {
     dims <- dim(x)
 
+    # Handle matrix indexing: each row is a coordinate tuple
+    if (!missing(i) && is.matrix(i) && missing(j)) {
+      nc <- ncol(i)
+      if (nc == 4L) {
+        linear_idx <- i[, 1] + (i[, 2] - 1L) * dims[1] +
+          (i[, 3] - 1L) * dims[1] * dims[2] +
+          (i[, 4] - 1L) * dims[1] * dims[2] * dims[3]
+        return(linear_access(x, as.integer(linear_idx)))
+      } else if (nc == 2L) {
+        return(matricized_access(x, i))
+      } else {
+        stop("Matrix index must have 2 or 4 columns for LatentNeuroVec")
+      }
+    }
+
     if (missing(i)) i <- seq_len(dims[1])
     if (missing(j)) j <- seq_len(dims[2])
     if (missing(k)) k <- seq_len(dims[3])
     if (missing(l)) l <- seq_len(dims[4])
+
+    # Convert logical indices to positions
+    if (is.logical(i)) i <- which(i)
+    if (is.logical(j)) j <- which(j)
+    if (is.logical(k)) k <- which(k)
+    if (is.logical(l)) l <- which(l)
 
     i <- as.integer(i)
     j <- as.integer(j)

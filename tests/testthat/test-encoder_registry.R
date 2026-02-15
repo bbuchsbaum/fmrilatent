@@ -28,7 +28,7 @@ test_that("built-in encoders are registered after loading", {
   expect_true(all(c("family", "description", "package") %in% names(tbl)))
 
   expected <- c("time_slepian", "time_dct", "time_bspline",
-                "space_slepian", "space_heat", "space_hrbf",
+                "space_slepian", "space_pca", "space_heat", "space_hrbf",
                 "space_wavelet_active", "st", "hierarchical")
   for (fam in expected) {
     expect_true(fam %in% tbl$family, info = paste("Missing:", fam))
