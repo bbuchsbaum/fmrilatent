@@ -1,0 +1,169 @@
+---
+title: Getting started with fmrilatent
+output: rmarkdown::html_vignette
+vignette: |
+  %\VignetteIndexEntry{Getting started with fmrilatent} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+css: albers.css
+resource_files:
+- albers.css
+- albers.js
+includes:
+  in_header: |-
+    <script src="albers.js"></script>
+    <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('palette-red');});</script>
+params:
+  family: red
+
+---
+
+```{r setup, include = FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>"
+)
+```
+
+```{r library}
+library(fmrilatent)
+```
+
+## Why fmrilatent?
+
+An fMRI dataset is a 4D array — three spatial dimensions and time. Most of
+that volume is empty: air, skull, tissue outside the brain. Even within the
+brain mask, the signal lives in a much lower-dimensional subspace than the
+raw voxel count suggests.
+
+fmrilatent exploits this structure. You choose a basis family, call
+`encode()`, and get a `LatentNeuroVec` that stores your data as a compact
+matrix factorization. The original data can be reconstructed on demand —
+partially or fully — without ever materializing the full dense array.
+
+## A first encoding
+
+Let's compress a small simulated fMRI dataset using a temporal DCT basis:
+
+```{r first-encode}
+# Build a small brain mask (4 x 4 x 4, all voxels in-mask)
+mask <- array(TRUE, dim = c(4, 4, 4))
+mask_vol <- neuroim2::LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
+
+# Simulated data: 20 time points, 64 voxels
+set.seed(42)
+X <- matrix(rnorm(20 * sum(mask)), nrow = 20)
+
+# Encode with 8 DCT components
+lat <- encode(X, spec_time_dct(k = 8), mask = mask_vol)
+lat
+```
+
+The `LatentNeuroVec` stores a 20 x 8 temporal basis and 64 x 8 spatial
+loadings — much smaller than the original 20 x 64 matrix. The savings grow
+dramatically with real data: a 300-timepoint run over 100,000 voxels shrinks
+from 30 million values to a basis and loadings totaling a fraction of that.
+
+## Getting data back
+
+Reconstruction is straightforward:
+
+```{r reconstruct}
+# Full matrix (time x voxels)
+recon <- as.matrix(lat)
+dim(recon)
+
+# How close is the approximation?
+sqrt(mean((recon - X)^2))
+```
+
+With 8 out of 20 possible DCT components, the approximation is lossy. More
+components capture more variance; fewer give heavier compression.
+
+You can also access data selectively:
+
+```{r access}
+# Time series at voxel 1 (linear index)
+ts1 <- series(lat, 1L)
+head(ts1)
+
+# Inspect the latent factors directly
+dim(basis(lat))      # temporal basis: 20 x 8
+dim(loadings(lat))   # spatial loadings: 64 x 8
+```
+
+## Choosing a basis
+
+Every basis family follows the same two-step pattern: build a spec, then
+call `encode()`. The choice of family depends on what structure you want to
+preserve.
+
+### Temporal families
+
+Temporal bases compress the time dimension. Each voxel's time course is
+projected onto a shared set of basis functions.
+
+```{r slepian-temporal}
+# Slepian/DPSS: bandlimited to 0.08 Hz, TR = 2s
+lat_slep <- encode(X, spec_time_slepian(tr = 2, bandwidth = 0.08, k = 4),
+                   mask = mask_vol)
+dim(basis(lat_slep))
+```
+
+```{r bspline}
+# B-spline: 6 smooth cubic functions
+lat_bs <- encode(X, spec_time_bspline(k = 6, degree = 3),
+                 mask = mask_vol)
+dim(basis(lat_bs))
+```
+
+### Spatial and spatiotemporal families
+
+Spatial bases compress the voxel dimension by projecting onto spatial atoms
+(graph Slepians, heat wavelets, radial basis functions, or lifting wavelets).
+Spatiotemporal bases compress both dimensions into a small core tensor.
+
+```{r spatial, eval = FALSE}
+# Spatial Slepian: 3 graph-spectral components per cluster
+lat_sp <- encode(X, spec_space_slepian(k = 3, k_neighbors = 6),
+                 mask = mask_vol)
+
+# Separable spatiotemporal: B-spline (time) + HRBF (space)
+lat_st <- encode(X,
+  spec_st(
+    time  = spec_time_bspline(k = 4),
+    space = spec_space_hrbf(params = list(sigma0 = 2, levels = 0,
+                                          radius_factor = 2.5))
+  ),
+  mask = mask_vol
+)
+
+# Partial decode: only time points 1-5
+partial <- predict(lat_st, time_idx = 1:5)
+dim(partial)
+```
+
+Separable encoding returns an `ImplicitLatent` object whose `predict()`
+method accepts `time_idx` and `roi_mask` arguments, so you reconstruct only
+what you need.
+
+### Quick reference
+
+| Family | Dimension | Strengths |
+|--------|-----------|-----------|
+| Slepian/DPSS | time | Optimal bandlimiting, minimal spectral leakage |
+| DCT | time | Fast, interpretable frequency components |
+| B-spline | time | Smooth, localized, adjustable flexibility |
+| Slepian | space | Graph-spectral concentration on regions |
+| Heat wavelet | space | Multiscale graph diffusion |
+| HRBF | space | Smooth radial basis functions |
+| Wavelet active | space | Mask-aware CDF 5/3 lifting, very fast |
+| Separable | time + space | Compact core tensor, partial decoding |
+
+## Next steps
+
+- `vignette("encode-factory")` walks through each encoding strategy in
+  detail, including benchmarking and materialization options.
+- `?LatentNeuroVec` documents the class and its methods (`basis()`,
+  `loadings()`, `series()`, `as.matrix()`, `as.array()`).
+- `?benchmark_roundtrip` compares encoding families on your own data and
+  hardware.
