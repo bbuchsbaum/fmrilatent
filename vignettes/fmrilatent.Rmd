@@ -17,7 +17,7 @@ params:
 ---
 
 ```{r setup, include = FALSE}
-if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (exists("params") && requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
@@ -54,7 +54,7 @@ set.seed(42)
 X <- matrix(rnorm(20 * sum(mask)), nrow = 20)
 
 # Encode with 8 DCT components
-lat <- encode(X, spec_time_dct(k = 8), mask = mask_vol)
+lat <- encode(X, spec_time_dct(k = 8), mask = mask_vol, materialize = "matrix")
 lat
 ```
 
@@ -105,14 +105,14 @@ projected onto a shared set of basis functions.
 ```{r slepian-temporal}
 # Slepian/DPSS: bandlimited to 0.08 Hz, TR = 2s
 lat_slep <- encode(X, spec_time_slepian(tr = 2, bandwidth = 0.08, k = 4),
-                   mask = mask_vol)
+                   mask = mask_vol, materialize = "matrix")
 dim(basis(lat_slep))
 ```
 
 ```{r bspline}
 # B-spline: 6 smooth cubic functions
 lat_bs <- encode(X, spec_time_bspline(k = 6, degree = 3),
-                 mask = mask_vol)
+                 mask = mask_vol, materialize = "matrix")
 dim(basis(lat_bs))
 ```
 

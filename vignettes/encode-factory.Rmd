@@ -17,7 +17,7 @@ params:
 ---
 
 ```{r setup, include = FALSE}
-if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (exists("params") && requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
@@ -59,7 +59,7 @@ analysis focused on a specific frequency range.
 
 ```{r slepian-time}
 spec_slep <- spec_time_slepian(tr = 2, bandwidth = 0.08, k = 4)
-lat_slep <- encode(X, spec_slep, mask = mask_vol)
+lat_slep <- encode(X, spec_slep, mask = mask_vol, materialize = "matrix")
 
 # 4 basis vectors spanning the 0-0.08 Hz band
 dim(basis(lat_slep))
@@ -80,7 +80,7 @@ is fast and parameter-free beyond choosing `k` — a good default when you
 have no strong prior about the signal bandwidth.
 
 ```{r dct}
-lat_dct <- encode(X, spec_time_dct(k = 8), mask = mask_vol)
+lat_dct <- encode(X, spec_time_dct(k = 8), mask = mask_vol, materialize = "matrix")
 dim(basis(lat_dct))
 sqrt(mean((as.matrix(lat_dct) - X)^2))
 ```
@@ -93,7 +93,8 @@ response, where you want smooth temporal structure without frequency-domain
 assumptions.
 
 ```{r bspline-time}
-lat_bs <- encode(X, spec_time_bspline(k = 6, degree = 3), mask = mask_vol)
+lat_bs <- encode(X, spec_time_bspline(k = 6, degree = 3), mask = mask_vol,
+                 materialize = "matrix")
 dim(basis(lat_bs))
 ```
 
@@ -236,7 +237,8 @@ k_space), so storage is minimal regardless of the original data size.
 handy for quick experiments:
 
 ```{r factory}
-lat_f <- latent_factory("dct_time", x = X, mask = mask_vol, k = 8)
+lat_f <- latent_factory("dct_time", x = X, mask = mask_vol, k = 8,
+                        materialize = "matrix")
 dim(basis(lat_f))
 ```
 
@@ -267,17 +269,18 @@ internally:
 - **`"matrix"`**: an explicit dense matrix. Faster for repeated full
   reconstructions since the basis is precomputed.
 
-```{r materialize}
-# Lazy handle (default)
-lat_lazy <- encode(X, spec_time_dct(k = 8), mask = mask_vol,
-                   materialize = "handle")
-
+```{r materialize, eval = FALSE}
 # Eager matrix
 lat_eager <- encode(X, spec_time_dct(k = 8), mask = mask_vol,
                     materialize = "matrix")
 
+# Lazy handle (default)
+lat_lazy <- encode(X, spec_time_dct(k = 8), mask = mask_vol,
+                   materialize = "handle")
+
 # Same numerical result
-all.equal(as.matrix(lat_lazy), as.matrix(lat_eager))
+all.equal(as.matrix(lat_eager), as.matrix(lat_lazy))
+#> [1] TRUE
 ```
 
 Both produce identical numerical results. Choose `"handle"` when memory
