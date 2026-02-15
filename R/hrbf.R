@@ -921,7 +921,7 @@ compute_hrbf_coefficients <- function(X_time_vox, basis_atoms_vox) {
     proj <- Matrix::tcrossprod(X_time_vox, basis_atoms_vox)       # T x K
     gram <- tryCatch(Matrix::tcrossprod(basis_atoms_vox), error = function(e) NULL) # K x K
     if (!is.null(gram)) {
-      d <- diag(gram)
+      d <- Matrix::diag(gram)
       lambda <- if (length(d) > 0) 1e-6 * (mean(as.numeric(d)) + 1) else 1e-6
       gram_reg <- tryCatch(gram + Matrix::Diagonal(n = nrow(gram), x = lambda), error = function(e) gram)
       gram_inv <- tryCatch(Matrix::solve(gram_reg), error = function(e) NULL)

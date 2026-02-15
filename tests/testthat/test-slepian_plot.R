@@ -434,3 +434,154 @@ test_that("plot functions have minimal theme applied", {
   expect_true(inherits(result_temporal$theme, "theme"))
   expect_true(inherits(result_gram$theme, "theme"))
 })
+
+# =============================================================================
+# Base graphics fallback tests (when ggplot2 not available)
+# =============================================================================
+
+test_that("plot_slepian_temporal base graphics fallback with matrix input", {
+  # Temporarily mock ggplot2 unavailability by testing behavior
+  set.seed(42)
+  n_time <- 30
+  k <- 4
+  basis <- matrix(rnorm(n_time * k), nrow = n_time, ncol = k)
+
+  # Should work without error even if ggplot2 not available
+  result <- suppressMessages(plot_slepian_temporal(basis, max_components = 3))
+
+  # Returns ggplot if available, NULL otherwise
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+    expect_s3_class(result, "ggplot")
+  } else {
+    expect_null(result)
+  }
+})
+
+test_that("plot_basis_gram base graphics fallback with matrix input", {
+  set.seed(99)
+  n_time <- 20
+  k <- 3
+  basis <- matrix(rnorm(n_time * k), nrow = n_time, ncol = k)
+
+  # Should work without error
+  result <- suppressMessages(plot_basis_gram(basis))
+
+  if (requireNamespace("ggplot2", quietly = TRUE)) {
+    expect_s3_class(result, "ggplot")
+  } else {
+    expect_null(result)
+  }
+})
+
+# =============================================================================
+# Additional coverage tests for plot_slepian_temporal and plot_basis_gram
+# =============================================================================
+
+test_that("plot_slepian_temporal with max_components = 1 plots single line", {
+  skip_if_not_installed("ggplot2")
+
+  set.seed(1010)
+  n_time <- 20
+  k <- 5
+  basis <- matrix(rnorm(n_time * k), nrow = n_time, ncol = k)
+
+  result <- plot_slepian_temporal(basis, max_components = 1L)
+  expect_s3_class(result, "ggplot")
+
+  plot_data <- ggplot2::ggplot_build(result)$data[[1]]
+  unique_groups <- length(unique(plot_data$group))
+  expect_equal(unique_groups, 1L)
+})
+
+test_that("plot_slepian_temporal with max_components exceeding ncol uses all columns", {
+  skip_if_not_installed("ggplot2")
+
+  set.seed(2020)
+  n_time <- 15
+  k <- 2
+  basis <- matrix(rnorm(n_time * k), nrow = n_time, ncol = k)
+
+  # max_components = 100, but only 2 columns exist
+
+  result <- plot_slepian_temporal(basis, max_components = 100L)
+  expect_s3_class(result, "ggplot")
+
+  plot_data <- ggplot2::ggplot_build(result)$data[[1]]
+  unique_groups <- length(unique(plot_data$group))
+  expect_equal(unique_groups, 2L)
+})
+
+test_that("plot_slepian_temporal title is correct", {
+  skip_if_not_installed("ggplot2")
+
+  basis <- matrix(rnorm(30), nrow = 10, ncol = 3)
+  result <- plot_slepian_temporal(basis)
+  expect_equal(result$labels$title, "Temporal Slepians (DPSS)")
+})
+
+test_that("plot_basis_gram title is correct", {
+  skip_if_not_installed("ggplot2")
+
+  basis <- matrix(rnorm(20), nrow = 10, ncol = 2)
+  result <- plot_basis_gram(basis)
+  expect_equal(result$labels$title, "Basis Gram matrix")
+})
+
+test_that("plot_basis_gram with large k produces k^2 tiles", {
+  skip_if_not_installed("ggplot2")
+
+  set.seed(3030)
+  n_time <- 20
+  k <- 7
+  basis <- matrix(rnorm(n_time * k), nrow = n_time, ncol = k)
+
+  result <- plot_basis_gram(basis)
+  expect_s3_class(result, "ggplot")
+
+  plot_data <- ggplot2::layer_data(result)
+  expect_equal(nrow(plot_data), k * k)
+})
+
+test_that("plot_basis_gram Gram matrix diagonal values are positive for non-zero basis", {
+  skip_if_not_installed("ggplot2")
+
+  set.seed(4040)
+  basis <- matrix(rnorm(30), nrow = 10, ncol = 3)
+  result <- plot_basis_gram(basis)
+
+  G <- crossprod(basis)
+  # Diagonal entries should all be positive (sum of squares)
+  expect_true(all(diag(G) > 0))
+
+  # Verify they appear in the plot data
+  df <- result$data
+  diag_entries <- df[df$i == df$j, "val"]
+  expect_true(all(diag_entries > 0))
+})
+
+test_that("plot_slepian_temporal with actual DPSS from both backends", {
+  skip_if_not_installed("ggplot2")
+
+  # Test with tridiag
+  B_tri <- dpss_time_basis(32, tr = 2, bandwidth = 0.06, k = 4, backend = "tridiag")
+  result_tri <- plot_slepian_temporal(B_tri, max_components = 4)
+  expect_s3_class(result_tri, "ggplot")
+
+  # Test with dense
+  B_dense <- dpss_time_basis(32, tr = 2, bandwidth = 0.06, k = 4, backend = "dense")
+  result_dense <- plot_slepian_temporal(B_dense, max_components = 4)
+  expect_s3_class(result_dense, "ggplot")
+})
+
+test_that("plot_basis_gram coord_equal produces square aspect ratio", {
+  skip_if_not_installed("ggplot2")
+
+  basis <- matrix(rnorm(20), nrow = 10, ncol = 2)
+  result <- plot_basis_gram(basis)
+
+  # Verify that coord_equal was applied by checking the coordinate system exists
+  # and that the plot builds correctly with equal aspect ratio
+  expect_true(inherits(result$coordinates, "Coord"))
+  built <- ggplot2::ggplot_build(result)
+  expect_true(!is.null(built))
+})

@@ -413,3 +413,275 @@ test_that(".latent_get_registry_env rejects invalid type", {
     "'arg' should be one of"
   )
 })
+
+# -----------------------------------------------------------------------------
+# Tests for registry enable/disable API
+# -----------------------------------------------------------------------------
+
+test_that("fmrilatent_registry_enable enables the registry", {
+  # Save original state
+  original_state <- getOption("fmrilatent.registry.enabled")
+  on.exit(options(fmrilatent.registry.enabled = original_state), add = TRUE)
+
+  # Disable first
+  fmrilatent_registry_disable()
+  expect_false(fmrilatent_registry_enabled())
+
+  # Now enable
+  result <- fmrilatent_registry_enable()
+  expect_true(result)
+  expect_true(fmrilatent_registry_enabled())
+})
+
+test_that("fmrilatent_registry_disable disables the registry", {
+  # Save original state
+  original_state <- getOption("fmrilatent.registry.enabled")
+  on.exit(options(fmrilatent.registry.enabled = original_state), add = TRUE)
+
+  # Enable first
+  fmrilatent_registry_enable()
+  expect_true(fmrilatent_registry_enabled())
+
+  # Now disable
+  result <- fmrilatent_registry_disable()
+  expect_true(result)
+  expect_false(fmrilatent_registry_enabled())
+})
+
+test_that("fmrilatent_registry_enabled returns correct state", {
+  # Save original state
+  original_state <- getOption("fmrilatent.registry.enabled")
+  on.exit(options(fmrilatent.registry.enabled = original_state), add = TRUE)
+
+  # Test enabled state
+  options(fmrilatent.registry.enabled = TRUE)
+  expect_true(fmrilatent_registry_enabled())
+
+  # Test disabled state
+  options(fmrilatent.registry.enabled = FALSE)
+  expect_false(fmrilatent_registry_enabled())
+
+  # Test NULL/missing state (defaults to TRUE)
+  options(fmrilatent.registry.enabled = NULL)
+  expect_true(fmrilatent_registry_enabled())
+})
+
+test_that(".latent_register_matrix returns FALSE when registry is disabled", {
+  # Save original state
+  original_state <- getOption("fmrilatent.registry.enabled")
+  on.exit(options(fmrilatent.registry.enabled = original_state), add = TRUE)
+
+  setup_clean_registry()
+  fmrilatent_registry_disable()
+
+  result <- fmrilatent:::.latent_register_matrix("test_id", matrix(1:4, 2), "basis")
+
+  expect_false(result)
+
+  # Re-enable to verify it wasn't registered
+  fmrilatent_registry_enable()
+  expect_false(fmrilatent:::.latent_has_matrix("test_id", "basis"))
+})
+
+test_that(".latent_get_matrix returns NULL when registry is disabled", {
+  # Save original state
+  original_state <- getOption("fmrilatent.registry.enabled")
+  on.exit(options(fmrilatent.registry.enabled = original_state), add = TRUE)
+
+  setup_clean_registry()
+
+  # Register with registry enabled
+  fmrilatent_registry_enable()
+  fmrilatent:::.latent_register_matrix("test_id", matrix(1:4, 2), "basis")
+  expect_true(fmrilatent:::.latent_has_matrix("test_id", "basis"))
+
+  # Disable registry
+  fmrilatent_registry_disable()
+
+  # Should return NULL even though item exists in environment
+  result <- fmrilatent:::.latent_get_matrix("test_id", "basis")
+  expect_null(result)
+
+  # Cleanup
+  fmrilatent_registry_enable()
+  fmrilatent_registry_clear()
+})
+
+test_that(".latent_get_matrix returns NULL when id doesn't exist", {
+  # Save original state
+  original_state <- getOption("fmrilatent.registry.enabled")
+  on.exit(options(fmrilatent.registry.enabled = original_state), add = TRUE)
+
+  setup_clean_registry()
+  fmrilatent_registry_enable()
+
+  result <- fmrilatent:::.latent_get_matrix("nonexistent_matrix_id", "basis")
+  expect_null(result)
+
+  result2 <- fmrilatent:::.latent_get_matrix("another_missing_id", "loadings")
+  expect_null(result2)
+})
+
+# -----------------------------------------------------------------------------
+# Tests for mask_to_array
+# -----------------------------------------------------------------------------
+
+test_that("mask_to_array converts array to array", {
+  arr <- array(c(TRUE, FALSE, TRUE, FALSE), dim = c(2, 2))
+  result <- mask_to_array(arr)
+  expect_identical(result, arr)
+})
+
+test_that("mask_to_array converts matrix to array", {
+  mat <- matrix(c(TRUE, FALSE, TRUE, FALSE), 2, 2)
+  result <- mask_to_array(mat)
+  expect_true(is.array(result))
+  expect_equal(dim(result), c(2, 2))
+})
+
+test_that("mask_to_array errors with informative message when conversion fails", {
+  # Use an environment object which genuinely fails as.array conversion
+  bad_obj <- new.env()
+
+  expect_error(
+    mask_to_array(bad_obj, location = "test_function"),
+    "In test_function: mask must be array-like or LogicalNeuroVol"
+  )
+
+  expect_error(
+    mask_to_array(bad_obj, location = "test_function"),
+    "Underlying error:"
+  )
+})
+
+test_that("mask_to_array errors when as.array returns NULL", {
+  # Define a mock class that returns NULL from as.array (must be global)
+  assign("as.array.mock_null_test", function(x, ...) NULL, envir = .GlobalEnv)
+  on.exit(rm("as.array.mock_null_test", envir = .GlobalEnv), add = TRUE)
+
+  mock_obj <- structure(list(), class = "mock_null_test")
+
+  expect_error(
+    mask_to_array(mock_obj, location = "my_test_func"),
+    "In my_test_func: mask must be array-like or LogicalNeuroVol"
+  )
+
+  expect_error(
+    mask_to_array(mock_obj, location = "my_test_func"),
+    "conversion returned NULL"
+  )
+})
+
+test_that("mask_to_array uses location parameter in error messages", {
+  # Use a function object which genuinely fails as.array conversion
+  bad_obj <- function() {}
+
+  expect_error(
+    mask_to_array(bad_obj, location = "custom_location_name"),
+    "In custom_location_name:"
+  )
+})
+
+# -----------------------------------------------------------------------------
+# Tests for .latent_basis_dim
+# -----------------------------------------------------------------------------
+
+test_that(".latent_basis_dim returns correct dimensions for matrix", {
+  mat <- matrix(1:20, 10, 2)
+  result <- fmrilatent:::.latent_basis_dim(mat)
+  expect_equal(result, c(10, 2))
+})
+
+test_that(".latent_basis_dim returns correct dimensions for 2D array", {
+  arr <- array(1:20, dim = c(10, 2))
+  result <- fmrilatent:::.latent_basis_dim(arr)
+  expect_equal(result, c(10, 2))
+})
+
+test_that(".latent_basis_dim returns correct dimensions for BasisHandle", {
+  # Create a BasisHandle with known dimensions
+  handle <- new("BasisHandle",
+                id = "test_basis",
+                dim = as.integer(c(100, 5)),
+                kind = "dct",
+                spec = list(),
+                label = "test")
+
+  result <- fmrilatent:::.latent_basis_dim(handle)
+  expect_equal(result, c(100, 5))
+})
+
+test_that(".latent_basis_dim errors on unsupported type", {
+  # Test with a vector (1D array)
+  vec <- 1:10
+  expect_error(
+    fmrilatent:::.latent_basis_dim(vec),
+    "Unsupported basis slot type"
+  )
+
+  # Test with a list
+  lst <- list(a = 1, b = 2)
+  expect_error(
+    fmrilatent:::.latent_basis_dim(lst),
+    "Unsupported basis slot type"
+  )
+
+  # Test with a 3D array
+  arr3d <- array(1:24, dim = c(2, 3, 4))
+  expect_error(
+    fmrilatent:::.latent_basis_dim(arr3d),
+    "Unsupported basis slot type"
+  )
+})
+
+# -----------------------------------------------------------------------------
+# Tests for .latent_loadings_dim
+# -----------------------------------------------------------------------------
+
+test_that(".latent_loadings_dim returns correct dimensions for matrix", {
+  mat <- matrix(1:30, 15, 2)
+  result <- fmrilatent:::.latent_loadings_dim(mat)
+  expect_equal(result, c(15, 2))
+})
+
+test_that(".latent_loadings_dim returns correct dimensions for 2D array", {
+  arr <- array(1:30, dim = c(15, 2))
+  result <- fmrilatent:::.latent_loadings_dim(arr)
+  expect_equal(result, c(15, 2))
+})
+
+test_that(".latent_loadings_dim returns correct dimensions for LoadingsHandle", {
+  # Create a LoadingsHandle with known dimensions
+  handle <- new("LoadingsHandle",
+                id = "test_loadings",
+                dim = as.integer(c(1000, 5)),
+                kind = "explicit",
+                spec = list(),
+                label = "test")
+
+  result <- fmrilatent:::.latent_loadings_dim(handle)
+  expect_equal(result, c(1000, 5))
+})
+
+test_that(".latent_loadings_dim errors on unsupported type", {
+  # Test with a vector (1D array)
+  vec <- 1:10
+  expect_error(
+    fmrilatent:::.latent_loadings_dim(vec),
+    "Unsupported loadings slot type"
+  )
+
+  # Test with a list
+  lst <- list(a = 1, b = 2)
+  expect_error(
+    fmrilatent:::.latent_loadings_dim(lst),
+    "Unsupported loadings slot type"
+  )
+
+  # Test with a 3D array
+  arr3d <- array(1:24, dim = c(2, 3, 4))
+  expect_error(
+    fmrilatent:::.latent_loadings_dim(arr3d),
+    "Unsupported loadings slot type"
+  )
+})

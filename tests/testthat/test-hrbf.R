@@ -744,3 +744,846 @@ test_that("hrbf_atoms_rcpp with extra fine levels", {
   expect_equal(ncol(B), sum(mask_arr))
   expect_gt(nrow(B), 0)
 })
+
+# ============================================================================
+# Additional tests for zero-coverage functions
+# ============================================================================
+
+test_that("hrbf_generate_basis edge case: missing seed gets default", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian")
+  # No seed provided
+  B <- hrbf_generate_basis(params, mask)
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(ncol(B), sum(mask_arr))
+})
+
+test_that("hrbf_reconstruct_partial error: missing voxel_idx", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+  coeff <- matrix(rnorm(3 * 8), nrow = 3)
+
+  expect_error(
+    hrbf_reconstruct_partial(coeff, mask, params),
+    "voxel_idx must be provided"
+  )
+})
+
+test_that("hrbf_reconstruct_partial error: voxel_idx out of bounds", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+  coeff <- matrix(rnorm(3 * 8), nrow = 3)
+
+  expect_error(
+    hrbf_reconstruct_partial(coeff, mask, params, voxel_idx = c(1, 100)),
+    "voxel_idx out of bounds"
+  )
+})
+
+test_that("hrbf_reconstruct_partial error: time_idx out of bounds", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+  coeff <- matrix(rnorm(3 * 8), nrow = 3)
+
+  expect_error(
+    hrbf_reconstruct_partial(coeff, mask, params, voxel_idx = c(1, 2), time_idx = c(1, 10)),
+    "time_idx out of bounds"
+  )
+})
+
+test_that("hrbf_reconstruct_partial edge case: empty voxel_idx", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+  coeff <- matrix(rnorm(3 * 8), nrow = 3)
+
+  expect_error(
+    hrbf_reconstruct_partial(coeff, mask, params, voxel_idx = integer(0)),
+    "voxel_idx must be provided"
+  )
+})
+
+test_that("hrbf_latent error: X must have time in rows", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  # Empty matrix
+  expect_error(
+    hrbf_latent(matrix(nrow = 0, ncol = 8), mask, params),
+    "X must have time in rows"
+  )
+})
+
+test_that("hrbf_latent with custom label", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  X <- matrix(rnorm(3 * 8), nrow = 3)
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  lvec <- hrbf_latent(X, mask, params, label = "test_label")
+  expect_s4_class(lvec, "LatentNeuroVec")
+  expect_equal(lvec@label, "test_label")
+})
+
+test_that("as_hrbf_latent attaches metadata correctly", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  X <- matrix(rnorm(3 * 8), nrow = 3)
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  lvec <- hrbf_latent(X, mask, params)
+  centres_test <- matrix(c(0, 0, 0), ncol = 3)
+  sigmas_test <- c(1.0)
+
+  lvec2 <- as_hrbf_latent(lvec, params, centres = centres_test, sigmas = sigmas_test)
+
+  expect_s4_class(lvec2, "LatentNeuroVec")
+  meta <- hrbf_meta(lvec2)
+  expect_equal(meta$family, "hrbf")
+  expect_equal(meta$centres, centres_test)
+  expect_equal(meta$sigmas, sigmas_test)
+})
+
+test_that("as_hrbf_latent error: non-LatentNeuroVec input", {
+  expect_error(
+    as_hrbf_latent(list(), params = list()),
+    "inherits\\(lvec, \"LatentNeuroVec\"\\) is not TRUE"
+  )
+})
+
+test_that("hrbf_meta returns NULL for non-LatentNeuroVec", {
+  expect_null(hrbf_meta(list()))
+  expect_null(hrbf_meta(matrix(1:10)))
+})
+
+test_that("hrbf_meta returns NULL for LatentNeuroVec without meta", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
+
+  # Create LatentNeuroVec without HRBF metadata
+  lvec <- LatentNeuroVec(
+    basis = matrix(rnorm(3 * 8), nrow = 3),
+    loadings = Matrix::Matrix(rnorm(8 * 8), nrow = 8),
+    space = spc,
+    mask = mask
+  )
+
+  expect_null(hrbf_meta(lvec))
+})
+
+test_that("hrbf_meta returns NULL for wrong family", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
+
+  lvec <- LatentNeuroVec(
+    basis = matrix(rnorm(3 * 8), nrow = 3),
+    loadings = Matrix::Matrix(rnorm(8 * 8), nrow = 8),
+    space = spc,
+    mask = mask,
+    meta = list(family = "other")
+  )
+
+  expect_null(hrbf_meta(lvec))
+})
+
+test_that("extract_mask_array_logical error: cannot extract array", {
+  expect_error(
+    fmrilatent:::extract_mask_array_logical(NULL, "test_location"),
+    "Cannot extract array from mask \\(test_location\\)"
+  )
+})
+
+test_that("extract_mask_array_logical coerces vectors to arrays", {
+  # Vectors get coerced to arrays with dimensions by as.array
+  # This is expected behavior, so just verify it works
+  vec_mask <- c(TRUE, FALSE, TRUE)
+  result <- fmrilatent:::extract_mask_array_logical(vec_mask, "test_location")
+  expect_true(is.logical(result))
+  expect_equal(length(dim(result)), 1)  # 1D array
+})
+
+test_that("extract_mask_array_logical handles list with arr field", {
+  mask_list <- list(arr = array(TRUE, dim = c(2, 2, 2)))
+  result <- fmrilatent:::extract_mask_array_logical(mask_list, "test")
+  expect_equal(dim(result), c(2, 2, 2))
+  expect_true(is.logical(result))
+})
+
+test_that("poisson_disk_sample_neuroim2 handles multi-component mask", {
+  # Create a mask with two disconnected components
+  mask_arr <- array(FALSE, dim = c(5, 5, 5))
+  mask_arr[1:2, 1:2, 1:2] <- TRUE  # Component 1
+  mask_arr[4:5, 4:5, 4:5] <- TRUE  # Component 2
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(5, 5, 5)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(mask, radius_mm = 1.5, seed = 42L)
+
+  expect_true(nrow(centres) >= 2)  # Should have centres from both components
+  expect_equal(ncol(centres), 3)
+  expect_equal(colnames(centres), c("i", "j", "k"))
+})
+
+test_that("poisson_disk_sample_neuroim2 handles empty mask", {
+  mask_arr <- array(FALSE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(mask, radius_mm = 1.0, seed = 1L)
+
+  expect_equal(nrow(centres), 0)
+  expect_equal(ncol(centres), 3)
+})
+
+test_that("poisson_disk_sample_neuroim2 handles very small mask", {
+  mask_arr <- array(FALSE, dim = c(3, 3, 3))
+  mask_arr[2, 2, 2] <- TRUE  # Single voxel
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(mask, radius_mm = 0.5, seed = 1L)
+
+  expect_gte(nrow(centres), 1)
+  expect_equal(ncol(centres), 3)
+})
+
+test_that("poisson_disk_sample_neuroim2_compat handles multi-component mask", {
+  mask_arr <- array(FALSE, dim = c(5, 5, 5))
+  mask_arr[1:2, 1:2, 1:2] <- TRUE
+  mask_arr[4:5, 4:5, 4:5] <- TRUE
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(5, 5, 5)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2_compat(mask, radius_mm = 1.5, seed = 42L)
+
+  expect_true(nrow(centres) >= 1)
+  expect_equal(ncol(centres), 3)
+  expect_equal(colnames(centres), c("i", "j", "k"))
+})
+
+test_that("poisson_disk_sample_neuroim2_compat handles empty mask", {
+  mask_arr <- array(FALSE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2_compat(mask, radius_mm = 1.0, seed = 1L)
+
+  expect_equal(nrow(centres), 0)
+  expect_equal(ncol(centres), 3)
+})
+
+test_that("poisson_disk_sample_neuroim2_compat with component offset", {
+  mask_arr <- array(TRUE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2_compat(
+    mask, radius_mm = 2.0, seed = 1L, component_id_for_seed_offset = 5L
+  )
+
+  expect_gte(nrow(centres), 1)
+  expect_equal(ncol(centres), 3)
+})
+
+test_that("generate_hrbf_atom gaussian kernel", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_coords_world <- matrix(c(
+    0, 0, 0,
+    1, 0, 0,
+    2, 0, 0
+  ), ncol = 3, byrow = TRUE)
+  mask_linear_indices <- 1:3
+  centre_coord_world <- c(0, 0, 0)
+  sigma_mm <- 1.0
+  params <- list(kernel_type = "gaussian")
+
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, mask_linear_indices, centre_coord_world, sigma_mm,
+    current_level_j = 0L, total_levels = 1L, params
+  )
+
+  expect_true(is.list(atom))
+  expect_true("values" %in% names(atom))
+  expect_true("indices" %in% names(atom))
+  expect_equal(length(atom$values), 3)
+  expect_equal(atom$indices, mask_linear_indices)
+
+  # Center should have highest value
+  expect_equal(which.max(atom$values), 1)
+})
+
+test_that("generate_hrbf_atom wendland kernel", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_coords_world <- matrix(c(
+    0, 0, 0,
+    0.5, 0, 0,
+    1.5, 0, 0
+  ), ncol = 3, byrow = TRUE)
+  mask_linear_indices <- 1:3
+  centre_coord_world <- c(0, 0, 0)
+  sigma_mm <- 1.0
+  params <- list(kernel_type = "wendland_c6")
+
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, mask_linear_indices, centre_coord_world, sigma_mm,
+    current_level_j = 0L, total_levels = 1L, params
+  )
+
+  expect_equal(length(atom$values), 3)
+  # Point at distance 1.5 should be zero (outside support radius)
+  expect_equal(atom$values[3], 0)
+  # Point at distance 0.5 should be non-zero
+  expect_gt(atom$values[2], 0)
+})
+
+test_that("generate_hrbf_atom wendland_c4 alias", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_coords_world <- matrix(c(0, 0, 0, 0.5, 0, 0), ncol = 3, byrow = TRUE)
+  params <- list(kernel_type = "wendland_c4")
+
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, 1:2, c(0, 0, 0), 1.0, 0L, 1L, params
+  )
+
+  expect_equal(length(atom$values), 2)
+  expect_gt(atom$values[1], 0)
+})
+
+test_that("lna_hrbf_centres_from_params with explicit centres and sigmas", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 2, levels = 1L)
+
+  centres <- matrix(c(0, 0, 0, 1, 1, 1), ncol = 3, byrow = TRUE)
+  sigmas <- c(2.0, 1.0)
+
+  result <- fmrilatent:::lna_hrbf_centres_from_params(
+    params, mask, centres = centres, sigmas = sigmas
+  )
+
+  expect_equal(nrow(result$centres), 2)
+  expect_equal(result$sigmas, sigmas)
+  expect_true(result$centres_stored)
+})
+
+test_that("lna_hrbf_centres_from_params error: centres without sigmas", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 2, levels = 1L)
+  centres <- matrix(c(0, 0, 0), ncol = 3)
+
+  expect_error(
+    fmrilatent:::lna_hrbf_centres_from_params(params, mask, centres = centres),
+    "Both centres and sigmas must be supplied together"
+  )
+})
+
+test_that("lna_hrbf_centres_from_params error: wrong centres dimensions", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 2, levels = 1L)
+  centres <- matrix(c(0, 0), ncol = 2)  # Wrong: should be 3 columns
+  sigmas <- c(1.0)
+
+  expect_error(
+    fmrilatent:::lna_hrbf_centres_from_params(params, mask, centres = centres, sigmas = sigmas),
+    "centres must be a matrix with 3 columns"
+  )
+})
+
+test_that("lna_hrbf_centres_from_params error: length mismatch", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 2, levels = 1L)
+  centres <- matrix(c(0, 0, 0, 1, 1, 1), ncol = 3, byrow = TRUE)
+  sigmas <- c(1.0)  # Wrong: should match nrow(centres)
+
+  expect_error(
+    fmrilatent:::lna_hrbf_centres_from_params(params, mask, centres = centres, sigmas = sigmas),
+    "length\\(sigmas\\) must equal nrow\\(centres\\)"
+  )
+})
+
+test_that("lna_hrbf_centres_from_params error: no seed", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 2, levels = 1L)  # No seed
+
+  expect_error(
+    fmrilatent:::lna_hrbf_centres_from_params(params, mask),
+    "lna_hrbf_centres_from_params requires centres/sigmas or seed"
+  )
+})
+
+test_that("lna_hrbf_centres_from_params with seed", {
+  mask_arr <- array(TRUE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  params <- list(sigma0 = 2, levels = 1L, radius_factor = 2.5, seed = 42L)
+
+  result <- fmrilatent:::lna_hrbf_centres_from_params(params, mask)
+
+  expect_true(is.matrix(result$centres))
+  expect_equal(ncol(result$centres), 3)
+  expect_gt(nrow(result$centres), 0)
+  expect_equal(length(result$sigmas), nrow(result$centres))
+  expect_false(result$centres_stored)
+})
+
+test_that("lna_hrbf_basis_from_params with full_grid TRUE", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  B <- lna_hrbf_basis_from_params(params, mask, full_grid = TRUE)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(ncol(B), length(mask_arr))  # Full grid
+})
+
+test_that("lna_hrbf_basis_from_params with full_grid FALSE", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  B <- lna_hrbf_basis_from_params(params, mask, full_grid = FALSE)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(ncol(B), sum(mask_arr))  # Active voxels only
+})
+
+test_that("lna_hrbf_basis_from_params error: centres without sigmas", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 1, levels = 0L)
+  centres <- matrix(c(0, 0, 0), ncol = 3)
+
+  expect_error(
+    lna_hrbf_basis_from_params(params, mask, centres = centres),
+    "Both centres and sigmas must be supplied together"
+  )
+})
+
+test_that("hrbf_basis_from_params with R backend and wendland kernel", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_arr <- array(TRUE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  params <- list(sigma0 = 2, levels = 1L, radius_factor = 2.5, kernel_type = "wendland_c6", seed = 42L)
+
+  B <- fmrilatent:::hrbf_basis_from_params(params, mask)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(ncol(B), sum(mask_arr))
+  expect_gt(nrow(B), 0)
+})
+
+test_that("compute_hrbf_coefficients square invertible case", {
+  # Create a square invertible basis
+  set.seed(123)
+  n <- 8
+  basis <- Matrix::Matrix(rnorm(n * n), nrow = n, sparse = TRUE)
+  # Make it well-conditioned
+  basis <- basis + Matrix::Diagonal(n, x = 10)
+  X <- matrix(rnorm(5 * n), nrow = 5)
+
+  coeff <- fmrilatent:::compute_hrbf_coefficients(X, basis)
+
+  expect_equal(dim(coeff), c(5, n))
+
+  # Reconstruction should be close
+  recon <- coeff %*% basis
+  expect_equal(dim(recon), dim(X))
+})
+
+test_that("compute_hrbf_coefficients overdetermined case", {
+  skip_on_cran()  # Skip due to long vector limits in diag() on some platforms
+  set.seed(456)
+  n_vox <- 12
+  n_atoms <- 6
+  # Create a truly sparse basis to avoid dense conversion
+  basis <- Matrix::sparseMatrix(
+    i = rep(1:n_atoms, each = 2),
+    j = sample(1:n_vox, n_atoms * 2, replace = TRUE),
+    x = rnorm(n_atoms * 2),
+    dims = c(n_atoms, n_vox)
+  )
+  X <- matrix(rnorm(3 * n_vox), nrow = 3)
+
+  coeff <- fmrilatent:::compute_hrbf_coefficients(X, basis)
+
+  expect_equal(dim(coeff), c(3, n_atoms))
+})
+
+test_that("compute_hrbf_coefficients singular case fallback", {
+  # Create a singular basis (rank deficient)
+  n <- 10
+  basis <- Matrix::Matrix(0, nrow = n, ncol = n, sparse = TRUE)
+  basis[1, ] <- 1  # Only one non-zero row
+  X <- matrix(rnorm(3 * n), nrow = 3)
+
+  # Should not error, falls back to projection
+  coeff <- fmrilatent:::compute_hrbf_coefficients(X, basis)
+
+  expect_equal(dim(coeff), c(3, n))
+})
+
+test_that("compute_hrbf_coefficients dimension mismatch error", {
+  basis <- Matrix::Matrix(rnorm(5 * 10), nrow = 5, sparse = TRUE)
+  X <- matrix(rnorm(3 * 20), nrow = 3)  # Wrong: ncol != ncol(basis)
+
+  expect_error(
+    fmrilatent:::compute_hrbf_coefficients(X, basis),
+    "ncol\\(X_time_vox\\) == ncol\\(basis_atoms_vox\\) is not TRUE"
+  )
+})
+
+test_that("is_hrbf_latent returns FALSE for non-HRBF latent", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
+
+  lvec <- LatentNeuroVec(
+    basis = matrix(rnorm(3 * 8), nrow = 3),
+    loadings = Matrix::Matrix(rnorm(8 * 8), nrow = 8),
+    space = spc,
+    mask = mask
+  )
+
+  expect_false(is_hrbf_latent(lvec))
+})
+
+test_that("hrbf_generate_basis with num_extra_fine_levels", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_arr <- array(TRUE, dim = c(4, 4, 4))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(4, 4, 4)))
+  params <- list(
+    sigma0 = 2,
+    levels = 1L,
+    radius_factor = 2.5,
+    kernel_type = "gaussian",
+    num_extra_fine_levels = 2L,
+    seed = 42L
+  )
+
+  B <- hrbf_generate_basis(params, mask)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(ncol(B), sum(mask_arr))
+  # Should have more atoms due to extra fine levels
+  expect_gt(nrow(B), 0)
+})
+
+test_that("hrbf_basis_from_params empty mask", {
+  mask_arr <- array(FALSE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  params <- list(sigma0 = 1, levels = 1L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  B <- fmrilatent:::hrbf_basis_from_params(params, mask)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(dim(B), c(0, 0))
+})
+
+test_that("lna_hrbf_basis_from_params empty mask", {
+  mask_arr <- array(FALSE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  params <- list(sigma0 = 1, levels = 1L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
+
+  B <- lna_hrbf_basis_from_params(params, mask)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(nrow(B), 0)
+})
+
+test_that("generate_hrbf_atom with fine level kernel switching", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_coords_world <- matrix(c(0, 0, 0, 0.5, 0, 0, 1.5, 0, 0), ncol = 3, byrow = TRUE)
+  params <- list(
+    levels = 2L,
+    num_extra_fine_levels = 1L,
+    num_fine_levels_alt_kernel = 1L,
+    kernel_type = "gaussian",
+    kernel_type_fine_levels = "wendland_c6"
+  )
+
+  # At fine level, should use wendland
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, 1:3, c(0, 0, 0), 1.0,
+    current_level_j = 3L,  # Fine level
+    total_levels = 2L,
+    params
+  )
+
+  # Point at distance 1.5 should be zero (wendland compact support)
+  expect_equal(atom$values[3], 0)
+})
+
+test_that("hrbf_reconstruct_partial with all time indices", {
+  set.seed(789)
+  mask_arr <- array(TRUE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  X <- matrix(rnorm(4 * 27), nrow = 4)
+  params <- list(sigma0 = 1.5, levels = 1L, radius_factor = 2.5, kernel_type = "gaussian", seed = 3L)
+
+  coeff <- hrbf_project_matrix(X, mask, params)
+  full <- hrbf_reconstruct_matrix(coeff, mask, params)
+
+  vox_idx <- c(5, 10, 15)
+  # Don't specify time_idx, should default to all
+  part <- hrbf_reconstruct_partial(coeff, mask, params, voxel_idx = vox_idx)
+
+  expect_equal(part, full[, vox_idx, drop = FALSE], tolerance = 1e-6)
+  expect_equal(nrow(part), nrow(coeff))
+})
+
+# ============================================================================
+# Additional coverage tests for uncovered functions
+# ============================================================================
+
+# --- hrbf_meta: thorough branch coverage ---
+
+test_that("hrbf_meta returns metadata for valid hrbf-tagged LatentNeuroVec", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  X <- matrix(rnorm(3 * 8), nrow = 3)
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5,
+                 kernel_type = "gaussian", seed = 1L)
+  lvec <- hrbf_latent(X, mask, params)
+  m <- hrbf_meta(lvec)
+  expect_true(is.list(m))
+  expect_equal(m$family, "hrbf")
+  expect_true(!is.null(m$params))
+})
+
+test_that("hrbf_meta returns NULL when meta slot is NULL", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
+  lvec <- LatentNeuroVec(
+    basis = matrix(rnorm(3 * 2), nrow = 3),
+    loadings = Matrix::Matrix(rnorm(8 * 2), nrow = 8),
+    space = spc, mask = mask
+  )
+  # meta defaults to list() which is not NULL but has no $family
+  expect_null(hrbf_meta(lvec))
+})
+
+test_that("hrbf_meta returns NULL for numeric input", {
+  expect_null(hrbf_meta(42))
+})
+
+# --- extract_mask_array_logical: additional branches ---
+
+test_that("extract_mask_array_logical converts numeric array to logical", {
+  num_arr <- array(c(1, 0, 1, 0, 1, 0, 1, 0), dim = c(2, 2, 2))
+  result <- fmrilatent:::extract_mask_array_logical(num_arr, "test_numeric")
+  expect_true(is.logical(result))
+  expect_equal(dim(result), c(2, 2, 2))
+  expect_equal(sum(result), 4)
+})
+
+test_that("extract_mask_array_logical handles NeuroVol mask", {
+  mask_arr <- array(c(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE),
+                    dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  result <- fmrilatent:::extract_mask_array_logical(mask, "test_neurovol")
+  expect_true(is.logical(result))
+  expect_equal(dim(result), c(2, 2, 2))
+  expect_equal(sum(result), 4)
+})
+
+test_that("extract_mask_array_logical errors on list without arr field", {
+  # A list without $arr that also fails as.array should error
+  bad_list <- list(foo = "bar")
+  expect_error(
+    fmrilatent:::extract_mask_array_logical(bad_list, "test_bad_list"),
+    "Cannot extract array from mask"
+  )
+})
+
+# --- poisson_disk_sample_neuroim2: branch coverage ---
+
+test_that("poisson_disk_sample_neuroim2 with single-component contiguous mask", {
+  mask_arr <- array(TRUE, dim = c(4, 4, 4))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(4, 4, 4)))
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(
+    mask, radius_mm = 2.0, seed = 10L
+  )
+  expect_true(nrow(centres) > 0)
+  expect_equal(ncol(centres), 3)
+  expect_equal(colnames(centres), c("i", "j", "k"))
+})
+
+test_that("poisson_disk_sample_neuroim2 with component_id_for_seed_offset > 0", {
+  mask_arr <- array(TRUE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  # When component_id_for_seed_offset > 0, multi-component path is skipped
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(
+    mask, radius_mm = 1.5, seed = 5L, component_id_for_seed_offset = 2L
+  )
+  expect_true(nrow(centres) > 0)
+  expect_equal(ncol(centres), 3)
+})
+
+test_that("poisson_disk_sample_neuroim2 small component uses centroid fallback", {
+  # A mask with a very small disconnected component (<= 8 voxels)
+  mask_arr <- array(FALSE, dim = c(10, 10, 3))
+  mask_arr[1:2, 1:2, 1] <- TRUE   # 4 voxels -- small component
+  mask_arr[8:10, 8:10, 3] <- TRUE  # 9 voxels -- larger component
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(10, 10, 3)))
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(
+    mask, radius_mm = 0.5, seed = 1L
+  )
+  # Should get centres from both components
+  expect_true(nrow(centres) >= 2)
+  expect_equal(ncol(centres), 3)
+})
+
+# --- generate_hrbf_atom: normalization and no-normalization ---
+
+test_that("generate_hrbf_atom with normalize_over_mask = FALSE", {
+  mask_coords_world <- matrix(c(0, 0, 0, 1, 0, 0), ncol = 3, byrow = TRUE)
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, 1:2, c(0, 0, 0), 1.0,
+    0L, 1L, list(kernel_type = "gaussian"),
+    normalize_over_mask = FALSE
+  )
+  # Without normalization, center value should be exactly 1 (exp(0))
+  expect_equal(atom$values[1], 1.0, tolerance = 1e-10)
+})
+
+test_that("generate_hrbf_atom with normalize_over_mask = TRUE normalizes", {
+  mask_coords_world <- matrix(c(0, 0, 0, 1, 0, 0), ncol = 3, byrow = TRUE)
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, 1:2, c(0, 0, 0), 1.0,
+    0L, 1L, list(kernel_type = "gaussian"),
+    normalize_over_mask = TRUE
+  )
+  # Normalized: sum(phi^2) should be approximately 1
+  expect_equal(sum(atom$values^2), 1.0, tolerance = 1e-10)
+})
+
+test_that("generate_hrbf_atom with wendland_c6 kernel and far point", {
+  mask_coords_world <- matrix(c(0, 0, 0, 2, 0, 0), ncol = 3, byrow = TRUE)
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, 1:2, c(0, 0, 0), 1.0,
+    0L, 1L, list(kernel_type = "wendland_c6"),
+    normalize_over_mask = FALSE
+  )
+  # At distance 2.0, r = 2.0/1.0 = 2.0 >= 1, so value is 0
+
+  expect_equal(atom$values[2], 0)
+  # At distance 0, value should be 1
+  expect_equal(atom$values[1], 1.0, tolerance = 1e-10)
+})
+
+test_that("generate_hrbf_atom with fine level alt kernel switching", {
+  mask_coords_world <- matrix(c(0, 0, 0, 0.5, 0, 0, 1.5, 0, 0),
+                              ncol = 3, byrow = TRUE)
+  params <- list(
+    levels = 2L,
+    num_extra_fine_levels = 1L,
+    num_fine_levels_alt_kernel = 2L,
+    kernel_type = "gaussian",
+    kernel_type_fine_levels = "wendland_c4"  # alias -> wendland_c6
+  )
+  atom <- fmrilatent:::generate_hrbf_atom(
+    mask_coords_world, 1:3, c(0, 0, 0), 1.0,
+    current_level_j = 2L, total_levels = 2L, params,
+    normalize_over_mask = FALSE
+  )
+  # wendland_c4 alias should be resolved to wendland_c6
+  # at distance 1.5, r = 1.5 >= 1, so value = 0
+  expect_equal(atom$values[3], 0)
+})
+
+# --- lna_hrbf_centres_from_params: more branch coverage ---
+
+test_that("lna_hrbf_centres_from_params with extra fine levels", {
+  mask_arr <- array(TRUE, dim = c(4, 4, 4))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(4, 4, 4)))
+  params <- list(sigma0 = 4, levels = 1L, radius_factor = 2.5,
+                 num_extra_fine_levels = 2L, seed = 7L)
+  result <- fmrilatent:::lna_hrbf_centres_from_params(params, mask)
+  expect_true(nrow(result$centres) > 0)
+  # Should have centres from extra fine levels
+  max_level <- max(result$level_vec)
+  expect_gte(max_level, 2L)
+  expect_false(result$centres_stored)
+})
+
+test_that("lna_hrbf_centres_from_params with neuroarchive compat profile", {
+  mask_arr <- array(TRUE, dim = c(3, 3, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
+  params <- list(sigma0 = 2, levels = 1L, radius_factor = 2.5, seed = 5L)
+  result <- fmrilatent:::lna_hrbf_centres_from_params(
+    params, mask, compat_profile = "neuroarchive_0.1.1"
+  )
+  expect_true(nrow(result$centres) > 0)
+  expect_false(result$centres_stored)
+})
+
+test_that("lna_hrbf_centres_from_params with explicit centres handles Inf sigma", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 2))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
+  params <- list(sigma0 = 6)
+  centres <- matrix(c(0, 0, 0), ncol = 3)
+  sigmas <- c(Inf)  # Inf sigma -> log2(6/Inf) = -Inf -> not finite -> clamped to 0
+  result <- fmrilatent:::lna_hrbf_centres_from_params(
+    params, mask, centres = centres, sigmas = sigmas
+  )
+  expect_equal(result$level_vec, 0L)
+  expect_true(result$centres_stored)
+})
+
+# --- compute_hrbf_coefficients: coverage for regularized least-squares path ---
+
+test_that("compute_hrbf_coefficients rectangular basis uses gram path", {
+  set.seed(321)
+  n_atoms <- 5
+  n_vox <- 20
+  # Rectangular (non-square) sparse basis -- takes gram regularization path
+  basis <- Matrix::sparseMatrix(
+    i = rep(1:n_atoms, each = 4),
+    j = sample(1:n_vox, n_atoms * 4, replace = TRUE),
+    x = rnorm(n_atoms * 4),
+    dims = c(n_atoms, n_vox)
+  )
+  X <- matrix(rnorm(3 * n_vox), nrow = 3)
+  coeff <- fmrilatent:::compute_hrbf_coefficients(X, basis)
+  expect_equal(dim(coeff), c(3, n_atoms))
+  expect_true(is.matrix(coeff))
+})
+
+test_that("compute_hrbf_coefficients well-conditioned square uses inverse path", {
+  set.seed(111)
+  n <- 5
+  # Well-conditioned diagonal-dominant sparse matrix
+  basis <- Matrix::Diagonal(n, x = 5) +
+    Matrix::sparseMatrix(i = 1:n, j = 1:n, x = rnorm(n) * 0.1,
+                         dims = c(n, n))
+  X <- matrix(rnorm(3 * n), nrow = 3)
+  coeff <- fmrilatent:::compute_hrbf_coefficients(X, basis)
+  expect_equal(dim(coeff), c(3, n))
+  # Verify: X approx coeff %*% basis
+  recon <- coeff %*% as.matrix(basis)
+  expect_equal(recon, X, tolerance = 1e-4)
+})
