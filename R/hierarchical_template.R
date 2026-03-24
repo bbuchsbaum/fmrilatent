@@ -5,6 +5,14 @@
 #' @export
 is_hierarchical_template <- function(x) inherits(x, "HierarchicalBasisTemplate")
 
+#' Test whether an object is a supported template
+#' @param x object to test
+#' @return Logical scalar.
+#' @export
+is_template <- function(x) {
+  is_hierarchical_template(x) || inherits(x, "ParcelBasisTemplate")
+}
+
 #' Build a hierarchical Laplacian template (offline)
 #'
 #' Constructs a multi-level spatial basis from nested parcellations using
@@ -134,30 +142,25 @@ encode_hierarchical <- function(X, template, label = NULL) {
   n_time <- nrow(X_mat)
   n_vox <- ncol(X_mat)
 
-  mask_arr <- as.array(template@mask)
+  mask_arr <- as.array(template_mask(template))
   if (n_vox != sum(mask_arr)) {
     stop("X has ", n_vox, " voxels, but template mask has ", sum(mask_arr))
   }
 
-  B <- template@loadings
-  G_factor <- template@gram_factor
-
-  proj <- Matrix::crossprod(B, Matrix::t(X_mat))  # atoms x time
-
-  coeff <- Matrix::solve(G_factor, proj)
-
-  coeff_t <- Matrix::t(coeff)  # time x atoms
+  proj <- template_project(template, X_mat)
+  coeff_t <- proj$coefficients
 
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), n_time))
-  lbl <- label %||% template@meta$label %||% "hierarchical_latent"
-  meta <- list(family = "hierarchical_laplacian", template = template@meta)
+  meta_tmpl <- template_meta(template)
+  lbl <- label %||% meta_tmpl$label %||% "hierarchical_latent"
+  meta <- list(family = "hierarchical_laplacian", template = meta_tmpl)
 
   LatentNeuroVec(
     basis = coeff_t,
-    loadings = template@loadings,
+    loadings = template_loadings(template),
     space = spc,
-    mask = template@mask,
-    offset = numeric(0),
+    mask = template_mask(template),
+    offset = proj$offset,
     label = lbl,
     meta = meta
   )
@@ -171,10 +174,10 @@ encode_hierarchical <- function(X, template, label = NULL) {
 project_hierarchical <- function(template, X) {
   if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
   X_mat <- Matrix::Matrix(X, sparse = FALSE)
-  mask_arr <- as.array(template@mask)
+  mask_arr <- as.array(template_mask(template))
   if (ncol(X_mat) != sum(mask_arr)) stop("X voxel dimension does not match template mask")
 
-  B <- template@loadings
+  B <- template_loadings(template)
   G_factor <- template@gram_factor
   proj <- Matrix::crossprod(B, Matrix::t(X_mat))
   Matrix::t(Matrix::solve(G_factor, proj))  # time x atoms
@@ -187,8 +190,7 @@ project_hierarchical <- function(template, X) {
 #' @export
 save_hierarchical_template <- function(template, file, compress = "xz") {
   if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
-  saveRDS(template, file = file, compress = compress)
-  invisible(normalizePath(file, winslash = "/", mustWork = FALSE))
+  save_template(template, file = file, compress = compress)
 }
 
 #' Load a hierarchical template from disk
@@ -200,6 +202,46 @@ load_hierarchical_template <- function(file) {
   if (!is_hierarchical_template(obj)) stop("RDS does not contain a HierarchicalBasisTemplate")
   obj
 }
+
+#' Load a saved template from disk
+#' @param file Path to a template RDS file.
+#' @return A supported template object.
+#' @export
+load_template <- function(file) {
+  obj <- readRDS(file)
+  if (!is_template(obj)) stop("RDS does not contain a supported template object")
+  obj
+}
+
+#' @export
+#' @rdname template_loadings
+setMethod("template_loadings", "HierarchicalBasisTemplate", function(x, ...) x@loadings)
+
+#' @export
+#' @rdname template_mask
+setMethod("template_mask", "HierarchicalBasisTemplate", function(x, ...) x@mask)
+
+#' @export
+#' @rdname template_meta
+setMethod("template_meta", "HierarchicalBasisTemplate", function(x, ...) x@meta %||% list())
+
+#' @export
+#' @rdname template_project
+setMethod("template_project", signature(x = "HierarchicalBasisTemplate", data = "ANY"),
+          function(x, data, ...) {
+            list(
+              coefficients = project_hierarchical(x, as.matrix(data)),
+              offset = numeric(0)
+            )
+          })
+
+#' @export
+#' @rdname save_template
+setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
+          function(template, file, compress = "xz", ...) {
+            saveRDS(template, file = file, compress = compress)
+            invisible(normalizePath(file, winslash = "/", mustWork = FALSE))
+          })
 
 # ---- helpers ---------------------------------------------------------------
 

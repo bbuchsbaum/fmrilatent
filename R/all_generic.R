@@ -155,3 +155,98 @@ NULL
 #' @name show
 #' @rdname show-methods
 NULL
+
+#' Reconstruct a latent object as a matrix
+#'
+#' @description
+#' Provides a common reconstruction interface for both explicit
+#' \code{LatentNeuroVec} objects and implicit decoder-backed latent objects.
+#'
+#' @param x A latent object.
+#' @param time_idx Optional integer time indices to keep.
+#' @param roi_mask Optional logical ROI mask for spatial subsetting.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric matrix with rows = time and columns = voxels within the
+#'   requested mask support.
+#' @export
+setGeneric("reconstruct_matrix", function(x, time_idx = NULL, roi_mask = NULL, ...) {
+  standardGeneric("reconstruct_matrix")
+})
+
+#' Reconstruct a latent object as a 4D array
+#'
+#' @description
+#' Reconstructs a latent object into a 4D array over its spatial support.
+#'
+#' @param x A latent object.
+#' @param time_idx Optional integer time indices to keep.
+#' @param roi_mask Optional logical ROI mask; voxels outside the ROI are zero.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric 4D array.
+#' @export
+setGeneric("reconstruct_array", function(x, time_idx = NULL, roi_mask = NULL, ...) {
+  standardGeneric("reconstruct_array")
+})
+
+#' Get lightweight metadata from a latent object
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments (unused).
+#' @return Metadata list.
+#' @export
+setGeneric("latent_meta", function(x, ...) standardGeneric("latent_meta"))
+
+#' Test whether a latent object is explicit
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments (unused).
+#' @return Logical scalar; \code{TRUE} when the object stores explicit basis and
+#'   loadings matrices.
+#' @export
+setGeneric("is_explicit_latent", function(x, ...) standardGeneric("is_explicit_latent"))
+
+#' Extract template loadings
+#'
+#' @param x A template object.
+#' @param ... Additional arguments (unused).
+#' @return Spatial loadings matrix stored by the template.
+#' @export
+setGeneric("template_loadings", function(x, ...) standardGeneric("template_loadings"))
+
+#' Extract template mask
+#'
+#' @param x A template object.
+#' @param ... Additional arguments (unused).
+#' @return Mask associated with the template.
+#' @export
+setGeneric("template_mask", function(x, ...) standardGeneric("template_mask"))
+
+#' Extract template metadata
+#'
+#' @param x A template object.
+#' @param ... Additional arguments (unused).
+#' @return Metadata list.
+#' @export
+setGeneric("template_meta", function(x, ...) standardGeneric("template_meta"))
+
+#' Project data onto a template
+#'
+#' @param x A template object.
+#' @param data Numeric matrix (time x voxels in mask order).
+#' @param ... Additional arguments passed to methods.
+#' @return A list with \code{coefficients} (time x atoms/components) and
+#'   \code{offset} (voxel means or \code{numeric(0)}).
+#' @export
+setGeneric("template_project", function(x, data, ...) standardGeneric("template_project"))
+
+#' Save a template object to disk
+#'
+#' @param template A template object.
+#' @param file Output path.
+#' @param compress Compression passed to \code{saveRDS()}.
+#' @param ... Additional arguments passed to methods.
+#' @return Normalized output path, invisibly.
+#' @export
+setGeneric("save_template", function(template, file, compress = "xz", ...) {
+  standardGeneric("save_template")
+})

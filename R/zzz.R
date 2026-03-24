@@ -29,4 +29,7 @@
   register_encoder("hierarchical", spec_hierarchical_template,
                    description = "Hierarchical Laplacian template basis",
                    package = pkgname)
+  register_encoder("space_parcel", spec_space_parcel,
+                   description = "Shared parcel basis template (project-only)",
+                   package = pkgname)
 }

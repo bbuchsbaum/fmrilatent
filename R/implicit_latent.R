@@ -1,5 +1,8 @@
 # Generic implicit latent container for basis-free decoders
 
+#' @include all_generic.R
+NULL
+
 #' Construct an ImplicitLatent object
 #'
 #' @param coeff Arbitrary coefficient payload (list or matrix) needed by decoder.
@@ -53,6 +56,59 @@ implicit_meta <- function(x) {
   if (!is_implicit_latent(x)) return(NULL)
   x$meta %||% NULL
 }
+
+#' @export
+as.matrix.ImplicitLatent <- function(x, time_idx = NULL, roi_mask = NULL, ...) {
+  reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+}
+
+#' @export
+as.array.ImplicitLatent <- function(x, time_idx = NULL, roi_mask = NULL, ...) {
+  reconstruct_array(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+}
+
+#' @export
+#' @rdname mask-methods
+setMethod("mask", "ImplicitLatent", function(x) {
+  if (inherits(x$mask, "LogicalNeuroVol")) {
+    x$mask
+  } else {
+    neuroim2::LogicalNeuroVol(as.logical(x$mask), neuroim2::NeuroSpace(dim(x$mask)))
+  }
+})
+
+#' @export
+#' @rdname latent_meta
+setMethod("latent_meta", "ImplicitLatent", function(x, ...) x$meta %||% list())
+
+#' @export
+#' @rdname is_explicit_latent
+setMethod("is_explicit_latent", "ImplicitLatent", function(x, ...) FALSE)
+
+#' @export
+#' @rdname reconstruct_matrix
+setMethod("reconstruct_matrix", "ImplicitLatent",
+          function(x, time_idx = NULL, roi_mask = NULL, ...) {
+            predict.ImplicitLatent(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+          })
+
+#' @export
+#' @rdname reconstruct_array
+setMethod("reconstruct_array", "ImplicitLatent",
+          function(x, time_idx = NULL, roi_mask = NULL, ...) {
+            mask_arr <- as.array(mask(x))
+            rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+            n_time <- nrow(rec)
+            arr <- array(0, dim = c(dim(mask_arr), n_time))
+            fill_mask <- if (is.null(roi_mask)) mask_arr else (mask_arr & as.logical(roi_mask))
+            fill_idx <- which(fill_mask)
+            for (t in seq_len(n_time)) {
+              slice <- numeric(prod(dim(mask_arr)))
+              slice[fill_idx] <- rec[t, ]
+              arr[, , , t] <- array(slice, dim = dim(mask_arr))
+            }
+            arr
+          })
 
 #' Subset reconstruction matrix columns by ROI mask
 #'

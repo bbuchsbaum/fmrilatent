@@ -95,3 +95,50 @@ setMethod("lift", signature(reduction = "GraphReduction", basis_spec = "ANY"),
          "Provide an external method (e.g., supervoxel Slepian or parcel PCA).")
   }
 )
+
+# --- ClusterReduction constructors -------------------------------------------
+
+#' Create a ClusterReduction from a mask and voxel-to-cluster map
+#'
+#' @param mask A \code{LogicalNeuroVol} or logical 3D array defining the brain mask.
+#' @param map Integer vector (mask order) mapping each voxel to a cluster id.
+#' @return A \code{ClusterReduction} object.
+#' @export
+make_cluster_reduction <- function(mask, map) {
+  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) {
+    mask
+  } else {
+    LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
+  }
+  new("ClusterReduction",
+      mask = mask_vol,
+      map = as.integer(map),
+      cluster_ids = as.integer(sort(unique(map))),
+      info = list())
+}
+
+#' Convert a ClusteredNeuroVol to a ClusterReduction
+#'
+#' Bridges the \code{neuroim2::ClusteredNeuroVol} parcellation representation
+#' to fmrilatent's \code{ClusterReduction} class, preserving label metadata.
+#'
+#' @param cvol A \code{ClusteredNeuroVol} object (from \pkg{neuroim2}).
+#' @return A \code{ClusterReduction} object with label metadata in \code{info}.
+#' @export
+as_cluster_reduction <- function(cvol) {
+  stopifnot(inherits(cvol, "ClusteredNeuroVol"))
+  mask_vol <- neuroim2::mask(cvol)
+  clusters <- cvol@clusters
+  info <- list()
+  if (!is.null(cvol@label_map) && length(cvol@label_map) > 0L) {
+    info$label_map <- cvol@label_map
+  }
+  if (!is.null(cvol@cluster_map) && length(cvol@cluster_map) > 0L) {
+    info$cluster_map <- cvol@cluster_map
+  }
+  new("ClusterReduction",
+      mask = mask_vol,
+      map = as.integer(clusters),
+      cluster_ids = as.integer(sort(unique(clusters))),
+      info = info)
+}

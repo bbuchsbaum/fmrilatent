@@ -216,7 +216,7 @@ encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
 #' @return A LatentNeuroVec or ImplicitLatent object.
 #' @export
 latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize = "handle", label = "") {
-  family <- match.arg(family, c("dct_time", "slepian_time", "slepian_space", "pca_space", "heat_space", "slepian_st", "bspline_hrbf_st", "wavelet_active", "hierarchical"))
+  family <- match.arg(family, c("dct_time", "slepian_time", "slepian_space", "pca_space", "parcel_space", "heat_space", "slepian_st", "bspline_hrbf_st", "wavelet_active", "hierarchical"))
   spec <- switch(
     family,
     dct_time = spec_time_dct(...),
@@ -233,6 +233,7 @@ latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize =
       space_spec <- args$space %||% spec_space_hrbf(params = args$params %||% list())
       spec_st(time = time_spec, space = space_spec)
     },
+    parcel_space = spec_space_parcel(...),
     wavelet_active = spec_space_wavelet_active(...),
     hierarchical = spec_hierarchical_template(...),
     slepian_st = {
@@ -293,7 +294,15 @@ encode_spec.spec_time_slepian <- function(x, spec, mask, materialize, label, ...
   }
   loadings <- Matrix::Matrix(crossprod(x, basis), sparse = FALSE)
   spc <- neuroim2::NeuroSpace(c(dim(as.array(mask)), n_time))
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+  meta <- list(
+    family = "time_slepian",
+    k = k_use,
+    tr = spec$tr,
+    bandwidth = spec$bandwidth,
+    backend = spec$backend
+  )
+  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
+                 offset = numeric(0), label = label, meta = meta)
 }
 
 #' @exportS3Method
@@ -307,7 +316,13 @@ encode_spec.spec_time_dct <- function(x, spec, mask, materialize, label, ...) {
   }
   loadings <- Matrix::Matrix(crossprod(x, basis), sparse = FALSE)
   spc <- neuroim2::NeuroSpace(c(dim(as.array(mask)), n_time))
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+  meta <- list(
+    family = "time_dct",
+    k = k_use,
+    norm = spec$norm
+  )
+  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
+                 offset = numeric(0), label = label, meta = meta)
 }
 
 #' @exportS3Method
@@ -335,7 +350,15 @@ encode_spec.spec_time_bspline <- function(x, spec, mask, materialize, label, ...
   }
   loadings <- Matrix::Matrix(crossprod(x, basis_mat(basis)), sparse = FALSE)
   spc <- neuroim2::NeuroSpace(c(dim(as.array(mask)), n_time))
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+  meta <- list(
+    family = "time_bspline",
+    k = k_use,
+    degree = spec$degree,
+    include_intercept = spec$include_intercept,
+    orthonormalize = spec$orthonormalize
+  )
+  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
+                 offset = numeric(0), label = label, meta = meta)
 }
 
 #' @exportS3Method
@@ -347,9 +370,15 @@ encode_spec.spec_space_slepian <- function(x, spec, mask, reduction, materialize
   } else {
     loadings <- slepian_spatial_loadings_handle(reduction, basis_spec = basis_slepian(k = spec$k), data = NULL, label = "slepian-spatial")
   }
-  basis <- as.matrix(x) %*% as.matrix(loadings)
+  basis <- as.matrix(x) %*% as.matrix(loadings_mat(loadings))
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+  meta <- list(
+    family = "space_slepian",
+    k = spec$k,
+    k_neighbors = spec$k_neighbors
+  )
+  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
+                 offset = numeric(0), label = label, meta = meta)
 }
 
 #' @exportS3Method
@@ -362,9 +391,17 @@ encode_spec.spec_space_heat <- function(x, spec, mask, reduction, materialize, l
   } else {
     loadings <- heat_wavelet_loadings_handle(reduction, basis_spec = spec_hw, data = NULL, label = "heat-wavelet")
   }
-  basis <- as.matrix(x) %*% as.matrix(loadings)
+  basis <- as.matrix(x) %*% as.matrix(loadings_mat(loadings))
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+  meta <- list(
+    family = "space_heat",
+    scales = spec$scales,
+    order = spec$order,
+    threshold = spec$threshold,
+    k_neighbors = spec$k_neighbors
+  )
+  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
+                 offset = numeric(0), label = label, meta = meta)
 }
 
 #' @exportS3Method
@@ -378,7 +415,12 @@ encode_spec.spec_space_hrbf <- function(x, spec, mask, reduction, materialize, l
   coeff <- t(.robust_gram_solve(gram, rhs))
   basis <- Matrix::Matrix(coeff, sparse = FALSE) # time x atoms
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask, offset = numeric(0), label = label)
+  meta <- list(
+    family = "space_hrbf",
+    params = params
+  )
+  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
+                 offset = numeric(0), label = label, meta = meta)
 }
 
 #' @exportS3Method

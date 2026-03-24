@@ -11,6 +11,8 @@ setOldClass("spec_heat_wavelet")
 setOldClass("spec_diffusion_wavelet")
 setOldClass("spec_pca")
 setOldClass("spec_flat")
+setOldClass("ImplicitLatent")
+setOldClass("ParcelBasisTemplate")
 
 #' LatentNeuroVec Class
 #'

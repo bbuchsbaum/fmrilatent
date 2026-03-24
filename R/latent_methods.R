@@ -411,6 +411,52 @@ setMethod(
 
 # --- Conversions ---
 
+#' @export
+#' @rdname latent_meta
+setMethod("latent_meta", "LatentNeuroVec", function(x, ...) x@meta %||% list())
+
+#' @export
+#' @rdname is_explicit_latent
+setMethod("is_explicit_latent", "LatentNeuroVec", function(x, ...) TRUE)
+
+#' @export
+#' @rdname reconstruct_matrix
+setMethod(
+  f = "reconstruct_matrix",
+  signature = signature(x = "LatentNeuroVec"),
+  definition = function(x, time_idx = NULL, roi_mask = NULL, ...) {
+    mat <- as.matrix(x)
+    if (!is.null(time_idx)) {
+      mat <- mat[as.integer(time_idx), , drop = FALSE]
+    }
+    if (!is.null(roi_mask)) {
+      mat <- roi_subset_columns(mat, as.array(mask(x)), roi_mask)
+    }
+    mat
+  }
+)
+
+#' @export
+#' @rdname reconstruct_array
+setMethod(
+  f = "reconstruct_array",
+  signature = signature(x = "LatentNeuroVec"),
+  definition = function(x, time_idx = NULL, roi_mask = NULL, ...) {
+    mask_arr <- as.array(mask(x))
+    rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+    n_time <- nrow(rec)
+    arr <- array(0, dim = c(dim(mask_arr), n_time))
+    fill_mask <- if (is.null(roi_mask)) mask_arr else (mask_arr & as.logical(roi_mask))
+    fill_idx <- which(fill_mask)
+    for (t in seq_len(n_time)) {
+      slice <- numeric(prod(dim(mask_arr)))
+      slice[fill_idx] <- rec[t, ]
+      arr[, , , t] <- array(slice, dim = dim(mask_arr))
+    }
+    arr
+  }
+)
+
 #' Reconstruct LatentNeuroVec as a matrix (time x voxels)
 #'
 #' @param x A \code{LatentNeuroVec} object.

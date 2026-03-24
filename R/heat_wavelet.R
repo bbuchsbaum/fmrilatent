@@ -79,12 +79,7 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_h
   }
 )
 
-# Helper to build a ClusterReduction from a map/mask
-make_cluster_reduction <- function(mask, map) {
-  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) mask else LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
-  new("ClusterReduction", mask = mask_vol, map = as.integer(map),
-      cluster_ids = as.integer(sort(unique(map))), info = list())
-}
+# make_cluster_reduction is now defined in R/reduction.R
 
 #' Heat wavelet latent constructor (explicit basis)
 #'
