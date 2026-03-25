@@ -108,7 +108,7 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
 
   atom_df <- do.call(rbind, atom_rows)
 
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), 1L))
+  spc <- .space_with_time_from_mask(mask_vol, 1L, "build_hierarchical_template")
 
   meta <- list(
     family = "hierarchical_laplacian",
@@ -133,16 +133,23 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
 #' Encode data using a hierarchical template
 #' @param X matrix time x voxels (mask order) matching template mask
 #' @param template HierarchicalBasisTemplate
+#' @param mask Optional mask to validate against the template mask before
+#'   encoding. When supplied, it must match the template exactly.
 #' @param label Optional label for the resulting LatentNeuroVec (defaults to template label)
 #' @return LatentNeuroVec with basis = time x atoms coefficients, loadings = template loadings
 #' @export
-encode_hierarchical <- function(X, template, label = NULL) {
+encode_hierarchical <- function(X, template, label = NULL, mask = NULL) {
   if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
   X_mat <- Matrix::Matrix(X, sparse = FALSE)
   n_time <- nrow(X_mat)
   n_vox <- ncol(X_mat)
 
-  mask_arr <- as.array(template_mask(template))
+  tmpl_mask <- template_mask(template)
+  if (!is.null(mask)) {
+    .assert_template_mask_match(mask, tmpl_mask, "encode_hierarchical")
+  }
+
+  mask_arr <- as.array(tmpl_mask)
   if (n_vox != sum(mask_arr)) {
     stop("X has ", n_vox, " voxels, but template mask has ", sum(mask_arr))
   }
@@ -150,7 +157,7 @@ encode_hierarchical <- function(X, template, label = NULL) {
   proj <- template_project(template, X_mat)
   coeff_t <- proj$coefficients
 
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), n_time))
+  spc <- .space_with_time_from_mask(tmpl_mask, n_time, "encode_hierarchical")
   meta_tmpl <- template_meta(template)
   lbl <- label %||% meta_tmpl$label %||% "hierarchical_latent"
   meta <- list(family = "hierarchical_laplacian", template = meta_tmpl)
@@ -159,7 +166,7 @@ encode_hierarchical <- function(X, template, label = NULL) {
     basis = coeff_t,
     loadings = template_loadings(template),
     space = spc,
-    mask = template_mask(template),
+    mask = tmpl_mask,
     offset = proj$offset,
     label = lbl,
     meta = meta

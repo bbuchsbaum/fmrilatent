@@ -285,6 +285,62 @@ mask_to_array <- function(mask, location = "unknown function") {
   mask_to_array(mask, location)
 }
 
+.normalize_roi_mask <- function(mask_arr, roi_mask = NULL, location = "unknown function") {
+  if (is.null(roi_mask)) {
+    return(NULL)
+  }
+
+  roi_arr <- .mask_to_array(roi_mask, location)
+  if (!identical(dim(roi_arr), dim(mask_arr))) {
+    stop(
+      "roi_mask dimensions (", paste(dim(roi_arr), collapse = " x "),
+      ") do not match mask dimensions (", paste(dim(mask_arr), collapse = " x "), ").",
+      call. = FALSE
+    )
+  }
+
+  roi_arr <- array(as.logical(roi_arr), dim = dim(mask_arr))
+  if (any(roi_arr & !as.logical(mask_arr))) {
+    stop("roi_mask contains voxels outside the object mask.", call. = FALSE)
+  }
+
+  roi_arr
+}
+
+.space_with_time_from_mask <- function(mask, n_time, location = "unknown function") {
+  mask_arr <- .mask_to_array(mask, location)
+  if (inherits(mask, "LogicalNeuroVol")) {
+    mask_space <- neuroim2::space(mask)
+    return(neuroim2::NeuroSpace(
+      c(dim(mask_arr), as.integer(n_time)),
+      spacing = neuroim2::spacing(mask_space),
+      origin = neuroim2::origin(mask_space)
+    ))
+  }
+
+  neuroim2::NeuroSpace(c(dim(mask_arr), as.integer(n_time)))
+}
+
+.assert_template_mask_match <- function(mask, template_mask, location = "unknown function") {
+  supplied_mask_arr <- .mask_to_array(mask, location)
+  template_mask_arr <- as.array(template_mask)
+
+  if (!identical(supplied_mask_arr, template_mask_arr)) {
+    stop(
+      "mask does not match the template mask. Shared templates require identical voxel support and ordering.",
+      call. = FALSE
+    )
+  }
+
+  if (inherits(mask, "LogicalNeuroVol")) {
+    if (!isTRUE(all.equal(neuroim2::space(mask), neuroim2::space(template_mask)))) {
+      stop("mask space does not match the template mask space.", call. = FALSE)
+    }
+  }
+
+  invisible(template_mask_arr)
+}
+
 # Dimension helpers that avoid materializing handles
 .latent_basis_dim <- function(b) {
   if (is(b, "Matrix")) {

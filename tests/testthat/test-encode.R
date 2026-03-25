@@ -243,35 +243,26 @@ test_that("encode.matrix works with spec_time_bspline orthonormalize=FALSE", {
   expect_equal(dim(basis(lv)), c(12, 5))
 })
 
-# Note: materialize='handle' and 'auto' currently have a bug in encode.R where
-# they create handles but then try to call crossprod(x, basis) which fails
-# because basis is a handle, not a matrix. These tests document this limitation
-# until the bug is fixed.
-
-test_that("encode with materialize='handle' requires matrix conversion (known limitation)", {
-  # This test documents a known limitation: materialize='handle' currently
-  # errors because the encode_spec functions call crossprod(x, basis) where
-  # basis is a handle. The loadings computation needs basis_mat(basis) first.
+test_that("encode with materialize='handle' works for temporal bases", {
   td <- make_test_data(n_time = 10)
   spec <- spec_time_slepian(tr = 2, bandwidth = 0.1, k = 4)
 
-  # Currently this errors - when fixed, this test should be updated
-  expect_error(
-    encode(td$X, spec, mask = td$mask_vol, materialize = "handle"),
-    "requires numeric"
-  )
+  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "handle")
+
+  expect_s4_class(lv, "LatentNeuroVec")
+  expect_s4_class(lv@basis, "BasisHandle")
+  expect_equal(dim(loadings(lv)), c(sum(td$mask), 4))
 })
 
-test_that("encode with materialize='auto' requires matrix conversion (known limitation)", {
-  # Same issue as 'handle' - crossprod(x, basis) fails with a handle
+test_that("encode with materialize='auto' works for temporal bases", {
   td <- make_test_data(n_time = 10)
   spec <- spec_time_dct(k = 4)
 
-  # Currently this errors - when fixed, this test should be updated
-  expect_error(
-    encode(td$X, spec, mask = td$mask_vol, materialize = "auto"),
-    "requires numeric"
-  )
+  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "auto")
+
+  expect_s4_class(lv, "LatentNeuroVec")
+  expect_s4_class(lv@basis, "BasisHandle")
+  expect_equal(dim(loadings(lv)), c(sum(td$mask), 4))
 })
 
 test_that("encode with label parameter sets label", {

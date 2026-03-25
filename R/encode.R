@@ -280,7 +280,8 @@ encode_spec.spec_hierarchical <- function(x, spec, mask, materialize, label, ...
     if (is.null(spec$template_file)) stop("template_file is required when template is NULL")
     tmpl <- load_hierarchical_template(spec$template_file)
   }
-  encode_hierarchical(x, tmpl, label = label)
+  .assert_template_mask_match(mask, template_mask(tmpl), "encode_spec.spec_hierarchical")
+  encode_hierarchical(x, tmpl, label = label, mask = mask)
 }
 
 #' @exportS3Method
@@ -292,8 +293,8 @@ encode_spec.spec_time_slepian <- function(x, spec, mask, materialize, label, ...
   } else {
     basis <- slepian_temporal_handle(n_time = n_time, tr = spec$tr, bandwidth = spec$bandwidth, k = k_use, backend = spec$backend)
   }
-  loadings <- Matrix::Matrix(crossprod(x, basis), sparse = FALSE)
-  spc <- neuroim2::NeuroSpace(c(dim(as.array(mask)), n_time))
+  loadings <- Matrix::Matrix(crossprod(x, basis_mat(basis)), sparse = FALSE)
+  spc <- .space_with_time_from_mask(mask, n_time, "encode_spec.spec_time_slepian")
   meta <- list(
     family = "time_slepian",
     k = k_use,
@@ -314,8 +315,8 @@ encode_spec.spec_time_dct <- function(x, spec, mask, materialize, label, ...) {
   } else {
     basis <- dct_basis_handle(n_time = n_time, k = k_use, norm = spec$norm)
   }
-  loadings <- Matrix::Matrix(crossprod(x, basis), sparse = FALSE)
-  spc <- neuroim2::NeuroSpace(c(dim(as.array(mask)), n_time))
+  loadings <- Matrix::Matrix(crossprod(x, basis_mat(basis)), sparse = FALSE)
+  spc <- .space_with_time_from_mask(mask, n_time, "encode_spec.spec_time_dct")
   meta <- list(
     family = "time_dct",
     k = k_use,
@@ -349,7 +350,7 @@ encode_spec.spec_time_bspline <- function(x, spec, mask, materialize, label, ...
     basis@spec$orthonormalize <- spec$orthonormalize
   }
   loadings <- Matrix::Matrix(crossprod(x, basis_mat(basis)), sparse = FALSE)
-  spc <- neuroim2::NeuroSpace(c(dim(as.array(mask)), n_time))
+  spc <- .space_with_time_from_mask(mask, n_time, "encode_spec.spec_time_bspline")
   meta <- list(
     family = "time_bspline",
     k = k_use,
@@ -368,10 +369,16 @@ encode_spec.spec_space_slepian <- function(x, spec, mask, reduction, materialize
   if (materialize == "matrix") {
     loadings <- lift(reduction, basis_slepian(k = spec$k), k_neighbors = spec$k_neighbors)
   } else {
-    loadings <- slepian_spatial_loadings_handle(reduction, basis_spec = basis_slepian(k = spec$k), data = NULL, label = "slepian-spatial")
+    loadings <- slepian_spatial_loadings_handle(
+      reduction,
+      basis_spec = basis_slepian(k = spec$k),
+      data = NULL,
+      k_neighbors = spec$k_neighbors,
+      label = "slepian-spatial"
+    )
   }
   basis <- as.matrix(x) %*% as.matrix(loadings_mat(loadings))
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
+  spc <- .space_with_time_from_mask(mask, nrow(x), "encode_spec.spec_space_slepian")
   meta <- list(
     family = "space_slepian",
     k = spec$k,
@@ -389,10 +396,16 @@ encode_spec.spec_space_heat <- function(x, spec, mask, reduction, materialize, l
   if (materialize == "matrix") {
     loadings <- lift(reduction, spec_hw, k_neighbors = spec$k_neighbors)
   } else {
-    loadings <- heat_wavelet_loadings_handle(reduction, basis_spec = spec_hw, data = NULL, label = "heat-wavelet")
+    loadings <- heat_wavelet_loadings_handle(
+      reduction,
+      basis_spec = spec_hw,
+      data = NULL,
+      k_neighbors = spec$k_neighbors,
+      label = "heat-wavelet"
+    )
   }
   basis <- as.matrix(x) %*% as.matrix(loadings_mat(loadings))
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
+  spc <- .space_with_time_from_mask(mask, nrow(x), "encode_spec.spec_space_heat")
   meta <- list(
     family = "space_heat",
     scales = spec$scales,
@@ -414,7 +427,7 @@ encode_spec.spec_space_hrbf <- function(x, spec, mask, reduction, materialize, l
   rhs <- t(as.matrix(x) %*% Matrix::t(B_atoms))
   coeff <- t(.robust_gram_solve(gram, rhs))
   basis <- Matrix::Matrix(coeff, sparse = FALSE) # time x atoms
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(x)))
+  spc <- .space_with_time_from_mask(mask, nrow(x), "encode_spec.spec_space_hrbf")
   meta <- list(
     family = "space_hrbf",
     params = params
@@ -467,7 +480,7 @@ encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, la
     loadings <- loadings %*% Matrix::Diagonal(x = d / scale_fac)
   }
 
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), n_time))
+  spc <- .space_with_time_from_mask(mask, n_time, "encode_spec.spec_space_pca")
   meta <- list(
     family = "pca_spatial",
     k = spec$k,

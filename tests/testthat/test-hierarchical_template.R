@@ -176,6 +176,41 @@ test_that("encode_hierarchical returns LatentNeuroVec with correct dimensions", 
   expect_s4_class(result, "LatentNeuroVec")
 })
 
+test_that("encode_hierarchical preserves custom mask geometry", {
+  skip_if_not_installed("neuroim2")
+  skip_if_not_installed("rgsp")
+  skip_if_not_installed("RSpectra")
+
+  spc3 <- NeuroSpace(c(2, 2, 1), spacing = c(2, 3, 4), origin = c(10, 20, 30))
+  mask_vol <- LogicalNeuroVol(array(TRUE, dim = c(2, 2, 1)), spc3)
+  parcellations <- list(c(1L, 1L, 2L, 2L))
+  template <- build_hierarchical_template(mask_vol, parcellations, k_per_level = 1L, k_neighbors = 2L)
+  X <- matrix(rnorm(5 * 4), nrow = 5, ncol = 4)
+
+  result <- encode_hierarchical(X, template, mask = mask_vol)
+
+  expect_equal(neuroim2::spacing(neuroim2::space(mask(result))), c(2, 3, 4))
+  expect_equal(neuroim2::origin(neuroim2::space(mask(result))), c(10, 20, 30))
+})
+
+test_that("hierarchical template encoding rejects mismatched masks", {
+  skip_if_not_installed("neuroim2")
+  skip_if_not_installed("rgsp")
+  skip_if_not_installed("RSpectra")
+
+  mask1_arr <- array(c(TRUE, TRUE, FALSE, FALSE, TRUE, TRUE, FALSE, FALSE), dim = c(2, 2, 2))
+  mask2_arr <- array(c(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE, TRUE, FALSE), dim = c(2, 2, 2))
+  mask1 <- LogicalNeuroVol(mask1_arr, NeuroSpace(dim(mask1_arr)))
+  mask2 <- LogicalNeuroVol(mask2_arr, NeuroSpace(dim(mask2_arr)))
+  template <- build_hierarchical_template(mask1, list(rep(1L, sum(mask1_arr))), k_per_level = 1L, k_neighbors = 2L)
+  X <- matrix(rnorm(5 * sum(mask1_arr)), nrow = 5)
+
+  expect_error(
+    encode(X, spec_hierarchical_template(template), mask = mask2, materialize = "matrix"),
+    "template mask"
+  )
+})
+
 # -----------------------------------------------------------------------------
 # Tests for project_hierarchical
 # -----------------------------------------------------------------------------

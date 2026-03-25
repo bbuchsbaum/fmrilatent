@@ -7,7 +7,7 @@
 spec_space_parcel(template)
 }
 \arguments{
-\item{template}{A \code{\link{ParcelBasisTemplate}} object built by
+\item{template}{A \code{"ParcelBasisTemplate"} object built by
 \code{\link{parcel_basis_template}()}.}
 }
 \value{
@@ -15,7 +15,7 @@ A \code{spec_space_parcel} object for \code{\link{encode}()}.
 }
 \description{
 Creates a spec for projecting data onto a pre-built
-\code{\link{ParcelBasisTemplate}}. The loadings are fixed (shared across
+\code{"ParcelBasisTemplate"}. The loadings are fixed (shared across
 subjects); only the temporal scores and per-subject offset vary.
 }
 \examples{

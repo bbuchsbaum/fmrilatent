@@ -14,7 +14,7 @@ parcel_basis_template(
 )
 }
 \arguments{
-\item{parcellation}{A \code{\link{ClusterReduction}} or a
+\item{parcellation}{A \code{\linkS4class{ClusterReduction}} or a
 \code{ClusteredNeuroVol} (coerced via \code{\link{as_cluster_reduction}()}).}
 
 \item{basis_spec}{A basis specification for \code{\link{lift}()}.
@@ -41,7 +41,7 @@ must remain replayable at encode time, so preprocessing arguments such as
 \code{offset} and \code{scale} are not supported here.}
 }
 \value{
-A \code{ParcelBasisTemplate} object (S3) with components:
+A \code{"ParcelBasisTemplate"} object (S3) with components:
   \describe{
     \item{loadings}{Sparse \code{Matrix} (voxels x atoms), block-diagonal by parcel.}
     \item{gram_factor}{Cached Cholesky factorization of \eqn{L^T L}.}

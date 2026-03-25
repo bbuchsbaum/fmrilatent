@@ -8,6 +8,7 @@ heat_wavelet_loadings_handle(
   reduction,
   basis_spec,
   data = NULL,
+  k_neighbors = 6L,
   id = NULL,
   label = "heat-wavelet"
 )
@@ -18,6 +19,9 @@ heat_wavelet_loadings_handle(
 \item{basis_spec}{Basis specification, e.g., from `basis_heat_wavelet()`.}
 
 \item{data}{Optional data passed through to `lift()` (often NULL).}
+
+\item{k_neighbors}{Number of neighbors used for local graph construction
+when materializing the lifted basis.}
 
 \item{id}{Optional registry id; provide a stable string to reuse
 across sessions. If NULL, a random id is generated.}

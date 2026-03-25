@@ -11,6 +11,7 @@
 ^\.claude($|/)
 ^\.\.Rcheck($|/)
 ^AGENTS\.md$
+(^|/)AGENTS\.md$
 ^CLAUDE\.md$
 ^Plan\.md$
 ^Progress\.md$

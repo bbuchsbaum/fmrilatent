@@ -9,6 +9,8 @@
 #' @param reduction  Graph/cluster reduction used by `lift()`.
 #' @param basis_spec Basis specification, e.g., from `basis_heat_wavelet()`.
 #' @param data       Optional data passed through to `lift()` (often NULL).
+#' @param k_neighbors Number of neighbors used for local graph construction
+#'   when materializing the lifted basis.
 #' @param id         Optional registry id; provide a stable string to reuse
 #'   across sessions. If NULL, a random id is generated.
 #' @param label      Optional human-readable label.
@@ -18,6 +20,7 @@
 heat_wavelet_loadings_handle <- function(reduction,
                                          basis_spec,
                                          data  = NULL,
+                                         k_neighbors = 6L,
                                          id    = NULL,
                                          label = "heat-wavelet") {
   if (is.null(id)) {
@@ -25,7 +28,7 @@ heat_wavelet_loadings_handle <- function(reduction,
   }
 
   # Materialize once to capture dimensions and seed the registry
-  L <- lift(reduction, basis_spec, data = data)
+  L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
   .latent_register_matrix(id, L, type = "loadings", overwrite = FALSE)
 
   new("LoadingsHandle",
@@ -36,7 +39,8 @@ heat_wavelet_loadings_handle <- function(reduction,
         family     = "heat_wavelet",
         reduction  = reduction,
         basis_spec = basis_spec,
-        data       = data
+        data       = data,
+        k_neighbors = k_neighbors
       ),
       label = label)
 }

@@ -51,6 +51,8 @@ slepian_temporal_handle <- function(n_time,
 #' @param reduction Graph reduction (e.g., ClusterReduction).
 #' @param basis_spec Slepian basis spec (from `basis_slepian()`).
 #' @param data Optional data passed to `lift()` (if needed).
+#' @param k_neighbors Number of neighbors used for local graph construction
+#'   when materializing the lifted basis.
 #' @param id Optional registry id; generated if NULL.
 #' @param label Optional label.
 #'
@@ -59,13 +61,14 @@ slepian_temporal_handle <- function(n_time,
 slepian_spatial_loadings_handle <- function(reduction,
                                             basis_spec = basis_slepian(),
                                             data = NULL,
+                                            k_neighbors = 6L,
                                             id = NULL,
                                             label = "slepian-spatial") {
   if (is.null(id)) {
     id <- paste0("slepian-spatial-",
                  sprintf("%08x", as.integer(stats::runif(1, 0, 2^31))))
   }
-  L <- lift(reduction, basis_spec, data = data)
+  L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
   .latent_register_matrix(id, L, type = "loadings", overwrite = FALSE)
 
   new("LoadingsHandle",
@@ -76,7 +79,8 @@ slepian_spatial_loadings_handle <- function(reduction,
         family     = "slepian_spatial",
         reduction  = reduction,
         basis_spec = basis_spec,
-        data       = data
+        data       = data,
+        k_neighbors = k_neighbors
       ),
       label = label)
 }

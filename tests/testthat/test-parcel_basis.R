@@ -146,6 +146,16 @@ test_that("parcel_basis_template rejects unsupported PCA scale preprocessing", {
   )
 })
 
+test_that("parcel_basis_template rejects unsupported PCA whitening", {
+  td <- make_test_data(n_time = 20, dims = c(4, 2, 2), n_parcels = 4)
+  red <- make_cluster_reduction(td$mask, td$map)
+
+  expect_error(
+    parcel_basis_template(red, basis_pca(k = 1, whiten = TRUE), data = td$X),
+    "whiten = TRUE"
+  )
+})
+
 # --- print method ---
 
 test_that("print.ParcelBasisTemplate runs without error", {
@@ -200,6 +210,20 @@ test_that("encode with spec_space_parcel preserves atlas labels in metadata", {
 
   expect_true(!is.null(lvec@meta$label_map))
   expect_equal(lvec@meta$label_map[["RegionA"]], 1L)
+})
+
+test_that("encode with spec_space_parcel preserves custom mask geometry", {
+  dims <- c(2, 2, 1)
+  spc3 <- NeuroSpace(dims, spacing = c(2, 3, 4), origin = c(10, 20, 30))
+  mask_vol <- LogicalNeuroVol(array(TRUE, dim = dims), spc3)
+  map <- c(1L, 1L, 2L, 2L)
+  X <- matrix(rnorm(5 * 4), nrow = 5, ncol = 4)
+  tmpl <- parcel_basis_template(make_cluster_reduction(mask_vol, map), basis_slepian(k = 1))
+
+  lvec <- encode(X, spec_space_parcel(tmpl), mask = mask_vol)
+
+  expect_equal(neuroim2::spacing(neuroim2::space(mask(lvec))), c(2, 3, 4))
+  expect_equal(neuroim2::origin(neuroim2::space(mask(lvec))), c(10, 20, 30))
 })
 
 test_that("encode with spec_space_parcel center=FALSE produces zero offset", {
@@ -318,4 +342,9 @@ test_that("make_cluster_reduction still works after move from heat_wavelet.R", {
   expect_s4_class(red, "ClusterReduction")
   expect_equal(length(red@cluster_ids), 3L)
   expect_equal(length(red@map), 27L)
+})
+
+test_that("make_cluster_reduction rejects maps with wrong length", {
+  mask <- array(TRUE, dim = c(2, 2, 1))
+  expect_error(make_cluster_reduction(mask, 1:2), "number of voxels")
 })

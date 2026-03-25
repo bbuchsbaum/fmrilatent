@@ -196,6 +196,60 @@ dim(recon_wav)
 Setting `threshold > 0` zeroes out small wavelet coefficients for lossy
 compression. With `threshold = 0` the transform is exact.
 
+### PCA (cluster-local)
+
+Parcel-local PCA computes per-cluster SVD to build a block-sparse spatial
+dictionary. Each parcel contributes `k` components. This is a data-driven
+approach — the loadings are subject-specific.
+
+```{r pca-space, eval = FALSE}
+# Define parcels (4 equal regions) and build a ClusterReduction
+parcel_map <- as.integer(rep_len(1:4, n_vox))
+red <- make_cluster_reduction(mask_vol, parcel_map)
+
+lat_pca <- encode(X, spec_space_pca(k = 3, center = TRUE), mask = mask_vol,
+                  reduction = red)
+
+# 4 parcels x 3 components = 12 total spatial atoms
+dim(loadings(lat_pca))
+```
+
+The `center` parameter subtracts voxel means before PCA (stored in
+`offset()`); `whiten = TRUE` rescales scores to unit variance.
+
+### Shared parcel templates
+
+When you have a parcellation (atlas) and want the **same** spatial
+dictionary across subjects, use `parcel_basis_template()`. The default
+basis is Laplacian eigenvectors — smooth functions from the voxel adjacency
+graph within each parcel. No training data is needed.
+
+```{r parcel-template, eval = FALSE}
+# Wrap the parcellation as a ClusteredNeuroVol (reusing parcel_map from above)
+atlas <- neuroim2::ClusteredNeuroVol(mask_vol, parcel_map)
+
+# Build template once (geometric basis — no data needed)
+tmpl <- parcel_basis_template(atlas, basis_slepian(k = 5))
+tmpl
+
+# Project each subject onto the shared dictionary
+lvec_s1 <- encode(X, spec_space_parcel(tmpl), mask = mask_vol)
+
+# Loadings are identical across subjects; scores and offset vary
+dim(basis(lvec_s1))     # time x atoms
+dim(loadings(lvec_s1))  # voxels x atoms
+```
+
+You can also build a shared PCA template from group data:
+
+```{r parcel-pca-shared, eval = FALSE}
+tmpl_pca <- parcel_basis_template(atlas, basis_pca(k = 5), data = X)
+lvec <- encode(X, spec_space_parcel(tmpl_pca), mask = mask_vol)
+```
+
+Any `lift()`-compatible basis spec works: `basis_slepian()` (default),
+`basis_pca()`, or `basis_heat_wavelet()`.
+
 ## Compressing both dimensions
 
 `spec_st()` combines a temporal and a spatial spec into a separable
@@ -251,14 +305,18 @@ Available family strings and their underlying specs:
 | `"slepian_time"` | `spec_time_slepian()` |
 | `"dct_time"` | `spec_time_dct()` |
 | `"slepian_space"` | `spec_space_slepian()` |
+| `"pca_space"` | `spec_space_pca()` |
+| `"parcel_space"` | `spec_space_parcel()` (pass `template =`) |
 | `"heat_space"` | `spec_space_heat()` |
 | `"slepian_st"` | `spec_st()` with Slepian time + space |
 | `"bspline_hrbf_st"` | `spec_st()` with B-spline time + HRBF space |
 | `"wavelet_active"` | `spec_space_wavelet_active()` |
+| `"hierarchical"` | `spec_hierarchical_template()` |
 
 Extra arguments in `...` are forwarded to the spec constructor. The two-step
 pattern (spec then `encode()`) gives you more control; the factory is a
-shortcut when defaults suffice.
+shortcut when defaults suffice. Note that B-spline temporal encoding is not
+in the factory — use `spec_time_bspline()` with `encode()` directly.
 
 ## Handle vs. matrix materialization
 
@@ -316,6 +374,8 @@ requirements.
 | Family | Stored | Accuracy | Speed |
 |--------|--------|----------|-------|
 | Slepian (space) | basis + loadings | exact on span | fast, sparse loadings |
+| PCA (local) | basis + loadings | optimal k-rank per parcel | fast, block-sparse |
+| Parcel template (shared) | basis + loadings | projection onto fixed dict | fast, reusable across subjects |
 | HRBF | basis + loadings | improves with atom count | moderate, dense atoms |
 | Wavelet active | coefficients | exact (biorthogonal 5/3) | very fast, mask-aware |
 | Separable (B-spline + HRBF) | core tensor + bases | approximate | fast, separable decode |

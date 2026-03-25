@@ -148,6 +148,39 @@ Separable encoding returns an `ImplicitLatent` object whose `predict()`
 method accepts `time_idx` and `roi_mask` arguments, so you reconstruct only
 what you need.
 
+### Parcel-based encoding
+
+When your data comes with a parcellation (Schaefer, Glasser, or any atlas),
+you can build a shared spatial dictionary once and project each subject onto
+it. The default basis is Laplacian eigenvectors — smooth spatial functions
+computed from voxel adjacency within each parcel, with no training data
+needed.
+
+```{r parcel-shared, eval = FALSE}
+# Define parcels (e.g., from an atlas; here 4 equal parcels)
+parcel_ids <- rep(1:4, each = 16)
+atlas <- neuroim2::ClusteredNeuroVol(mask_vol, parcel_ids)
+
+# Build a template once — Laplacian eigenvectors, no data needed
+tmpl <- parcel_basis_template(atlas, basis_slepian(k = 5))
+
+# Project each subject — same loadings, different scores and offset
+lvec_s1 <- encode(X, spec_space_parcel(tmpl), mask = mask_vol)
+lvec_s2 <- encode(X, spec_space_parcel(tmpl), mask = mask_vol)  # different data in practice
+
+# Or use data-driven PCA loadings from training data
+tmpl_pca <- parcel_basis_template(atlas, basis_pca(k = 5), data = X)
+lvec <- encode(X, spec_space_parcel(tmpl_pca), mask = mask_vol)
+```
+
+For subject-specific (local) parcel PCA, use `spec_space_pca()` with a
+`ClusterReduction`:
+
+```{r parcel-local, eval = FALSE}
+red <- as_cluster_reduction(atlas)
+lvec <- encode(X, spec_space_pca(k = 5), mask = mask_vol, reduction = red)
+```
+
 ### Quick reference
 
 | Family | Dimension | Strengths |
@@ -156,6 +189,8 @@ what you need.
 | DCT | time | Fast, interpretable frequency components |
 | B-spline | time | Smooth, localized, adjustable flexibility |
 | Slepian | space | Graph-spectral concentration on regions |
+| PCA | space | Data-driven per-parcel components |
+| Parcel template | space | Shared dictionary across subjects, atlas-based |
 | Heat wavelet | space | Multiscale graph diffusion |
 | HRBF | space | Smooth radial basis functions |
 | Wavelet active | space | Mask-aware CDF 5/3 lifting, very fast |

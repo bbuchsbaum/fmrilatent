@@ -110,6 +110,14 @@ make_cluster_reduction <- function(mask, map) {
   } else {
     LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
   }
+  n_vox <- sum(as.array(mask_vol))
+  if (length(map) != n_vox) {
+    stop(
+      "map must have length ", n_vox, " (the number of voxels in the mask), got ",
+      length(map), ".",
+      call. = FALSE
+    )
+  }
   new("ClusterReduction",
       mask = mask_vol,
       map = as.integer(map),

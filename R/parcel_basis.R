@@ -18,7 +18,7 @@ NULL
 #' and caches the Gram factorization for efficient projection. The resulting
 #' template can be reused across subjects via \code{\link{spec_space_parcel}()}.
 #'
-#' @param parcellation A \code{\link{ClusterReduction}} or a
+#' @param parcellation A \code{\linkS4class{ClusterReduction}} or a
 #'   \code{ClusteredNeuroVol} (coerced via \code{\link{as_cluster_reduction}()}).
 #' @param basis_spec A basis specification for \code{\link{lift}()}.
 #'   Default is \code{basis_slepian(k = 5)} which computes the k smallest
@@ -39,7 +39,7 @@ NULL
 #'   must remain replayable at encode time, so preprocessing arguments such as
 #'   \code{offset} and \code{scale} are not supported here.
 #'
-#' @return A \code{ParcelBasisTemplate} object (S3) with components:
+#' @return A \code{"ParcelBasisTemplate"} object (S3) with components:
 #'   \describe{
 #'     \item{loadings}{Sparse \code{Matrix} (voxels x atoms), block-diagonal by parcel.}
 #'     \item{gram_factor}{Cached Cholesky factorization of \eqn{L^T L}.}
@@ -93,6 +93,9 @@ parcel_basis_template <- function(parcellation,
   }
 
   if (inherits(basis_spec, "spec_pca")) {
+    if (isTRUE(basis_spec$whiten)) {
+      stop("PCA parcel templates do not support whiten = TRUE.", call. = FALSE)
+    }
     if ("center" %in% names(extra_args)) {
       stop("Use parcel_basis_template(center = ...) rather than passing center in ... for PCA templates.",
            call. = FALSE)
@@ -220,10 +223,10 @@ setMethod("save_template", signature(template = "ParcelBasisTemplate"),
 #' Spatial parcel-basis spec (shared/template-based)
 #'
 #' Creates a spec for projecting data onto a pre-built
-#' \code{\link{ParcelBasisTemplate}}. The loadings are fixed (shared across
+#' \code{"ParcelBasisTemplate"}. The loadings are fixed (shared across
 #' subjects); only the temporal scores and per-subject offset vary.
 #'
-#' @param template A \code{\link{ParcelBasisTemplate}} object built by
+#' @param template A \code{"ParcelBasisTemplate"} object built by
 #'   \code{\link{parcel_basis_template}()}.
 #' @return A \code{spec_space_parcel} object for \code{\link{encode}()}.
 #'
@@ -252,22 +255,21 @@ encode_spec.spec_space_parcel <- function(x, spec, mask, reduction, materialize,
   n_time <- nrow(x)
   n_vox <- ncol(x)
   template_mask <- template_mask(tmpl)
-  template_mask_arr <- as.array(template_mask)
-  supplied_mask_arr <- .mask_to_array(mask, "encode_spec.spec_space_parcel")
+  template_mask_arr <- .assert_template_mask_match(
+    mask,
+    template_mask,
+    "encode_spec.spec_space_parcel"
+  )
 
   if (n_vox != nrow(L)) {
     stop("Data has ", n_vox, " voxels but template loadings have ", nrow(L),
          " rows.", call. = FALSE)
   }
-  if (!identical(supplied_mask_arr, template_mask_arr)) {
-    stop("mask does not match the template mask. Shared parcel templates require identical voxel support and ordering.",
-         call. = FALSE)
-  }
 
   proj <- template_project(tmpl, x)
   basis <- proj$coefficients
 
-  spc <- neuroim2::NeuroSpace(c(dim(template_mask_arr), n_time))
+  spc <- .space_with_time_from_mask(template_mask, n_time, "encode_spec.spec_space_parcel")
   meta_tmpl <- template_meta(tmpl)
 
   meta <- list(

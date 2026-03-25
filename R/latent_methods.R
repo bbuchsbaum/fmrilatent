@@ -443,10 +443,11 @@ setMethod(
   signature = signature(x = "LatentNeuroVec"),
   definition = function(x, time_idx = NULL, roi_mask = NULL, ...) {
     mask_arr <- as.array(mask(x))
-    rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+    roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "reconstruct_array.LatentNeuroVec")
+    rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_arr, ...)
     n_time <- nrow(rec)
     arr <- array(0, dim = c(dim(mask_arr), n_time))
-    fill_mask <- if (is.null(roi_mask)) mask_arr else (mask_arr & as.logical(roi_mask))
+    fill_mask <- if (is.null(roi_arr)) mask_arr else (mask_arr & roi_arr)
     fill_idx <- which(fill_mask)
     for (t in seq_len(n_time)) {
       slice <- numeric(prod(dim(mask_arr)))

@@ -57,11 +57,28 @@ implicit_meta <- function(x) {
   x$meta %||% NULL
 }
 
+#' Reconstruct an ImplicitLatent as a matrix
+#'
+#' @method as.matrix ImplicitLatent
+#' @param x An \code{ImplicitLatent} object.
+#' @param time_idx Optional integer time indices to keep.
+#' @param roi_mask Optional logical ROI mask for spatial subsetting.
+#' @param ... Additional arguments passed to the decoder.
+#' @return A numeric matrix with rows = time and columns = voxels within the
+#'   requested mask support.
 #' @export
 as.matrix.ImplicitLatent <- function(x, time_idx = NULL, roi_mask = NULL, ...) {
   reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_mask, ...)
 }
 
+#' Reconstruct an ImplicitLatent as an array
+#'
+#' @method as.array ImplicitLatent
+#' @param x An \code{ImplicitLatent} object.
+#' @param time_idx Optional integer time indices to keep.
+#' @param roi_mask Optional logical ROI mask; voxels outside the ROI are zero.
+#' @param ... Additional arguments passed to the decoder.
+#' @return A numeric array with dimensions \code{c(x, y, z, time)}.
 #' @export
 as.array.ImplicitLatent <- function(x, time_idx = NULL, roi_mask = NULL, ...) {
   reconstruct_array(x, time_idx = time_idx, roi_mask = roi_mask, ...)
@@ -97,10 +114,11 @@ setMethod("reconstruct_matrix", "ImplicitLatent",
 setMethod("reconstruct_array", "ImplicitLatent",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
             mask_arr <- as.array(mask(x))
-            rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_mask, ...)
+            roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "reconstruct_array.ImplicitLatent")
+            rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_arr, ...)
             n_time <- nrow(rec)
             arr <- array(0, dim = c(dim(mask_arr), n_time))
-            fill_mask <- if (is.null(roi_mask)) mask_arr else (mask_arr & as.logical(roi_mask))
+            fill_mask <- if (is.null(roi_arr)) mask_arr else (mask_arr & roi_arr)
             fill_idx <- which(fill_mask)
             for (t in seq_len(n_time)) {
               slice <- numeric(prod(dim(mask_arr)))
@@ -129,9 +147,10 @@ setMethod("reconstruct_array", "ImplicitLatent",
 #' roi  <- array(c(TRUE, FALSE, FALSE, TRUE), dim = c(2, 2, 1))
 #' roi_subset_columns(rec, mask, roi)  # keeps columns 1 and 3
 roi_subset_columns <- function(rec_mat, mask_arr, roi_mask = NULL) {
-  if (is.null(roi_mask)) return(rec_mat)
+  roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "roi_subset_columns")
+  if (is.null(roi_arr)) return(rec_mat)
   global_idx <- which(as.logical(mask_arr))
-  roi_global <- which(as.logical(roi_mask))
+  roi_global <- which(roi_arr)
   col_keep   <- which(global_idx %in% roi_global)
   rec_mat[, col_keep, drop = FALSE]
 }

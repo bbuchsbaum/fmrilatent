@@ -90,6 +90,30 @@ test_that("handle-backed explicit spatial encoders support common interface", {
   expect_equal(dim(reconstruct_array(lv_heat)), c(dim(td$mask_arr), td$n_time))
 })
 
+test_that("handle-backed spatial encoders preserve k_neighbors on rematerialization", {
+  skip_if_not_installed("rgsp")
+
+  td <- make_test_data_ci_int(n_time = 6, dims = c(3, 3, 2))
+  old_opt <- getOption("fmrilatent.registry.enabled")
+  options(fmrilatent.registry.enabled = FALSE)
+  on.exit(options(fmrilatent.registry.enabled = old_opt), add = TRUE)
+
+  lv_heat_handle <- encode(
+    td$X,
+    spec_space_heat(scales = c(1, 2), order = 10, k_neighbors = 3),
+    mask = td$mask_vol,
+    materialize = "handle"
+  )
+  lv_heat_matrix <- encode(
+    td$X,
+    spec_space_heat(scales = c(1, 2), order = 10, k_neighbors = 3),
+    mask = td$mask_vol,
+    materialize = "matrix"
+  )
+
+  expect_equal(as.matrix(loadings(lv_heat_handle)), as.matrix(loadings(lv_heat_matrix)))
+})
+
 test_that("saved parcel templates replay identical encodings after reload", {
   td <- make_test_data_ci_int(n_time = 10, dims = c(4, 4, 2))
   map <- as.integer(rep_len(1:4, td$n_vox))

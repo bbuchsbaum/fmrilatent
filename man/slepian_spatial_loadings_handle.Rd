@@ -8,6 +8,7 @@ slepian_spatial_loadings_handle(
   reduction,
   basis_spec = basis_slepian(),
   data = NULL,
+  k_neighbors = 6L,
   id = NULL,
   label = "slepian-spatial"
 )
@@ -18,6 +19,9 @@ slepian_spatial_loadings_handle(
 \item{basis_spec}{Slepian basis spec (from `basis_slepian()`).}
 
 \item{data}{Optional data passed to `lift()` (if needed).}
+
+\item{k_neighbors}{Number of neighbors used for local graph construction
+when materializing the lifted basis.}
 
 \item{id}{Optional registry id; generated if NULL.}
 

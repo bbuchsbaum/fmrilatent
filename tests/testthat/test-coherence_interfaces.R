@@ -137,6 +137,17 @@ test_that("common latent interface works for ImplicitLatent", {
   expect_equal(arr_roi[, , 1, 1], matrix(c(mat[1, 1], 0, mat[1, 3], 0), nrow = 2))
 })
 
+test_that("common latent interface rejects malformed roi_mask inputs", {
+  lv <- make_test_lvec_ci()
+  il <- make_test_implicit_ci()
+  bad_roi <- array(c(TRUE, FALSE, TRUE, FALSE, TRUE, FALSE), dim = c(3, 2, 1))
+
+  expect_error(reconstruct_matrix(lv, roi_mask = bad_roi), "roi_mask dimensions")
+  expect_error(reconstruct_array(lv, roi_mask = bad_roi), "roi_mask dimensions")
+  expect_error(reconstruct_matrix(il, roi_mask = bad_roi), "roi_mask dimensions")
+  expect_error(reconstruct_array(il, roi_mask = bad_roi), "roi_mask dimensions")
+})
+
 test_that("template protocol works for parcel templates", {
   tmpl <- make_test_parcel_template_ci(center = TRUE)
   X <- matrix(c(1, 2, 3, 4,
