@@ -11,6 +11,7 @@ Provides S4 classes and methods for representing neuroimaging data in latent spa
 \seealso{
 Useful links:
 \itemize{
+  \item \url{https://bbuchsbaum.github.io/fmrilatent/}
   \item \url{https://github.com/bbuchsbaum/fmrilatent}
   \item Report bugs at \url{https://github.com/bbuchsbaum/fmrilatent/issues}
 }

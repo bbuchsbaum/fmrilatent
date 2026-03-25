@@ -1,5 +1,10 @@
 # fmrilatent
 
+<!-- badges: start -->
+[![R-CMD-check](https://github.com/bbuchsbaum/fmrilatent/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bbuchsbaum/fmrilatent/actions/workflows/R-CMD-check.yaml)
+[![pkgdown](https://github.com/bbuchsbaum/fmrilatent/actions/workflows/pkgdown.yaml/badge.svg)](https://bbuchsbaum.github.io/fmrilatent/)
+<!-- badges: end -->
+
 Memory-efficient latent space representations for fMRI data in R.
 
 ## Overview
