@@ -28,7 +28,9 @@ An object satisfies the contract if it is either
       target-space data.}
     \item{\code{source_domain_id}, \code{target_domain_id}}{Stable
       character identifiers for the source and target domains. Used for
-      composition safety and provenance digests.}
+      composition safety and provenance digests. \code{.compose_linear_maps()}
+      requires matching domain ids across the junction unless at least one
+      side is an empty string ("unspecified").}
     \item{\code{source_support}, \code{target_support}}{Optional
       descriptors of the sample layout on each side (for example a
       \code{LogicalNeuroVol}, a 3D logical mask, surface vertex indices, or
@@ -36,15 +38,47 @@ An object satisfies the contract if it is either
       reconstruct domain-aware outputs; when absent it falls back to
       \code{provenance$target_support} / \code{provenance$target_mask}.}
     \item{\code{adjoint_convention}}{Character tag identifying the
-      adjoint convention. Defaults to \code{"euclidean_discrete"}.}
-    \item{\code{provenance}}{Optional named list of provenance metadata
-      (source package, transform ids, Jacobian policy, etc.).}
+      adjoint convention. Defaults to \code{"euclidean_discrete"} (the
+      discrete transpose under the standard Euclidean inner product).
+      Covariance pushforward paths such as \code{decode_covariance()} and
+      \code{.project_covariance_diag()} currently require this value;
+      operators using another convention must be re-normalized before
+      being handed to the pushforward code.}
+    \item{\code{provenance}}{Optional named list of provenance metadata.
+      \code{fmrilatent} interprets a small set of reserved keys:
+      \describe{
+        \item{\code{target_mask}, \code{target_support}, \code{target_domain}}{
+          Legacy fallback locations read by
+          \code{.resolve_transport_target_support()} when the top-level
+          fields are absent. New producers should set the top-level
+          fields instead.}
+        \item{\code{source_support}}{Legacy fallback for the top-level
+          field of the same name.}
+        \item{\code{coordinates}}{Appended with value \code{"raw"} when
+          the map has been wrapped with
+          \code{.transform_linear_map_coordinates()}.}
+      }
+      All other keys are advisory and carried through composition
+      verbatim. Producers should prefer top-level fields over provenance
+      entries for anything fmrilatent actually reads.}
     \item{\code{materialize(...)} (optional)}{Returns the dense
       \code{n_target x n_source} matrix representation. Used only when a
       caller explicitly asks for it; the main encode and decode paths are
       matrix-free and only call \code{forward}/\code{adjoint_apply}.}
+    \item{\code{contract_version}}{Integer scalar identifying the
+      contract revision. Auto-filled by \code{as_portable_linear_map()}
+      to \code{1L} in this release. Future revisions will bump this tag
+      so producers and consumers can negotiate compatibility.}
   }
 }
+
+\strong{Producer-form vs canonical form on \code{TransportLatent}.}
+\code{transport_latent()} records the raw producer object at
+\code{x$field_operator} (and its legacy alias \code{x$observation_operator})
+as a back-reference for debugging and round-trip. The canonical
+portable-linear-map representation used internally by all encode/decode
+math is at \code{x$transport$field_operator}. Consumers that need to
+introspect the operator should always read the canonical form.
 
 Producers (such as \code{neurofunctor::compile_observation_operator}) can
 return either a bare callback list or a wrapped object. Call

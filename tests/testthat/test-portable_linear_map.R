@@ -217,3 +217,166 @@ test_that("decode_coefficients wrap='auto' handles multi-column gamma", {
   expect_identical(dim(raw), c(as.integer(td$V), 2L))
 })
 
+# -----------------------------------------------------------------------
+# Round 1 hardening: contract_version, domain-id check,
+# adjoint_convention gate, producer vs canonical storage.
+# -----------------------------------------------------------------------
+
+test_that("portable linear map carries contract_version = 1L", {
+  op <- as_portable_linear_map(matrix(seq_len(6), 2, 3))
+  expect_identical(op$contract_version, 1L)
+
+  cbk <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(seq_len(6), 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(seq_len(6), 3, 2)) %*% y
+  )
+  op2 <- as_portable_linear_map(cbk)
+  expect_identical(op2$contract_version, 1L)
+
+  # Producer-supplied contract_version is preserved verbatim (allows
+  # forward-compat negotiation).
+  cbk_future <- utils::modifyList(cbk, list(contract_version = 999L))
+  op3 <- as_portable_linear_map(cbk_future)
+  expect_identical(op3$contract_version, 999L)
+})
+
+test_that("compose_linear_maps propagates contract_version (max of inputs)", {
+  first <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(1, 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 3, 2)) %*% y,
+    contract_version = 1L
+  )
+  second <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) matrix(1, 4, 3) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
+    contract_version = 2L
+  )
+  composed <- fmrilatent:::.compose_linear_maps(first, second)
+  expect_identical(composed$contract_version, 2L)
+})
+
+test_that("compose_linear_maps warns on mismatched domain ids under strict=TRUE", {
+  first <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(1, 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 3, 2)) %*% y,
+    target_domain_id = "mid_A"
+  )
+  second <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) matrix(1, 4, 3) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
+    source_domain_id = "mid_B"
+  )
+  expect_warning(
+    fmrilatent:::.compose_linear_maps(first, second, strict = TRUE),
+    "domain ids do not match"
+  )
+})
+
+test_that("compose_linear_maps is silent on domain ids when strict=FALSE (default)", {
+  first <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(1, 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 3, 2)) %*% y,
+    target_domain_id = "digesthash_deadbeef"
+  )
+  second <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) matrix(1, 4, 3) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
+    source_domain_id = "template_field"
+  )
+  # Silent composition is the back-compat default; basis_decoder digests
+  # and user operator names live in different namespaces.
+  expect_silent(fmrilatent:::.compose_linear_maps(first, second))
+})
+
+test_that("compose_linear_maps strict mode respects empty-string as unspecified", {
+  first <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(1, 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 3, 2)) %*% y,
+    target_domain_id = ""
+  )
+  second <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) matrix(1, 4, 3) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
+    source_domain_id = "mid_B"
+  )
+  expect_silent(fmrilatent:::.compose_linear_maps(first, second, strict = TRUE))
+})
+
+test_that("compose_linear_maps warns on conflicting non-euclidean adjoint conventions", {
+  first <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(1, 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 3, 2)) %*% y,
+    adjoint_convention = "jacobian_weighted"
+  )
+  second <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) matrix(1, 4, 3) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
+    adjoint_convention = "mass_weighted"
+  )
+  expect_warning(
+    fmrilatent:::.compose_linear_maps(first, second),
+    "incompatible adjoint_conventions"
+  )
+})
+
+test_that("compose_linear_maps allows one side to be euclidean_discrete", {
+  first <- list(
+    n_source = 2L, n_target = 3L,
+    forward = function(x, ...) matrix(1, 3, 2) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 3, 2)) %*% y,
+    adjoint_convention = "euclidean_discrete"
+  )
+  second <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) matrix(1, 4, 3) %*% x,
+    adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
+    adjoint_convention = "jacobian_weighted"
+  )
+  composed <- fmrilatent:::.compose_linear_maps(first, second)
+  expect_identical(composed$adjoint_convention, "jacobian_weighted")
+})
+
+test_that(".project_covariance_diag rejects non-euclidean adjoint_convention", {
+  M <- matrix(rnorm(12), 4, 3)
+  bad <- list(
+    n_source = 3L, n_target = 4L,
+    forward = function(x, ...) M %*% x,
+    adjoint_apply = function(y, ...) t(M) %*% y,
+    adjoint_convention = "jacobian_weighted"
+  )
+  expect_error(
+    fmrilatent:::.project_covariance_diag(bad, diag(3)),
+    "euclidean_discrete"
+  )
+})
+
+test_that(".project_covariance_diag accepts default euclidean_discrete", {
+  M <- matrix(seq_len(6), 2, 3)
+  op <- as_portable_linear_map(M)
+  diag_var <- fmrilatent:::.project_covariance_diag(op, diag(3))
+  # var(Ax) diagonal equals rowSums(M^2) when Sigma = I
+  expect_equal(diag_var, rowSums(M^2))
+})
+
+test_that("transport_latent stores raw producer and canonical forms separately", {
+  td <- .portable_linear_map_td()
+  # x$field_operator is the raw producer (a plain callback list with no
+  # contract_version); x$transport$field_operator is the normalized form.
+  expect_false(is.null(td$lat$field_operator))
+  expect_false(is.null(td$lat$transport$field_operator))
+  expect_identical(td$lat$transport$field_operator$contract_version, 1L)
+  # The legacy observation_operator alias points at the same raw producer.
+  expect_identical(td$lat$observation_operator, td$lat$field_operator)
+})
+

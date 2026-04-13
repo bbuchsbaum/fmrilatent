@@ -29,7 +29,9 @@ NULL
 #'       target-space data.}
 #'     \item{\code{source_domain_id}, \code{target_domain_id}}{Stable
 #'       character identifiers for the source and target domains. Used for
-#'       composition safety and provenance digests.}
+#'       composition safety and provenance digests. \code{.compose_linear_maps()}
+#'       requires matching domain ids across the junction unless at least one
+#'       side is an empty string ("unspecified").}
 #'     \item{\code{source_support}, \code{target_support}}{Optional
 #'       descriptors of the sample layout on each side (for example a
 #'       \code{LogicalNeuroVol}, a 3D logical mask, surface vertex indices, or
@@ -37,15 +39,47 @@ NULL
 #'       reconstruct domain-aware outputs; when absent it falls back to
 #'       \code{provenance$target_support} / \code{provenance$target_mask}.}
 #'     \item{\code{adjoint_convention}}{Character tag identifying the
-#'       adjoint convention. Defaults to \code{"euclidean_discrete"}.}
-#'     \item{\code{provenance}}{Optional named list of provenance metadata
-#'       (source package, transform ids, Jacobian policy, etc.).}
+#'       adjoint convention. Defaults to \code{"euclidean_discrete"} (the
+#'       discrete transpose under the standard Euclidean inner product).
+#'       Covariance pushforward paths such as \code{decode_covariance()} and
+#'       \code{.project_covariance_diag()} currently require this value;
+#'       operators using another convention must be re-normalized before
+#'       being handed to the pushforward code.}
+#'     \item{\code{provenance}}{Optional named list of provenance metadata.
+#'       \code{fmrilatent} interprets a small set of reserved keys:
+#'       \describe{
+#'         \item{\code{target_mask}, \code{target_support}, \code{target_domain}}{
+#'           Legacy fallback locations read by
+#'           \code{.resolve_transport_target_support()} when the top-level
+#'           fields are absent. New producers should set the top-level
+#'           fields instead.}
+#'         \item{\code{source_support}}{Legacy fallback for the top-level
+#'           field of the same name.}
+#'         \item{\code{coordinates}}{Appended with value \code{"raw"} when
+#'           the map has been wrapped with
+#'           \code{.transform_linear_map_coordinates()}.}
+#'       }
+#'       All other keys are advisory and carried through composition
+#'       verbatim. Producers should prefer top-level fields over provenance
+#'       entries for anything fmrilatent actually reads.}
 #'     \item{\code{materialize(...)} (optional)}{Returns the dense
 #'       \code{n_target x n_source} matrix representation. Used only when a
 #'       caller explicitly asks for it; the main encode and decode paths are
 #'       matrix-free and only call \code{forward}/\code{adjoint_apply}.}
+#'     \item{\code{contract_version}}{Integer scalar identifying the
+#'       contract revision. Auto-filled by \code{as_portable_linear_map()}
+#'       to \code{1L} in this release. Future revisions will bump this tag
+#'       so producers and consumers can negotiate compatibility.}
 #'   }
 #' }
+#'
+#' \strong{Producer-form vs canonical form on \code{TransportLatent}.}
+#' \code{transport_latent()} records the raw producer object at
+#' \code{x$field_operator} (and its legacy alias \code{x$observation_operator})
+#' as a back-reference for debugging and round-trip. The canonical
+#' portable-linear-map representation used internally by all encode/decode
+#' math is at \code{x$transport$field_operator}. Consumers that need to
+#' introspect the operator should always read the canonical form.
 #'
 #' Producers (such as \code{neurofunctor::compile_observation_operator}) can
 #' return either a bare callback list or a wrapped object. Call
@@ -193,12 +227,16 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   }
 }
 
+# Current version of the portable linear-map contract.
+.PORTABLE_LINEAR_MAP_VERSION <- 1L
+
 .linear_map_from_matrix <- function(mat, source_domain_id = "", target_domain_id = "",
                                     source_support = NULL, target_support = NULL,
                                     provenance = list(), adjoint_convention = "euclidean_discrete") {
   mat <- as.matrix(mat)
   list(
     mode = "matrix",
+    contract_version = .PORTABLE_LINEAR_MAP_VERSION,
     n_source = ncol(mat),
     n_target = nrow(mat),
     source_domain_id = source_domain_id,
@@ -221,6 +259,21 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   )
 }
 
+.require_euclidean_adjoint <- function(map, context = "adjoint convention") {
+  conv <- map$adjoint_convention %||% "euclidean_discrete"
+  if (!identical(conv, "euclidean_discrete")) {
+    stop(context, " requires an operator with adjoint_convention = ",
+         "'euclidean_discrete' (the Euclidean discrete transpose). ",
+         "Got '", conv, "'. The covariance pushforward math depends on ",
+         "this convention; supply an operator that normalizes its ",
+         "adjoint to the Euclidean inner product, or override ",
+         "adjoint_convention explicitly if the current value is ",
+         "incorrectly set.",
+         call. = FALSE)
+  }
+  invisible(map)
+}
+
 .validate_linear_map_contract <- function(map, context = "linear map") {
   for (nm in c("n_source", "n_target")) {
     value <- map[[nm]]
@@ -236,6 +289,25 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     stop(context, " must define adjoint_apply().", call. = FALSE)
   }
   map
+}
+
+.build_normalized_linear_map <- function(map, forward_fn, adjoint_fn) {
+  prov <- map$provenance %||% list()
+  list(
+    mode = map$mode %||% "callbacks",
+    contract_version = map$contract_version %||% .PORTABLE_LINEAR_MAP_VERSION,
+    n_source = as.integer(map$n_source),
+    n_target = as.integer(map$n_target),
+    source_domain_id = map$source_domain_id %||% "",
+    target_domain_id = map$target_domain_id %||% "",
+    source_support = map$source_support %||% prov$source_support %||% NULL,
+    target_support = map$target_support %||% prov$target_support %||% NULL,
+    adjoint_convention = map$adjoint_convention %||% "euclidean_discrete",
+    provenance = prov,
+    forward = forward_fn,
+    adjoint_apply = adjoint_fn,
+    materialize = map$materialize %||% NULL
+  )
 }
 
 .normalize_linear_map <- function(map, context = "linear map") {
@@ -257,46 +329,12 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
            call. = FALSE)
     }
     if (length(missing) == 0L) {
-      prov <- map$provenance %||% list()
-      return(.validate_linear_map_contract(list(
-        mode = map$mode %||% "callbacks",
-        n_source = as.integer(map$n_source),
-        n_target = as.integer(map$n_target),
-        source_domain_id = map$source_domain_id %||% "",
-        target_domain_id = map$target_domain_id %||% "",
-        source_support = map$source_support %||% prov$source_support %||% NULL,
-        target_support = map$target_support %||% prov$target_support %||% NULL,
-        adjoint_convention = map$adjoint_convention %||% "euclidean_discrete",
-        provenance = prov,
-        forward = map$forward,
-        adjoint_apply = map$adjoint_apply,
-        materialize = map$materialize %||% NULL
-      ), context = context))
-    }
-
-    alias_required <- c("forward", "adjoint", "n_source", "n_target")
-    alias_present <- vapply(alias_required, function(nm) !is.null(map[[nm]]), logical(1))
-    alias_missing <- alias_required[!alias_present]
-    if (any(alias_present) && length(alias_missing) > 0L) {
-      stop(context, " is missing required fields: ", paste(alias_missing, collapse = ", "), ".",
-           call. = FALSE)
-    }
-    if (all(alias_present)) {
-      prov <- map$provenance %||% list()
-      return(.validate_linear_map_contract(list(
-        mode = map$mode %||% "callbacks",
-        n_source = as.integer(map$n_source),
-        n_target = as.integer(map$n_target),
-        source_domain_id = map$source_domain_id %||% "",
-        target_domain_id = map$target_domain_id %||% "",
-        source_support = map$source_support %||% prov$source_support %||% NULL,
-        target_support = map$target_support %||% prov$target_support %||% NULL,
-        adjoint_convention = map$adjoint_convention %||% "euclidean_discrete",
-        provenance = prov,
-        forward = map$forward,
-        adjoint_apply = map$adjoint,
-        materialize = map$materialize %||% NULL
-      ), context = context))
+      return(.validate_linear_map_contract(
+        .build_normalized_linear_map(map,
+                                     forward_fn = map$forward,
+                                     adjoint_fn = map$adjoint_apply),
+        context = context
+      ))
     }
   }
 
@@ -312,7 +350,8 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   as.matrix(map$forward(eye))
 }
 
-.compose_linear_maps <- function(first, second, context = "composed linear map") {
+.compose_linear_maps <- function(first, second, context = "composed linear map",
+                                  strict = getOption("fmrilatent.strict_compose", FALSE)) {
   first <- .normalize_linear_map(first, context = paste(context, "first map"))
   second <- .normalize_linear_map(second, context = paste(context, "second map"))
   if (first$n_target != second$n_source) {
@@ -320,22 +359,72 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
          call. = FALSE)
   }
 
-  list(
-    mode = "callbacks",
-    n_source = first$n_source,
-    n_target = second$n_target,
-    source_domain_id = first$source_domain_id %||% "",
-    target_domain_id = second$target_domain_id %||% "",
-    source_support = first$source_support %||% NULL,
-    target_support = second$target_support %||% NULL,
-    adjoint_convention = second$adjoint_convention %||% first$adjoint_convention %||%
-      "euclidean_discrete",
-    provenance = c(first$provenance %||% list(), second$provenance %||% list()),
-    forward = function(data, ...) second$forward(first$forward(data, ...), ...),
-    adjoint_apply = function(data, ...) first$adjoint_apply(second$adjoint_apply(data, ...), ...),
-    materialize = function(...) {
-      .materialize_linear_map(second) %*% .materialize_linear_map(first)
+  # Domain-id compatibility: when both sides carry a non-empty id and the
+  # caller opts in to strict mode, warn on mismatches. The check is opt-in
+  # because fmrilatent's own basis_decoder methods use content digests for
+  # target_domain_id while external field operators typically use readable
+  # names; those two conventions live in different namespaces and are not
+  # meaningfully comparable. Users who control both sides of a composition
+  # (e.g. bench tests) can pass `strict = TRUE` or set
+  # `options(fmrilatent.strict_compose = TRUE)` to enable the check.
+  if (isTRUE(strict)) {
+    first_out <- first$target_domain_id %||% ""
+    second_in <- second$source_domain_id %||% ""
+    if (nzchar(first_out) && nzchar(second_in) && !identical(first_out, second_in)) {
+      warning(context, " domain ids do not match: first$target_domain_id = '",
+              first_out, "' but second$source_domain_id = '", second_in,
+              "'. Silencing this warning requires either matching ids ",
+              "or setting one side to \"\" (unspecified).",
+              call. = FALSE)
     }
+  }
+
+  # Adjoint conventions: warn on mismatched non-euclidean conventions so the
+  # user has a signal at composition time. The actual math gate lives in
+  # .project_covariance_diag(), which errors at the point of use when the
+  # composed map is not euclidean_discrete.
+  first_conv <- first$adjoint_convention %||% "euclidean_discrete"
+  second_conv <- second$adjoint_convention %||% "euclidean_discrete"
+  if (!identical(first_conv, second_conv) &&
+      !identical(first_conv, "euclidean_discrete") &&
+      !identical(second_conv, "euclidean_discrete")) {
+    warning(context, " has incompatible adjoint_conventions: '", first_conv,
+            "' and '", second_conv,
+            "'. decode_covariance() will reject this map at use time. ",
+            "Re-normalize one side to euclidean_discrete before composing ",
+            "if you intend to push a covariance through it.",
+            call. = FALSE)
+  }
+  composed_conv <- if (identical(first_conv, "euclidean_discrete")) {
+    second_conv
+  } else {
+    first_conv
+  }
+
+  # Composition exposes only the outer source/target supports and domain
+  # ids; intermediate supports are intentionally dropped (they are not
+  # observable from the composed operator).
+  .build_normalized_linear_map(
+    list(
+      mode = "callbacks",
+      contract_version = max(
+        first$contract_version %||% .PORTABLE_LINEAR_MAP_VERSION,
+        second$contract_version %||% .PORTABLE_LINEAR_MAP_VERSION
+      ),
+      n_source = first$n_source,
+      n_target = second$n_target,
+      source_domain_id = first$source_domain_id %||% "",
+      target_domain_id = second$target_domain_id %||% "",
+      source_support = first$source_support %||% NULL,
+      target_support = second$target_support %||% NULL,
+      adjoint_convention = composed_conv,
+      provenance = c(first$provenance %||% list(), second$provenance %||% list()),
+      materialize = function(...) {
+        .materialize_linear_map(second) %*% .materialize_linear_map(first)
+      }
+    ),
+    forward_fn = function(data, ...) second$forward(first$forward(data, ...), ...),
+    adjoint_fn = function(data, ...) first$adjoint_apply(second$adjoint_apply(data, ...), ...)
   )
 }
 
@@ -511,23 +600,26 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     stop("analysis transform must provide to_analysis() and to_raw() callables.", call. = FALSE)
   }
 
-  list(
-    mode = "callbacks",
-    n_source = map$n_source,
-    n_target = map$n_target,
-    source_domain_id = map$source_domain_id %||% "",
-    target_domain_id = map$target_domain_id %||% "",
-    source_support = map$source_support %||% NULL,
-    target_support = map$target_support %||% NULL,
-    adjoint_convention = map$adjoint_convention %||% "euclidean_discrete",
-    provenance = c(map$provenance %||% list(), list(coordinates = "raw")),
-    forward = function(data, ...) map$forward(transform$to_analysis(data), ...),
-    adjoint_apply = function(data, ...) transform$to_raw(map$adjoint_apply(data, ...)),
-    materialize = function(...) {
-      base <- .materialize_linear_map(map)
-      analysis_matrix <- transform$matrix %||% diag(map$n_source)
-      base %*% analysis_matrix
-    }
+  .build_normalized_linear_map(
+    list(
+      mode = "callbacks",
+      contract_version = map$contract_version %||% .PORTABLE_LINEAR_MAP_VERSION,
+      n_source = map$n_source,
+      n_target = map$n_target,
+      source_domain_id = map$source_domain_id %||% "",
+      target_domain_id = map$target_domain_id %||% "",
+      source_support = map$source_support %||% NULL,
+      target_support = map$target_support %||% NULL,
+      adjoint_convention = map$adjoint_convention %||% "euclidean_discrete",
+      provenance = c(map$provenance %||% list(), list(coordinates = "raw")),
+      materialize = function(...) {
+        base <- .materialize_linear_map(map)
+        analysis_matrix <- transform$matrix %||% diag(map$n_source)
+        base %*% analysis_matrix
+      }
+    ),
+    forward_fn = function(data, ...) map$forward(transform$to_analysis(data), ...),
+    adjoint_fn = function(data, ...) transform$to_raw(map$adjoint_apply(data, ...))
   )
 }
 
@@ -563,6 +655,7 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
 
 .project_covariance_diag <- function(map, Sigma, block_size = 32L) {
   map <- .normalize_linear_map(map)
+  .require_euclidean_adjoint(map, context = "covariance diagonal pushforward")
   Sigma <- .as_square_matrix(Sigma, map$n_source, context = "Sigma")
   factor <- .covariance_factor(Sigma)
   if (ncol(factor) == 0L) {
