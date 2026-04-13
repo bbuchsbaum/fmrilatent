@@ -32,3 +32,4 @@
 ^src/AGENTS\.md$
 ^vignettes/AGENTS\.md$
 ^transport_latent_prd\.json$
+^PLANNED\.md$
