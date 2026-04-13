@@ -33,3 +33,4 @@
 ^vignettes/AGENTS\.md$
 ^transport_latent_prd\.json$
 ^PLANNED\.md$
+^dev($|/)

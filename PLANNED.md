@@ -9,27 +9,34 @@ pipeline. These are refinements to land when the downstream packages
 
 ## Round 3 — Hybrid cortex+subcortex support type (deferred)
 
-CIFTI-style data flattens to a bare integer/logical support vector today,
-which loses per-component semantics. To round-trip cortex-L + cortex-R +
-subcortical volume cleanly:
+Full design captured in `dev/round3_cifti_design.md`. What we have
+been calling a "hybrid support type" is essentially CIFTI-2
+grayordinates: a flat length-N vector where each position is a
+cortical surface vertex on L or R hemisphere or a subcortical voxel
+in a per-structure volume grid. The design doc covers:
 
-- Introduce a `hybrid_support` type, probably as a named list of the
-  form `list(cortex_l = lh_support, cortex_r = rh_support, subcortex = vol_mask)`
-  with an explicit total cardinality and a components order attribute.
-- Extend `.support_cardinality()` (R/transport_latent.R) to sum
-  per-component cardinalities.
-- Add a `.wrap_decoded_hybrid()` helper in R/implicit_latent.R that
-  slices a flattened length-N value vector according to component
-  boundaries and returns either a structured named list of
-  NeuroVol/NeuroSurface objects or a new hybrid wrapper class.
-- Route `wrap_decoded.ImplicitLatent` through `.wrap_decoded_hybrid()`
-  when the resolved support is a hybrid_support.
-- Decide whether hybrid_support should be a plain named list (minimal
-  new API) or an S4 class with `cardinality()` / `slice()` methods
-  (cleaner, more dispatch). Recommend waiting until neurofunctor has
-  a concrete CIFTI consumer before committing to a shape.
-- End-to-end test: encode a hybrid-target operator, decode back to
-  the three components, verify per-component dimensions and content.
+- Why component order is contract, not an implementation detail.
+- The four-piece architectural split: `hybrid_support` primitive,
+  `.wrap_decoded_hybrid()` helper, `HybridBasisTemplate` S3 class,
+  `encode_transport()` matrix-input hybrid path.
+- 13 gotchas ranked by how silently they break (component-order
+  drift, medial-wall fills, per-structure subcortex NeuroSpaces,
+  block-diagonal basis assumption, adjoint identity, wrap return
+  shape, coefficient-space flatness, no-NeuroVec-input constraint,
+  ROI subsetting dual modes, roughness penalties, sparse
+  intermediates, serialization).
+- A six-phase plan totalling ~700 LoC, ~40 tests, 3 new source files.
+- Synthetic-fixture end-to-end test covering 20 assertions.
+- Two open design questions (§6.2 producer-side hybrid_support
+  strictness, §6.4 `template_loadings()` return type) that must be
+  resolved before implementation starts.
+
+Non-goals explicitly captured: CIFTI file I/O stays in `ciftiTools`,
+no unified cross-domain basis functions, no `HybridNeuroObject`
+wrapper class (wrap returns a plain named list), no nested subcortex
+hierarchy for v1, no automatic neurofunctor composition.
+
+Read `dev/round3_cifti_design.md` before starting implementation.
 
 ## Round 1 leftovers (deferred refinements)
 
