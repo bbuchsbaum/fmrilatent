@@ -75,6 +75,9 @@ setMethod(
         out_mat
       }
     } else {
+      if (xor(has_j, has_k)) {
+        stop("series() coordinate access requires i, j, and k together.")
+      }
       # CASE B: user gave i,j,k => single voxel
       if (!(length(i) == 1 && length(j) == 1 && length(k) == 1)) {
         stop("series(x, i,j,k): i,j,k must each be a single integer for one voxel.")
@@ -107,17 +110,15 @@ setMethod(
   signature = signature(x = "LatentNeuroVec", i = "numeric"),
   definition = function(x, i, j, k, ..., drop = TRUE) {
     i <- as.integer(i)
-    if (!missing(j)) {
-      j <- as.integer(j)
-      if (!missing(k)) {
-        k <- as.integer(k)
-        series(x, i, j, k, ..., drop = drop)
-      } else {
-        series(x, i, j, ..., drop = drop)
-      }
-    } else {
-      series(x, i, ..., drop = drop)
+    if (missing(j) && missing(k)) {
+      return(series(x, i, ..., drop = drop))
     }
+    if (missing(j) || missing(k)) {
+      stop("series() coordinate access requires i, j, and k together.")
+    }
+    j <- as.integer(j)
+    k <- as.integer(k)
+    series(x, i, j, k, ..., drop = drop)
   }
 )
 
@@ -132,16 +133,14 @@ setMethod(
     }
     if (is.numeric(i)) i <- as.integer(i)
 
-    if (!missing(j)) {
-      j <- as.integer(j)
-      if (!missing(k)) {
-        k <- as.integer(k)
-        series(x, i, j, k, ..., drop = drop)
-      } else {
-        series(x, i, j, ..., drop = drop)
-      }
-    } else {
+    if (missing(j) && missing(k)) {
       series(x, i, ..., drop = drop)
+    } else if (missing(j) || missing(k)) {
+      stop("series() coordinate access requires i, j, and k together.")
+    } else {
+      j <- as.integer(j)
+      k <- as.integer(k)
+      series(x, i, j, k, ..., drop = drop)
     }
   }
 )

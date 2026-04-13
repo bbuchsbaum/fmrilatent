@@ -250,8 +250,10 @@ setMethod(
 setMethod(
   "[[", signature(x = "LatentNeuroVec", i = "numeric"),
   function(x, i) {
-    if (length(i) != 1) stop("Index must be a single number")
-    if (i < 1 || i > dim(x)[4]) stop("Index out of range")
+    if (length(i) != 1L || is.na(i) || !is.finite(i)) stop("Index must be a single finite number")
+    if (!isTRUE(all.equal(i, as.integer(i)))) stop("Index must be integer-valued")
+    i <- as.integer(i)
+    if (i < 1L || i > dim(x)[4]) stop("Index out of range")
 
     b1 <- basis_mat(x, i = i)
     b2 <- loadings_mat(x)

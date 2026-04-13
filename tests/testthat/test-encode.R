@@ -55,6 +55,22 @@ test_that("spec_time_dct accepts none normalization", {
   expect_equal(spec$norm, "none")
 })
 
+test_that("spec constructors reject malformed inputs", {
+  expect_error(spec_time_dct(k = -5), "positive integer")
+  expect_error(spec_time_slepian(tr = -1, bandwidth = 0.1), "positive finite number")
+  expect_error(spec_time_slepian(tr = 2, bandwidth = 0), "positive finite number")
+  expect_error(spec_time_bspline(k = 0), "positive integer")
+  expect_error(spec_space_slepian(k = 0), "positive integer")
+  expect_error(spec_space_pca(k = 0), "positive integer")
+  expect_error(spec_space_heat(scales = c(1, -2)), "positive finite values")
+  expect_error(spec_space_heat(order = 0), "positive integer")
+  expect_error(spec_space_hrbf(params = "bad"), "params must be a list")
+  expect_error(spec_space_hrbf(params = list(kernel_type = "bad")), "kernel_type")
+  expect_error(spec_space_wavelet_active(levels_space = 0), "positive integer")
+  expect_error(spec_space_wavelet_active(levels_time = -1), "non-negative integer")
+  expect_error(spec_space_wavelet_active(threshold = -0.1), "non-negative finite number")
+})
+
 test_that("spec_time_bspline creates correct spec object", {
   spec <- spec_time_bspline(k = 8, degree = 3, include_intercept = FALSE, orthonormalize = TRUE)
   expect_s3_class(spec, "spec_time_bspline")

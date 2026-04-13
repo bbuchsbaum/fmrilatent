@@ -27,7 +27,20 @@ slepian_temporal_handle <- function(n_time,
   }
   k <- as.integer(k)
   if (is.null(id)) {
-    id <- sprintf("slepian-t-%d-%.4f-%d-%s", n_time, bandwidth, k, backend)
+    id <- paste0(
+      "slepian-t-",
+      digest::digest(
+        list(
+          kind = "slepian_temporal",
+          n_time = n_time,
+          tr = tr,
+          bandwidth = bandwidth,
+          k = k,
+          backend = backend
+        ),
+        algo = "xxhash64"
+      )
+    )
   }
   if (is.null(label)) {
     label <- sprintf("Slepian_t(n=%d,k=%d,W=%.4f)", n_time, k, bandwidth)
@@ -65,11 +78,25 @@ slepian_spatial_loadings_handle <- function(reduction,
                                             id = NULL,
                                             label = "slepian-spatial") {
   if (is.null(id)) {
-    id <- paste0("slepian-spatial-",
-                 sprintf("%08x", as.integer(stats::runif(1, 0, 2^31))))
+    id <- paste0(
+      "slepian-spatial-",
+      digest::digest(
+        list(
+          kind = "slepian_spatial",
+          reduction = reduction,
+          basis_spec = basis_spec,
+          data = data,
+          k_neighbors = as.integer(k_neighbors)
+        ),
+        algo = "xxhash64"
+      )
+    )
   }
-  L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
-  .latent_register_matrix(id, L, type = "loadings", overwrite = FALSE)
+  L <- .latent_get_matrix(id, type = "loadings")
+  if (is.null(L)) {
+    L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
+    .latent_register_matrix(id, L, type = "loadings", overwrite = FALSE)
+  }
 
   new("LoadingsHandle",
       id    = id,

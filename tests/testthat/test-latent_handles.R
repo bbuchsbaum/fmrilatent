@@ -656,7 +656,7 @@ test_that(".latent_loadings_dim returns correct dimensions for LoadingsHandle", 
                 id = "test_loadings",
                 dim = as.integer(c(1000, 5)),
                 kind = "explicit",
-                spec = list(),
+                spec = list(matrix = matrix(0, 1000, 5)),
                 label = "test")
 
   result <- fmrilatent:::.latent_loadings_dim(handle)

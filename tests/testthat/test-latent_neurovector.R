@@ -228,6 +228,24 @@ test_that("LatentNeuroVec constructor validates finite values in basis", {
   )
 })
 
+test_that("LatentNeuroVec constructor validates finite values in base-matrix basis", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
+
+  bad_basis <- matrix(c(1, NaN, 1, 1, 1, 1), 3, 2)
+
+  expect_error(
+    LatentNeuroVec(
+      basis = bad_basis,
+      loadings = matrix(1, 4, 2),
+      space = space,
+      mask = mask_vol
+    ),
+    "finite values"
+  )
+})
+
 test_that("LatentNeuroVec constructor validates finite values in offset", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
@@ -421,10 +439,10 @@ test_that("[[ extracts single volume correctly", {
   expect_s4_class(vol_last, "SparseNeuroVol")
 })
 
-test_that("[[ validates index is single number", {
+test_that("[[ validates index is a single finite number", {
   lvec <- create_test_lvec()
 
-  expect_error(lvec[[c(1, 2)]], "single number")
+  expect_error(lvec[[c(1, 2)]], "single finite number")
 })
 
 test_that("[[ validates index is in range", {
@@ -1208,34 +1226,36 @@ test_that("materialize_basis_from_spec handles dct kind", {
 test_that("materialize_basis_from_spec handles explicit kind", {
   test_mat <- matrix(rnorm(12), 4, 3)
   bh <- new("BasisHandle",
+            dim = as.integer(c(4, 3)),
             kind = "explicit",
             spec = list(matrix = test_mat),
-            id = "test-explicit")
+            id = "test-explicit",
+            label = "test")
 
   mat <- fmrilatent:::materialize_basis_from_spec(bh)
   expect_equal(as.matrix(mat), test_mat, tolerance = 1e-10)
 })
 
-test_that("materialize_basis_from_spec errors on unknown kind", {
-  bh <- new("BasisHandle",
-            kind = "unknown_kind",
-            spec = list(),
-            id = "test-unknown")
-
+test_that("BasisHandle rejects unknown kind at construction time", {
   expect_error(
-    fmrilatent:::materialize_basis_from_spec(bh),
-    "Unknown BasisHandle kind"
+    new("BasisHandle",
+        dim = as.integer(c(4, 3)),
+        kind = "unknown_kind",
+        spec = list(),
+        id = "test-unknown",
+        label = "test"),
+    "BasisHandle@kind"
   )
 })
 
-test_that("materialize_basis_from_spec errors on explicit without matrix", {
-  bh <- new("BasisHandle",
-            kind = "explicit",
-            spec = list(),  # No matrix
-            id = "test-no-matrix")
-
+test_that("BasisHandle explicit kind requires matrix at construction time", {
   expect_error(
-    fmrilatent:::materialize_basis_from_spec(bh),
+    new("BasisHandle",
+        dim = as.integer(c(4, 3)),
+        kind = "explicit",
+        spec = list(),
+        id = "test-no-matrix",
+        label = "test"),
     "requires spec\\$matrix"
   )
 })
@@ -1257,30 +1277,26 @@ test_that("materialize_loadings_from_spec handles explicit kind", {
   expect_equal(as.matrix(mat), test_mat, tolerance = 1e-10)
 })
 
-test_that("materialize_loadings_from_spec errors on unknown kind", {
-  lh <- new("LoadingsHandle",
-            kind = "unknown_kind",
-            dim = c(4L, 3L),
-            spec = list(),
-            id = "test-unknown-load",
-            label = "test")
-
+test_that("LoadingsHandle rejects unknown kind at construction time", {
   expect_error(
-    fmrilatent:::materialize_loadings_from_spec(lh),
-    "Unknown LoadingsHandle kind"
+    new("LoadingsHandle",
+        kind = "unknown_kind",
+        dim = c(4L, 3L),
+        spec = list(),
+        id = "test-unknown-load",
+        label = "test"),
+    "LoadingsHandle@kind"
   )
 })
 
-test_that("materialize_loadings_from_spec errors on explicit without matrix", {
-  lh <- new("LoadingsHandle",
-            kind = "explicit",
-            dim = c(4L, 3L),
-            spec = list(),  # No matrix
-            id = "test-no-matrix-load",
-            label = "test")
-
+test_that("LoadingsHandle explicit kind requires matrix at construction time", {
   expect_error(
-    fmrilatent:::materialize_loadings_from_spec(lh),
+    new("LoadingsHandle",
+        kind = "explicit",
+        dim = c(4L, 3L),
+        spec = list(),
+        id = "test-no-matrix-load",
+        label = "test"),
     "requires spec\\$matrix"
   )
 })
@@ -1360,6 +1376,15 @@ test_that("series with numeric i,j,k dispatches correctly", {
   s <- series(lvec, 1.0, 1.0, 1.0)
   # Should work and return something
   expect_true(length(s) > 0)
+})
+
+test_that("series rejects partial coordinate indexing", {
+  lvec <- create_test_lvec(nx = 3, ny = 3, nz = 2, nt = 5)
+
+  expect_error(
+    series(lvec, 1.0, 1.0),
+    "requires i, j, and k together"
+  )
 })
 
 test_that("series with drop=FALSE for multiple voxels", {
@@ -1581,6 +1606,24 @@ test_that("LatentNeuroVec validates finite values in loadings", {
   expect_error(
     LatentNeuroVec(
       basis = Matrix::Matrix(matrix(1, 3, 2)),
+      loadings = bad_loadings,
+      space = space,
+      mask = mask_vol
+    ),
+    "finite values"
+  )
+})
+
+test_that("LatentNeuroVec validates finite values in base-matrix loadings", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
+
+  bad_loadings <- matrix(c(1, Inf, 1, 1, 1, 1, 1, 1), 4, 2)
+
+  expect_error(
+    LatentNeuroVec(
+      basis = matrix(1, 3, 2),
       loadings = bad_loadings,
       space = space,
       mask = mask_vol
@@ -2515,6 +2558,13 @@ test_that("[[ with offset adds offset correctly", {
   expect_equal(as.numeric(vol[2, 1, 1]), 20, tolerance = 1e-10)
 })
 
+test_that("[[ rejects fractional and missing indices", {
+  lvec <- create_test_lvec(nx = 2, ny = 2, nz = 1, nt = 3)
+
+  expect_error(lvec[[1.7]], "integer-valued")
+  expect_error(lvec[[NA_real_]], "single finite number")
+})
+
 # ============================================================================
 # Additional Coverage Tests for latent_indexing.R (70.4% -> higher)
 # ============================================================================
@@ -2840,31 +2890,29 @@ test_that("materialize_basis_from_spec materializes explicit handle", {
   expect_equal(as.matrix(mat), explicit_mat)
 })
 
-test_that("materialize_basis_from_spec errors for explicit without matrix", {
-  bh <- new("BasisHandle",
-    id = "test-explicit-no-mat",
-    dim = as.integer(c(5, 3)),
-    kind = "explicit",
-    spec = list(),
-    label = "test"
-  )
+test_that("BasisHandle explicit kind requires matrix when validity runs", {
   expect_error(
-    fmrilatent:::materialize_basis_from_spec(bh),
+    new("BasisHandle",
+      id = "test-explicit-no-mat",
+      dim = as.integer(c(5, 3)),
+      kind = "explicit",
+      spec = list(),
+      label = "test"
+    ),
     "requires spec\\$matrix"
   )
 })
 
-test_that("materialize_basis_from_spec errors for unknown kind", {
-  bh <- new("BasisHandle",
-    id = "test-unknown",
-    dim = as.integer(c(5, 3)),
-    kind = "unknown_kind",
-    spec = list(),
-    label = "test"
-  )
+test_that("BasisHandle rejects unknown kind when validity runs", {
   expect_error(
-    fmrilatent:::materialize_basis_from_spec(bh),
-    "Unknown BasisHandle kind"
+    new("BasisHandle",
+      id = "test-unknown",
+      dim = as.integer(c(5, 3)),
+      kind = "unknown_kind",
+      spec = list(),
+      label = "test"
+    ),
+    "BasisHandle@kind"
   )
 })
 
@@ -2884,31 +2932,29 @@ test_that("materialize_loadings_from_spec materializes explicit handle", {
   expect_equal(as.matrix(mat), explicit_mat)
 })
 
-test_that("materialize_loadings_from_spec errors for explicit without matrix", {
-  lh <- new("LoadingsHandle",
-    id = "test-explicit-loadings-no-mat",
-    dim = as.integer(c(4, 3)),
-    kind = "explicit",
-    spec = list(),
-    label = "test"
-  )
+test_that("LoadingsHandle explicit kind requires matrix when validity runs", {
   expect_error(
-    fmrilatent:::materialize_loadings_from_spec(lh),
+    new("LoadingsHandle",
+      id = "test-explicit-loadings-no-mat",
+      dim = as.integer(c(4, 3)),
+      kind = "explicit",
+      spec = list(),
+      label = "test"
+    ),
     "requires spec\\$matrix"
   )
 })
 
-test_that("materialize_loadings_from_spec errors for unknown kind", {
-  lh <- new("LoadingsHandle",
-    id = "test-unknown-loadings",
-    dim = as.integer(c(4, 3)),
-    kind = "unknown_kind",
-    spec = list(),
-    label = "test"
-  )
+test_that("LoadingsHandle rejects unknown kind when validity runs", {
   expect_error(
-    fmrilatent:::materialize_loadings_from_spec(lh),
-    "Unknown LoadingsHandle kind"
+    new("LoadingsHandle",
+      id = "test-unknown-loadings",
+      dim = as.integer(c(4, 3)),
+      kind = "unknown_kind",
+      spec = list(),
+      label = "test"
+    ),
+    "LoadingsHandle@kind"
   )
 })
 

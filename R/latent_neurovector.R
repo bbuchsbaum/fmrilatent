@@ -187,10 +187,10 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   }
 
   # Ensure all numeric inputs are finite
-  if (is(basis, "Matrix") && !all(is.finite(basis))) {
+  if ((is.matrix(basis) || is(basis, "Matrix")) && !all(is.finite(basis))) {
     stop("'basis' must contain only finite values")
   }
-  if (is(loadings, "Matrix") && !all(is.finite(loadings))) {
+  if ((is.matrix(loadings) || is(loadings, "Matrix")) && !all(is.finite(loadings))) {
     stop("'loadings' must contain only finite values")
   }
   if (length(offset) > 0 && !all(is.finite(offset))) {

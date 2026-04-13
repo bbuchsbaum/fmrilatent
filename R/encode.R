@@ -803,6 +803,78 @@
 
 # --- Spec constructors --------------------------------------------------------
 
+.validate_positive_count <- function(x, name) {
+  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 1 || !isTRUE(all.equal(x, round(x)))) {
+    stop(name, " must be a positive integer.", call. = FALSE)
+  }
+  as.integer(round(x))
+}
+
+.validate_nonnegative_count <- function(x, name) {
+  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 0 || !isTRUE(all.equal(x, round(x)))) {
+    stop(name, " must be a non-negative integer.", call. = FALSE)
+  }
+  as.integer(round(x))
+}
+
+.validate_positive_scalar <- function(x, name) {
+  if (length(x) != 1L || is.na(x) || !is.finite(x) || x <= 0) {
+    stop(name, " must be a positive finite number.", call. = FALSE)
+  }
+  as.numeric(x)
+}
+
+.validate_nonnegative_scalar <- function(x, name) {
+  if (length(x) != 1L || is.na(x) || !is.finite(x) || x < 0) {
+    stop(name, " must be a non-negative finite number.", call. = FALSE)
+  }
+  as.numeric(x)
+}
+
+.validate_flag_scalar <- function(x, name) {
+  if (!is.logical(x) || length(x) != 1L || is.na(x)) {
+    stop(name, " must be TRUE or FALSE.", call. = FALSE)
+  }
+  isTRUE(x)
+}
+
+.validate_hrbf_params <- function(params) {
+  if (!is.list(params)) {
+    stop("params must be a list.", call. = FALSE)
+  }
+  params_clean <- params
+  if (!is.null(params_clean$sigma0)) {
+    params_clean$sigma0 <- .validate_positive_scalar(params_clean$sigma0, "params$sigma0")
+  }
+  if (!is.null(params_clean$levels)) {
+    params_clean$levels <- .validate_nonnegative_count(params_clean$levels, "params$levels")
+  }
+  if (!is.null(params_clean$radius_factor)) {
+    params_clean$radius_factor <- .validate_positive_scalar(params_clean$radius_factor, "params$radius_factor")
+  }
+  if (!is.null(params_clean$num_extra_fine_levels)) {
+    params_clean$num_extra_fine_levels <- .validate_nonnegative_count(
+      params_clean$num_extra_fine_levels,
+      "params$num_extra_fine_levels"
+    )
+  }
+  if (!is.null(params_clean$seed)) {
+    params_clean$seed <- .validate_nonnegative_count(params_clean$seed, "params$seed")
+  }
+  if (!is.null(params_clean$kernel_type) &&
+      !params_clean$kernel_type %in% c("gaussian", "wendland_c4", "wendland_c6")) {
+    stop("params$kernel_type must be one of: gaussian, wendland_c4, wendland_c6.", call. = FALSE)
+  }
+  if (!is.null(params_clean$kernel_type_fine_levels) &&
+      !params_clean$kernel_type_fine_levels %in% c("gaussian", "wendland_c4", "wendland_c6")) {
+    stop(
+      "params$kernel_type_fine_levels must be one of: gaussian, wendland_c4, wendland_c6.",
+      call. = FALSE
+    )
+  }
+  params_clean
+}
+
 #' Temporal Slepian/DPSS spec
 #'
 #' @param tr Repetition time (seconds).
@@ -813,6 +885,11 @@
 #' @export
 spec_time_slepian <- function(tr, bandwidth = 0.1, k = NULL, backend = c("tridiag", "dense")) {
   backend <- match.arg(backend)
+  tr <- .validate_positive_scalar(tr, "tr")
+  bandwidth <- .validate_positive_scalar(bandwidth, "bandwidth")
+  if (!is.null(k)) {
+    k <- .validate_positive_count(k, "k")
+  }
   structure(list(tr = tr, bandwidth = bandwidth, k = k, backend = backend), class = "spec_time_slepian")
 }
 
@@ -824,6 +901,7 @@ spec_time_slepian <- function(tr, bandwidth = 0.1, k = NULL, backend = c("tridia
 #' @export
 spec_time_dct <- function(k, norm = c("ortho", "none")) {
   norm <- match.arg(norm)
+  k <- .validate_positive_count(k, "k")
   structure(list(k = k, norm = norm), class = "spec_time_dct")
 }
 
@@ -836,6 +914,10 @@ spec_time_dct <- function(k, norm = c("ortho", "none")) {
 #' @return A `spec_time_bspline` object.
 #' @export
 spec_time_bspline <- function(k, degree = 3L, include_intercept = FALSE, orthonormalize = TRUE) {
+  k <- .validate_positive_count(k, "k")
+  degree <- .validate_positive_count(degree, "degree")
+  include_intercept <- .validate_flag_scalar(include_intercept, "include_intercept")
+  orthonormalize <- .validate_flag_scalar(orthonormalize, "orthonormalize")
   structure(list(k = k, degree = degree, include_intercept = include_intercept,
                  orthonormalize = orthonormalize),
             class = "spec_time_bspline")
@@ -848,6 +930,8 @@ spec_time_bspline <- function(k, degree = 3L, include_intercept = FALSE, orthono
 #' @return A `spec_space_slepian` object.
 #' @export
 spec_space_slepian <- function(k = 3L, k_neighbors = 6L) {
+  k <- .validate_positive_count(k, "k")
+  k_neighbors <- .validate_positive_count(k_neighbors, "k_neighbors")
   structure(list(k = k, k_neighbors = k_neighbors), class = "spec_space_slepian")
 }
 
@@ -867,11 +951,14 @@ spec_space_slepian <- function(k = 3L, k_neighbors = 6L) {
 spec_space_pca <- function(k = 3L, center = TRUE, whiten = FALSE,
                            backend = c("auto", "svds", "svd")) {
   backend <- match.arg(backend)
+  k <- .validate_positive_count(k, "k")
+  center <- .validate_flag_scalar(center, "center")
+  whiten <- .validate_flag_scalar(whiten, "whiten")
   structure(
     list(
-      k = as.integer(k),
-      center = isTRUE(center),
-      whiten = isTRUE(whiten),
+      k = k,
+      center = center,
+      whiten = whiten,
       backend = backend
     ),
     class = "spec_space_pca"
@@ -887,7 +974,13 @@ spec_space_pca <- function(k = 3L, center = TRUE, whiten = FALSE,
 #' @return A `spec_space_heat` object.
 #' @export
 spec_space_heat <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 1e-6, k_neighbors = 6L) {
-  structure(list(scales = scales, order = order, threshold = threshold, k_neighbors = k_neighbors),
+  if (!is.numeric(scales) || length(scales) == 0L || any(!is.finite(scales)) || any(scales <= 0)) {
+    stop("scales must be a non-empty numeric vector of positive finite values.", call. = FALSE)
+  }
+  order <- .validate_positive_count(order, "order")
+  threshold <- .validate_nonnegative_scalar(threshold, "threshold")
+  k_neighbors <- .validate_positive_count(k_neighbors, "k_neighbors")
+  structure(list(scales = as.numeric(scales), order = order, threshold = threshold, k_neighbors = k_neighbors),
             class = "spec_space_heat")
 }
 
@@ -897,7 +990,7 @@ spec_space_heat <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 1e-
 #' @return A `spec_space_hrbf` object.
 #' @export
 spec_space_hrbf <- function(params = list()) {
-  structure(list(params = params), class = "spec_space_hrbf")
+  structure(list(params = .validate_hrbf_params(params)), class = "spec_space_hrbf")
 }
 
 #' Spatial wavelet (active pencil) spec
@@ -908,6 +1001,9 @@ spec_space_hrbf <- function(params = list()) {
 #' @return A `spec_space_wavelet_active` object.
 #' @export
 spec_space_wavelet_active <- function(levels_space = 2L, levels_time = 0L, threshold = 0) {
+  levels_space <- .validate_positive_count(levels_space, "levels_space")
+  levels_time <- .validate_nonnegative_count(levels_time, "levels_time")
+  threshold <- .validate_nonnegative_scalar(threshold, "threshold")
   structure(list(levels_space = levels_space, levels_time = levels_time, threshold = threshold),
             class = "spec_space_wavelet_active")
 }

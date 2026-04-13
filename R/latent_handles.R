@@ -12,6 +12,51 @@ setClass(
   )
 )
 
+.known_basis_handle_kinds <- c("dct", "slepian_temporal", "bspline", "lifted", "explicit")
+
+.validate_handle_dim <- function(dim, class_name) {
+  if (length(dim) != 2L) {
+    return(paste0(class_name, "@dim must have length 2."))
+  }
+  if (any(is.na(dim)) || any(dim < 1L)) {
+    return(paste0(class_name, "@dim must contain positive integers."))
+  }
+  TRUE
+}
+
+.validate_explicit_handle_spec <- function(spec, class_name) {
+  if (is.null(spec$matrix)) {
+    return(paste0(class_name, "(kind = 'explicit') requires spec$matrix."))
+  }
+  TRUE
+}
+
+setValidity("BasisHandle", function(object) {
+  if (length(object@id) != 1L || is.na(object@id) || !nzchar(object@id)) {
+    return("BasisHandle@id must be a non-empty character scalar.")
+  }
+  dim_valid <- .validate_handle_dim(object@dim, "BasisHandle")
+  if (!isTRUE(dim_valid)) return(dim_valid)
+  if (length(object@kind) != 1L || is.na(object@kind) || !(object@kind %in% .known_basis_handle_kinds)) {
+    return(paste0(
+      "BasisHandle@kind must be one of: ",
+      paste(.known_basis_handle_kinds, collapse = ", "),
+      "."
+    ))
+  }
+  if (length(object@label) != 1L || is.na(object@label)) {
+    return("BasisHandle@label must be a character scalar.")
+  }
+  if (!is.list(object@spec)) {
+    return("BasisHandle@spec must be a list.")
+  }
+  if (identical(object@kind, "explicit")) {
+    spec_valid <- .validate_explicit_handle_spec(object@spec, "BasisHandle")
+    if (!isTRUE(spec_valid)) return(spec_valid)
+  }
+  TRUE
+})
+
 #' @keywords internal
 setClass(
   "LoadingsHandle",
@@ -23,6 +68,34 @@ setClass(
     label = "character"
   )
 )
+
+.known_loadings_handle_kinds <- c("lifted", "slepian_spatial", "explicit")
+
+setValidity("LoadingsHandle", function(object) {
+  if (length(object@id) != 1L || is.na(object@id) || !nzchar(object@id)) {
+    return("LoadingsHandle@id must be a non-empty character scalar.")
+  }
+  dim_valid <- .validate_handle_dim(object@dim, "LoadingsHandle")
+  if (!isTRUE(dim_valid)) return(dim_valid)
+  if (length(object@kind) != 1L || is.na(object@kind) || !(object@kind %in% .known_loadings_handle_kinds)) {
+    return(paste0(
+      "LoadingsHandle@kind must be one of: ",
+      paste(.known_loadings_handle_kinds, collapse = ", "),
+      "."
+    ))
+  }
+  if (length(object@label) != 1L || is.na(object@label)) {
+    return("LoadingsHandle@label must be a character scalar.")
+  }
+  if (!is.list(object@spec)) {
+    return("LoadingsHandle@spec must be a list.")
+  }
+  if (identical(object@kind, "explicit")) {
+    spec_valid <- .validate_explicit_handle_spec(object@spec, "LoadingsHandle")
+    if (!isTRUE(spec_valid)) return(spec_valid)
+  }
+  TRUE
+})
 
 # Unions so LatentNeuroVec can accept either Matrix or handle
 setClassUnion("MatrixOrBasisHandle",    c("Matrix", "matrix", "BasisHandle"))

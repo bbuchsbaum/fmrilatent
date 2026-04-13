@@ -98,6 +98,13 @@ test_that("slepian_temporal_handle generates unique ids by default", {
   expect_equal(handle1@id, handle4@id)
 })
 
+test_that("slepian_temporal_handle auto id changes with tr", {
+  handle1 <- slepian_temporal_handle(n_time = 20L, tr = 1.0, bandwidth = 0.1, k = 3L)
+  handle2 <- slepian_temporal_handle(n_time = 20L, tr = 2.0, bandwidth = 0.1, k = 3L)
+
+  expect_false(handle1@id == handle2@id)
+})
+
 test_that("slepian_temporal_handle defaults to tridiag backend", {
   handle <- slepian_temporal_handle(n_time = 15L, tr = 2.0, bandwidth = 0.1)
 
@@ -286,7 +293,7 @@ test_that("slepian_spatial_loadings_handle creates LoadingsHandle with correct s
   expect_true(nchar(handle@id) > 0)
 })
 
-test_that("slepian_spatial_loadings_handle generates random id when not provided", {
+test_that("slepian_spatial_loadings_handle reuses deterministic id when inputs match", {
   skip_if_not_installed("RSpectra")
 
   mask <- array(TRUE, dim = c(2, 2, 2))
@@ -297,8 +304,7 @@ test_that("slepian_spatial_loadings_handle generates random id when not provided
   handle1 <- slepian_spatial_loadings_handle(reduction = red, basis_spec = spec)
   handle2 <- slepian_spatial_loadings_handle(reduction = red, basis_spec = spec)
 
-  # Each call should generate a new random id
-  expect_false(handle1@id == handle2@id)
+  expect_equal(handle1@id, handle2@id)
 })
 
 test_that("slepian_spatial_loadings_handle uses custom id when provided", {
@@ -532,19 +538,14 @@ test_that(".latent_loadings_dim works with LoadingsHandle", {
 })
 
 # =============================================================================
-# Edge case: auto-generated ids do not include backend
+# Edge case: auto-generated ids reflect backend-specific cache keys
 # =============================================================================
 
-test_that("handles with same params but different backends get same auto-generated id", {
-  # This documents current behavior: backend is NOT included in the auto-generated id.
-  # Different backends now get different auto-generated IDs to prevent cache collisions
+test_that("handles with same params but different backends get different auto-generated ids", {
   h1 <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "tridiag")
   h2 <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "dense")
 
-  # Different ids (backend is now included in auto-generated id)
   expect_false(h1@id == h2@id)
-  expect_true(grepl("tridiag", h1@id))
-  expect_true(grepl("dense", h2@id))
 
   # Different spec backends
   expect_equal(h1@spec$backend, "tridiag")
