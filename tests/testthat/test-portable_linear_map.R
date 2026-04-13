@@ -198,12 +198,40 @@ test_that("decode_coefficients wrap='auto' returns a NeuroVol for volumetric tar
   expect_equal(dim(wrapped), dim(td$mask_vol))
 })
 
-test_that("decode_coefficients wrap='auto' on template space errors cleanly", {
+test_that("decode_coefficients wrap='auto' on template space returns a NeuroVol", {
   td <- .portable_linear_map_td()
   gamma <- seq_len(td$k) / td$k
+  wrapped <- decode_coefficients(td$lat, gamma, space = "template", wrap = "auto")
+  expect_true(methods::is(wrapped, "NeuroVol"))
+  # Template support for a parcel_basis_template is the template mask, which
+  # in the fixture is the same shape as the native mask (identity operator).
+  expect_equal(dim(wrapped), dim(td$mask_vol))
+})
+
+test_that("decode_coefficients wrap='auto' template multi-column returns NeuroVec", {
+  td <- .portable_linear_map_td()
+  gamma <- matrix(rnorm(td$k * 3L), nrow = td$k, ncol = 3L)
+  wrapped <- decode_coefficients(td$lat, gamma, space = "template", wrap = "auto")
+  expect_true(methods::is(wrapped, "NeuroVec"))
+  # 4D: 3 spatial dims + time-like axis of length 3
+  expect_identical(as.integer(dim(wrapped)[4]), 3L)
+})
+
+test_that("wrap_decoded template-space errors for non-transport latent objects", {
+  # Build a plain ImplicitLatent without transport backing
+  mask_vol <- neuroim2::LogicalNeuroVol(array(TRUE, dim = c(2, 2, 1)),
+                                        neuroim2::NeuroSpace(c(2, 2, 1)))
+  plain <- implicit_latent(
+    coeff = list(),
+    decoder = function(time_idx = NULL, roi_mask = NULL, ...) {
+      matrix(0, nrow = 1, ncol = 4)
+    },
+    meta = list(family = "plain"),
+    mask = mask_vol
+  )
   expect_error(
-    decode_coefficients(td$lat, gamma, space = "template", wrap = "auto"),
-    "only implemented for space = \"native\""
+    wrap_decoded(plain, values = rep(0, 4), space = "template"),
+    "does not support space = \"template\""
   )
 })
 

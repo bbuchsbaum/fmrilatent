@@ -723,12 +723,6 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   if (wrap == "none") {
     return(values)
   }
-  if (identical(space, "template")) {
-    stop("decode_coefficients(wrap = \"auto\") is only implemented for ",
-         "space = \"native\". No wrap_decoded() method supports template ",
-         "space yet; call with wrap = \"none\" for raw template-space values.",
-         call. = FALSE)
-  }
   # decoder forward() returns target-samples x ncol(gamma); wrap_decoded()
   # methods expect time-first (rows = frames), so transpose when gamma has
   # more than one column.

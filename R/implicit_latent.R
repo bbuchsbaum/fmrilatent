@@ -273,27 +273,55 @@ setMethod("reconstruct_array", "ImplicitLatent",
             .wrap_decoded_volume(rec, fill_mask, context = "reconstruct_array.ImplicitLatent")
           })
 
+.wrap_decoded_by_support <- function(values, support, domain, context) {
+  if (inherits(support, "LogicalNeuroVol") ||
+      (is.logical(support) && length(dim(support)) == 3L)) {
+    return(.wrap_decoded_volume(values, support, context = context))
+  }
+  if (.is_surface_domain(domain)) {
+    return(.wrap_decoded_surface(values, domain, support, context = context))
+  }
+  stop(context, " has no wrapper for this domain/support combination.", call. = FALSE)
+}
+
 #' @export
 #' @rdname wrap_decoded
 setMethod("wrap_decoded", "ImplicitLatent",
           function(x, values, time_idx = NULL, space = c("native", "template"), ...) {
             space <- match.arg(space)
-            if (space != "native") {
-              stop("wrap_decoded() for ImplicitLatent currently supports only native-space wrapping.",
-                   call. = FALSE)
+            if (space == "native") {
+              return(.wrap_decoded_by_support(
+                values,
+                support = latent_support(x),
+                domain = latent_domain(x),
+                context = "wrap_decoded.ImplicitLatent[native]"
+              ))
             }
-            support <- latent_support(x)
-            domain <- latent_domain(x)
-            if (inherits(support, "LogicalNeuroVol") ||
-                (is.logical(support) && length(dim(support)) == 3L)) {
-              return(.wrap_decoded_volume(values, support, context = "wrap_decoded.ImplicitLatent"))
+            # Template-space wrapping is only meaningful for transport-backed
+            # latent objects, which carry a basis_asset whose template_support()
+            # / template_domain() describe the template-side sample layout.
+            if (!.is_transport_latent(x)) {
+              stop("wrap_decoded() does not support space = \"template\" for ",
+                   "non-transport latent objects (no basis asset to describe ",
+                   "template-side support).", call. = FALSE)
             }
-            if (.is_surface_domain(domain)) {
-              return(.wrap_decoded_surface(values, domain, support,
-                                           context = "wrap_decoded.ImplicitLatent"))
+            asset <- basis_asset(x)
+            if (is.null(asset)) {
+              stop("wrap_decoded(space = \"template\") requires a basis_asset ",
+                   "on the transport latent object.", call. = FALSE)
             }
-            stop("wrap_decoded() has no native-space wrapper for this domain/support combination.",
-                 call. = FALSE)
+            t_support <- tryCatch(template_support(asset), error = function(e) NULL)
+            t_domain <- tryCatch(template_domain(asset), error = function(e) NULL)
+            if (is.null(t_support)) {
+              stop("wrap_decoded(space = \"template\") requires the basis ",
+                   "asset to implement template_support().", call. = FALSE)
+            }
+            .wrap_decoded_by_support(
+              values,
+              support = t_support,
+              domain = t_domain,
+              context = "wrap_decoded.ImplicitLatent[template]"
+            )
           })
 
 #' Subset reconstruction matrix columns by ROI mask
