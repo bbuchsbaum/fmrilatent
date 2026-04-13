@@ -20,5 +20,6 @@ encoding. When supplied, it must match the template exactly.}
 LatentNeuroVec with basis = time x atoms coefficients, loadings = template loadings
 }
 \description{
-Encode data using a hierarchical template
+Note: unlike parcel and AWPT encoding, hierarchical encoding does not
+center the data. The returned offset is always \code{numeric(0)}.
 }

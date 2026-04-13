@@ -472,7 +472,7 @@ perform_haar_lift_analysis <- function(data_matrix_T_x_Nmask, mask_3d_array,
 #'
 #' @keywords internal
 perform_haar_lift_synthesis <- function(coeff_list, mask_3d_array, levels,
-                                         z_order_seed = 42L) {
+                                        z_order_seed = 42L) {
   if (is.null(coeff_list$root) || !is.matrix(coeff_list$root)) {
     stop("coeff_list$root must be a matrix", call. = FALSE)
   }
@@ -561,7 +561,9 @@ compute_block_map <- function(mask_3d_array, levels) {
     x_seq <- seq(1L, dims[1], by = 2L)
     y_seq <- seq(1L, dims[2], by = 2L)
     z_seq <- seq(1L, dims[3], by = 2L)
-    nbx <- length(x_seq); nby <- length(y_seq); nbz <- length(z_seq)
+    nbx <- length(x_seq)
+    nby <- length(y_seq)
+    nbz <- length(z_seq)
     nblocks <- nbx * nby * nbz
     counts <- integer(nblocks)
     codes <- integer(nblocks)
@@ -745,7 +747,9 @@ haar_wavelet_inverse <- function(coeff, mask, levels = NULL, z_seed = NULL,
         m0[, seq_len(min(ncol(m), ncol_expected))] <- m[, seq_len(min(ncol(m), ncol_expected)), drop = FALSE]
         m <- m0
       }
-      if (lv %in% levels_keep) m else {
+      if (lv %in% levels_keep) {
+        m
+      } else {
         m[] <- 0
         m
       }

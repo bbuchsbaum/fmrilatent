@@ -88,6 +88,36 @@ make_test_hierarchical_template_ci <- function() {
       meta = list(family = "hierarchical_laplacian", label = "test_hier"))
 }
 
+make_test_parcel_template_nonorthogonal_ci <- function() {
+  mask_vol <- make_test_mask_vol_ci()
+  loadings <- Matrix(matrix(
+    c(1, 0,
+      0, 1,
+      1, 1,
+      0, 1),
+    nrow = 4, byrow = TRUE
+  ), sparse = FALSE)
+  gram_factor <- Matrix::Cholesky(Matrix::crossprod(loadings), perm = TRUE)
+  reduction <- make_cluster_reduction(mask_vol, c(1L, 1L, 2L, 2L))
+  structure(
+    list(
+      loadings = loadings,
+      gram_factor = gram_factor,
+      reduction = reduction,
+      basis_spec = basis_slepian(k = 2),
+      center = FALSE,
+      meta = list(
+        family = "spec_slepian",
+        k = 2L,
+        ridge = 1e-8,
+        label_map = list(A = 1L, B = 2L),
+        cluster_map = list(`1` = 1:2, `2` = 3:4)
+      )
+    ),
+    class = "ParcelBasisTemplate"
+  )
+}
+
 test_that("common latent interface works for LatentNeuroVec", {
   lv <- make_test_lvec_ci()
   roi <- array(c(TRUE, FALSE, TRUE, FALSE), dim = c(2, 2, 1))
@@ -179,6 +209,33 @@ test_that("template protocol works for hierarchical templates", {
   expect_equal(proj$offset, numeric(0))
   expect_equal(dim(proj$coefficients), c(2, 1))
   expect_equal(as.matrix(proj$coefficients), expected_coeff)
+})
+
+test_that("template-backed explicit latent objects retain shared-basis coordinate semantics", {
+  tmpl <- make_test_parcel_template_nonorthogonal_ci()
+  payload <- .template_coordinate_payload(
+    raw_loadings = template_loadings(tmpl),
+    measure = template_measure(tmpl),
+    default_measure = "unit"
+  )
+  Z_analysis <- matrix(
+    c(1, 2,
+      0, 1,
+      -1, 3),
+    nrow = 3, byrow = TRUE
+  )
+  X <- Z_analysis %*% t(payload$analysis_loadings)
+  lv <- encode(X, spec_space_parcel(tmpl), mask = template_mask(tmpl))
+
+  expect_equal(coef_time(lv, "analysis"), Z_analysis, tolerance = 1e-8)
+  expect_equal(
+    coef_time(lv, "raw"),
+    t(payload$analysis_transform$to_raw(t(Z_analysis))),
+    tolerance = 1e-8
+  )
+  expect_equal(coef_metric(lv, "raw"), payload$raw_metric, tolerance = 1e-8)
+  expect_s3_class(basis_asset(lv), "ParcelBasisTemplate")
+  expect_equal(as.matrix(loadings(lv)), as.matrix(payload$analysis_loadings), tolerance = 1e-8)
 })
 
 test_that("save_template and load_template round-trip parcel templates", {

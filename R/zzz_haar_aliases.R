@@ -32,4 +32,3 @@ as_haar_latent <- function(obj) {
   }
   stop("Object is not Haar implicit latent", call. = FALSE)
 }
-

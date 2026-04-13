@@ -6,12 +6,20 @@
 \alias{fmrilatent-package}
 \title{fmrilatent: Latent Space Representations of fMRI Data}
 \description{
-Provides S4 classes and methods for representing neuroimaging data in latent spaces. The LatentNeuroVec class offers a memory-efficient representation using matrix factorization (basis x loadings), enabling compact storage and efficient computation for dimensionality-reduced fMRI data such as PCA or ICA decompositions. Integrates with the neuroim2 package for standard neuroimaging data structures.
+`fmrilatent` owns latent representations for neuroimaging data, including
+explicit factorized objects, shared basis assets, operator-backed latent
+objects, coefficient recovery, and coefficient-to-map projection.
+}
+\details{
+The package deliberately stops at the latent-method layer. It does not own
+first-level GLM fitting, contrasts, temporal autocorrelation modeling, or
+statistical inference. Downstream modeling packages should consume
+`coef_time(x, "analysis")` plus the decoder and projection generics exposed
+here.
 }
 \seealso{
 Useful links:
 \itemize{
-  \item \url{https://bbuchsbaum.github.io/fmrilatent/}
   \item \url{https://github.com/bbuchsbaum/fmrilatent}
   \item Report bugs at \url{https://github.com/bbuchsbaum/fmrilatent/issues}
 }

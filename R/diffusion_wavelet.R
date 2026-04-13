@@ -162,7 +162,11 @@ diffusion_wavelet_latent <- function(X, mask, reduction = NULL,
   loadings <- lift(reduction, spec, k_neighbors = k_neighbors)
   basis <- as.matrix(X) %*% as.matrix(loadings)
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(X)))
-  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) mask else LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) {
+    mask
+  } else {
+    LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  }
   meta <- list(family = "diffusion_wavelet", spec = spec, k_neighbors = k_neighbors)
   LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask_vol, label = label, meta = meta)
 }

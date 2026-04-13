@@ -181,6 +181,151 @@ red <- as_cluster_reduction(atlas)
 lvec <- encode(X, spec_space_pca(k = 5), mask = mask_vol, reduction = red)
 ```
 
+## Transport-backed latent workflows
+
+The operator-aware transport path is the bridge between `fmrilatent` and
+downstream modeling packages. The package boundary is deliberate:
+
+- `fmrilatent` owns the shared basis asset, coefficient recovery, and
+  coefficient-to-map projection.
+- Geometry lives outside the package: `neurotransform` / `neurofunctor`
+  compile the subject-specific field operator.
+- First-level GLMs, contrasts, and inference stay downstream. In v1, they
+  should consume `coef_time(x, "analysis")`.
+
+The transport model keeps subject anatomy and shared latent structure
+separate:
+
+\[
+D_s = A_s \circ B
+\]
+
+Here `B` is the shared basis decoder on template anatomy and `A_s` is the
+subject-specific field operator that maps template fields onto the
+subject's native BOLD grid.
+
+### 1. Build one shared basis asset
+
+The basis asset is reusable across subjects. A parcel template or AWPT
+template both satisfy the same decoder contract.
+
+```{r transport-template, eval = FALSE}
+# Template mask and atlas on the shared anatomical domain
+template_mask <- mask_vol
+parcel_ids <- rep(1:4, each = 16)
+atlas <- neuroim2::ClusteredNeuroVol(template_mask, parcel_ids)
+
+# Shared template-space dictionary
+tmpl <- parcel_basis_template(atlas, basis_slepian(k = 5))
+
+# AWPT templates use the same fmrilatent-side contract
+# awpt_tmpl <- awpt_basis_template(atlas, basis_awpt_wavelet(scales = c(1, 2, 4)))
+```
+
+### 2. Compile the subject field operator elsewhere
+
+`fmrilatent` does not own warp compilation. It only consumes an operator with
+forward and adjoint methods plus target-domain provenance. In a real pipeline,
+this operator is compiled from transforms and sampling rules outside the
+package.
+
+```{r transport-operator, eval = FALSE}
+# Native mask for one subject's BOLD grid
+native_mask <- template_mask
+
+# Demo operator: identity transport when native and template grids coincide.
+# Real operators are compiled by neurofunctor / neurotransform.
+obs <- list(
+  n_source = sum(as.array(template_mask)),
+  n_target = sum(as.array(native_mask)),
+  source_domain_id = "template:demo",
+  target_domain_id = "subject01:bold",
+  forward = function(z) as.matrix(z),
+  adjoint_apply = function(y) as.matrix(y),
+  provenance = list(
+    operator = "identity-demo",
+    target_mask = native_mask
+  )
+)
+```
+
+### 3. Encode native BOLD into shared coefficients
+
+The encode step is matrix-free on the main transport/AWPT paths. `fmrilatent`
+stores the coefficient representation plus the shared basis asset and
+field operator metadata needed for later projection.
+
+```{r transport-encode, eval = FALSE}
+set.seed(1)
+X_native <- matrix(rnorm(120 * sum(as.array(native_mask))), nrow = 120)
+run_id <- c(rep(1L, 60), rep(2L, 60))
+
+lat_tx <- encode_transport(
+  X_native,
+  basis_asset = tmpl,
+  field_operator = obs,
+  temporal_lambda = 0.5,
+  spatial_lambda = 0.1,
+  run_id = run_id
+)
+
+# AWPT uses the same handoff surface with an AWPT basis asset
+# lat_awpt <- encode_awpt(X_native, basis_asset = awpt_tmpl,
+#                         field_operator = obs, run_id = run_id)
+```
+
+### 4. Hand off analysis coordinates to the modeling layer
+
+Downstream code should ordinarily consume analysis coordinates, not raw
+transport coordinates. In v1, analysis coordinates are Euclidean by contract.
+
+```{r transport-handoff, eval = FALSE}
+# Response matrix for downstream modeling packages
+Y_analysis <- coef_time(lat_tx, coordinates = "analysis")
+
+# Optional metadata for downstream checks / bookkeeping
+analysis_metric <- coef_metric(lat_tx, coordinates = "analysis")
+shared_basis <- basis_asset(lat_tx)
+native_decoder <- decoder(lat_tx, space = "native", coordinates = "analysis")
+template_decoder <- decoder(lat_tx, space = "template", coordinates = "analysis")
+```
+
+At this point `fmrilatent` stops. A downstream package such as `fmrireg`
+fits the temporal model in coefficient space and returns effect vectors and
+coefficient covariance matrices.
+
+### 5. Project coefficient results back to image space
+
+Once a downstream model returns coefficient-space effects, `fmrilatent`
+renders them back into native or template space on demand.
+
+```{r transport-project, eval = FALSE}
+# Returned by a downstream coefficient-space model
+gamma_hat <- rnorm(ncol(Y_analysis))
+Sigma_hat <- diag(length(gamma_hat)) * 0.05
+
+# Native-space beta and variance
+beta_native <- decode_coefficients(
+  lat_tx, gamma_hat, space = "native", coordinates = "analysis"
+)
+var_native <- decode_covariance(
+  lat_tx, Sigma_hat, space = "native", coordinates = "analysis", diag_only = TRUE
+)
+
+# Template-space beta and variance
+beta_template <- decode_coefficients(
+  lat_tx, gamma_hat, space = "template", coordinates = "analysis"
+)
+var_template <- decode_covariance(
+  lat_tx, Sigma_hat, space = "template", coordinates = "analysis", diag_only = TRUE
+)
+```
+
+This is the fmrilatent-side vertical slice: one shared basis asset, one
+subject field operator, matrix-free coefficient recovery, analysis-space
+handoff, and coefficient-to-map projection. The statistical model itself
+belongs elsewhere.
+
 ### Quick reference
 
 | Family | Dimension | Strengths |

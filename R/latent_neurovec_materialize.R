@@ -10,8 +10,7 @@ NULL
 
 #' @keywords internal
 setGeneric(
-
-"basis_mat",
+  "basis_mat",
   function(x, i = NULL, j = NULL, ...) standardGeneric("basis_mat")
 )
 

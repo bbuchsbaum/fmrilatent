@@ -21,4 +21,3 @@ test_that("heat_wavelet_latent constructs LatentNeuroVec", {
   expect_equal(nrow(loadings(lv)), sum(mask))
   expect_equal(nrow(basis(lv)), nrow(X))
 })
-

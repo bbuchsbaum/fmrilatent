@@ -122,7 +122,7 @@ hrbf_atoms_rcpp_internal <- fmrilatent:::hrbf_atoms_rcpp
 test_that("hrbf_atoms_rcpp gaussian kernel produces expected values", {
   # Simple 3x3 grid of mask points
 
-mask_xyz <- matrix(c(
+  mask_xyz <- matrix(c(
     0, 0, 0,
     1, 0, 0,
     2, 0, 0,
@@ -189,12 +189,12 @@ test_that("hrbf_atoms_rcpp wendland kernel produces expected values", {
   # At r=0.5: (1-0.5)^8 * (32*0.125 + 25*0.25 + 8*0.5 + 1)
   #         = (0.5)^8 * (4 + 6.25 + 4 + 1) = 0.00390625 * 15.25
   r <- 0.5
-  expected_05 <- (1 - r)^8 * (32*r^3 + 25*r^2 + 8*r + 1)
+  expected_05 <- (1 - r)^8 * (32 * r^3 + 25 * r^2 + 8 * r + 1)
   expect_equal(result_dense[1, 2], expected_05, tolerance = 1e-10)
 
   # At r=0.9: should be small but positive
   r <- 0.9
-  expected_09 <- (1 - r)^8 * (32*r^3 + 25*r^2 + 8*r + 1)
+  expected_09 <- (1 - r)^8 * (32 * r^3 + 25 * r^2 + 8 * r + 1)
   expect_equal(result_dense[1, 3], expected_09, tolerance = 1e-10)
 
   # At r=1.0: exactly zero (boundary)
@@ -217,18 +217,18 @@ test_that("hrbf_atoms_rcpp wendland kernel has compact support", {
   result_dense <- as.matrix(result)
 
   # Points with r < 1 should be non-zero
-  expect_gt(result_dense[1, 1], 0) # r=0
-  expect_gt(result_dense[1, 2], 0) # r=0.25
-  expect_gt(result_dense[1, 3], 0) # r=0.5
-  expect_gt(result_dense[1, 4], 0) # r=0.75
-  expect_gt(result_dense[1, 5], 0) # r=0.9
+  expect_gt(result_dense[1, 1], 0)
+  expect_gt(result_dense[1, 2], 0)
+  expect_gt(result_dense[1, 3], 0)
+  expect_gt(result_dense[1, 4], 0)
+  expect_gt(result_dense[1, 5], 0)
 
   # Points with r >= 1 should be exactly zero
-  expect_equal(result_dense[1, 6], 0.0)  # r=1.0
-  expect_equal(result_dense[1, 7], 0.0)  # r=1.01
-  expect_equal(result_dense[1, 8], 0.0)  # r=1.5
-  expect_equal(result_dense[1, 9], 0.0)  # r=2.0
-  expect_equal(result_dense[1, 10], 0.0) # r=3.0
+  expect_equal(result_dense[1, 6], 0.0)
+  expect_equal(result_dense[1, 7], 0.0)
+  expect_equal(result_dense[1, 8], 0.0)
+  expect_equal(result_dense[1, 9], 0.0)
+  expect_equal(result_dense[1, 10], 0.0)
 })
 
 test_that("hrbf_atoms_rcpp respects value_threshold for gaussian", {
@@ -292,12 +292,12 @@ test_that("hrbf_atoms_rcpp handles multiple centres", {
   expect_equal(result_dense[2, 5], 1.0, tolerance = 1e-10)
 
   # Check decay for first centre
-  expect_equal(result_dense[1, 2], exp(-0.5), tolerance = 1e-10) # dist=1
-  expect_equal(result_dense[1, 3], exp(-2.0), tolerance = 1e-10) # dist=2
+  expect_equal(result_dense[1, 2], exp(-0.5), tolerance = 1e-10)
+  expect_equal(result_dense[1, 3], exp(-2.0), tolerance = 1e-10)
 
   # Check decay for second centre
-  expect_equal(result_dense[2, 4], exp(-0.5), tolerance = 1e-10) # dist=1
-  expect_equal(result_dense[2, 3], exp(-2.0), tolerance = 1e-10) # dist=2
+  expect_equal(result_dense[2, 4], exp(-0.5), tolerance = 1e-10)
+  expect_equal(result_dense[2, 3], exp(-2.0), tolerance = 1e-10)
 })
 
 test_that("hrbf_atoms_rcpp handles different sigma values per centre", {
@@ -322,11 +322,9 @@ test_that("hrbf_atoms_rcpp handles different sigma values per centre", {
   expect_equal(result_dense[2, 2], 1.0, tolerance = 1e-10)
 
   # Distance from centre 1 to point 2: distance=2, sigma=1
-  # exp(-4/(2*1)) = exp(-2)
   expect_equal(result_dense[1, 2], exp(-2), tolerance = 1e-10)
 
   # Distance from centre 2 to point 1: distance=2, sigma=2
-  # exp(-4/(2*4)) = exp(-0.5)
   expect_equal(result_dense[2, 1], exp(-0.5), tolerance = 1e-10)
 })
 
@@ -466,30 +464,30 @@ test_that("hrbf_atoms_rcpp output is sparse for wendland", {
 })
 
 test_that("hrbf_atoms_rcpp gaussian is symmetric",
-{
-  # Test symmetry by placing mask points equidistant from center
-  mask_xyz <- matrix(c(
-    1, 0, 0,
-    -1, 0, 0,
-    0, 1, 0,
-    0, -1, 0,
-    0, 0, 1,
-    0, 0, -1
-  ), ncol = 3, byrow = TRUE)
+          {
+            # Test symmetry by placing mask points equidistant from center
+            mask_xyz <- matrix(c(
+              1, 0, 0,
+              -1, 0, 0,
+              0, 1, 0,
+              0, -1, 0,
+              0, 0, 1,
+              0, 0, -1
+            ), ncol = 3, byrow = TRUE)
 
-  centres <- matrix(c(0, 0, 0), ncol = 3, byrow = TRUE)
-  sigma_vec <- 1.0
+            centres <- matrix(c(0, 0, 0), ncol = 3, byrow = TRUE)
+            sigma_vec <- 1.0
 
-  result <- hrbf_atoms_rcpp_internal(mask_xyz, centres, sigma_vec, "gaussian", 1e-12)
-  result_dense <- as.matrix(result)
+            result <- hrbf_atoms_rcpp_internal(mask_xyz, centres, sigma_vec, "gaussian", 1e-12)
+            result_dense <- as.matrix(result)
 
-  # All equidistant points should have the same value
-  expect_equal(result_dense[1, 1], result_dense[1, 2], tolerance = 1e-10)
-  expect_equal(result_dense[1, 1], result_dense[1, 3], tolerance = 1e-10)
-  expect_equal(result_dense[1, 1], result_dense[1, 4], tolerance = 1e-10)
-  expect_equal(result_dense[1, 1], result_dense[1, 5], tolerance = 1e-10)
-  expect_equal(result_dense[1, 1], result_dense[1, 6], tolerance = 1e-10)
-})
+            # All equidistant points should have the same value
+            expect_equal(result_dense[1, 1], result_dense[1, 2], tolerance = 1e-10)
+            expect_equal(result_dense[1, 1], result_dense[1, 3], tolerance = 1e-10)
+            expect_equal(result_dense[1, 1], result_dense[1, 4], tolerance = 1e-10)
+            expect_equal(result_dense[1, 1], result_dense[1, 5], tolerance = 1e-10)
+            expect_equal(result_dense[1, 1], result_dense[1, 6], tolerance = 1e-10)
+          })
 
 test_that("hrbf_atoms_rcpp wendland is symmetric", {
   mask_xyz <- matrix(c(
@@ -1241,7 +1239,7 @@ test_that("compute_hrbf_coefficients singular case fallback", {
 
 test_that("compute_hrbf_coefficients dimension mismatch error", {
   basis <- Matrix::Matrix(rnorm(5 * 10), nrow = 5, sparse = TRUE)
-  X <- matrix(rnorm(3 * 20), nrow = 3)  # Wrong: ncol != ncol(basis)
+  X <- matrix(rnorm(3 * 20), nrow = 3)
 
   expect_error(
     fmrilatent:::compute_hrbf_coefficients(X, basis),
@@ -1503,7 +1501,7 @@ test_that("generate_hrbf_atom with fine level alt kernel switching", {
     num_extra_fine_levels = 1L,
     num_fine_levels_alt_kernel = 2L,
     kernel_type = "gaussian",
-    kernel_type_fine_levels = "wendland_c4"  # alias -> wendland_c6
+    kernel_type_fine_levels = "wendland_c4"
   )
   atom <- fmrilatent:::generate_hrbf_atom(
     mask_coords_world, 1:3, c(0, 0, 0), 1.0,

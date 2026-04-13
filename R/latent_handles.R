@@ -4,11 +4,11 @@
 setClass(
   "BasisHandle",
   slots = c(
-    id    = "character",  # registry key
-    dim   = "integer",    # c(n_time, k)
-    kind  = "character",  # e.g., "dct", "lifted", "explicit"
-    spec  = "list",       # parameters for reconstruction
-    label = "character"   # optional human-readable label
+    id    = "character",
+    dim   = "integer",
+    kind  = "character",
+    spec  = "list",
+    label = "character"
   )
 )
 
@@ -16,11 +16,11 @@ setClass(
 setClass(
   "LoadingsHandle",
   slots = c(
-    id    = "character",  # registry key
-    dim   = "integer",    # c(n_vox, k)
-    kind  = "character",  # e.g., "lifted", "explicit"
-    spec  = "list",       # parameters for reconstruction
-    label = "character"   # optional human-readable label
+    id    = "character",
+    dim   = "integer",
+    kind  = "character",
+    spec  = "list",
+    label = "character"
   )
 )
 

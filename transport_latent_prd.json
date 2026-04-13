@@ -1,0 +1,814 @@
+{
+  "document": {
+    "title": "fmrilatent Transport-Backed Latent Representation PRD and Implementation Plan",
+    "document_type": "product_requirements_and_delivery_plan",
+    "status": "draft_for_third_party_review",
+    "version": "0.1.0",
+    "created_date": "2026-04-11",
+    "authors": [
+      {
+        "role": "head_engineering_assessment",
+        "system": "OpenAI Codex"
+      }
+    ],
+    "repository": "bbuchsbaum/fmrilatent",
+    "related_repositories": [
+      "bbuchsbaum/neurofunctor",
+      "bbuchsbaum/neurotransform",
+      "bbuchsbaum/fmrireg",
+      "bbuchsbaum/genpca"
+    ],
+    "intended_reviewers": [
+      "third_party technical reviewer",
+      "package maintainer",
+      "cross-package architecture reviewer"
+    ]
+  },
+  "executive_summary": {
+    "problem_statement": "fmrilatent currently supports explicit factorized latent representations and lightweight decoder-backed implicit representations, but it does not yet expose a first-class protocol for transport-backed latent analysis where a shared template basis is observed through subject-specific operators compiled outside the package.",
+    "proposed_solution": "Extend fmrilatent so it can own the semantics of an analysis-ready latent field while delegating geometry compilation to neurofunctor and neurotransform. The initial implementation should represent transport-backed models as an ImplicitLatent family backed by a shared BasisTemplate asset, an external ObservationOperator, and explicit coefficient-space analysis coordinates.",
+    "architectural_thesis": "Inter-subject anatomy belongs in the observation operator, not in the latent representation.",
+    "delivery_recommendation": "Do not create a new top-level package. Deliver a thin vertical slice first: one shared template basis, one compiled observer, one operator-backed latent object, one coefficient recovery path, and one projection path usable by fmrireg.",
+    "decision": "Proceed",
+    "decision_rationale": [
+      "neurofunctor now provides a credible operator substrate with TransportOperator and ObservationOperator support.",
+      "fmrilatent already has the right latent/template primitives but needs a stronger latent protocol.",
+      "The change can be delivered incrementally without destabilizing existing LatentNeuroVec workflows."
+    ]
+  },
+  "context": {
+    "current_state": {
+      "fmrilatent": {
+        "strengths": [
+          "LatentNeuroVec already provides explicit factorized latent storage.",
+          "ImplicitLatent already provides decoder-backed reconstruction for families where explicit matrices are not the right representation.",
+          "ParcelBasisTemplate and HierarchicalBasisTemplate already establish reusable template-asset patterns.",
+          "encode() and latent_factory() already provide a family-oriented entry point."
+        ],
+        "limitations": [
+          "ImplicitLatent has no first-class coefficient-space protocol.",
+          "There is no generic contract for analysis coordinates, coefficient metrics, or covariance pushforward.",
+          "Template projection is currently explicit-loadings-centric and does not generalize to external observation operators.",
+          "There is no operator-aware encode path for solving Y ~= HZ."
+        ]
+      },
+      "neurofunctor": {
+        "new_support": [
+          "LinearOperator hierarchy",
+          "LatentSpace domain type",
+          "compile_transport_operator()",
+          "compile_observation_operator()",
+          "forward()/adjoint() interfaces",
+          "operator provenance and QC"
+        ],
+        "strategic_value": "neurofunctor can now build and validate subject-specific transport and observation operators without owning basis estimation or GLM logic."
+      }
+    },
+    "source_evidence": [
+      {
+        "path": "Vision.md",
+        "relevance": "Package vision already prefers two object shapes and reusable template assets."
+      },
+      {
+        "path": "R/implicit_latent.R",
+        "relevance": "Shows the current minimal implicit latent contract."
+      },
+      {
+        "path": "R/parcel_basis.R",
+        "relevance": "Shows reusable shared template dictionaries and dual-solve projection."
+      },
+      {
+        "path": "R/hierarchical_template.R",
+        "relevance": "Shows a second reusable template asset pattern."
+      },
+      {
+        "path": "../neurofunctor/R/projector.R",
+        "relevance": "Shows compile_transport_operator() and compile_observation_operator()."
+      }
+    ]
+  },
+  "product_definition": {
+    "name": "Transport-Backed Latent Representation Layer",
+    "one_sentence_description": "A latent representation layer for fMRI in which fmrilatent owns shared basis assets, coefficient recovery, and reconstruction semantics, while subject anatomy is carried by external observation operators.",
+    "target_users": [
+      "fmrilatent maintainers",
+      "developers integrating fmrilatent with fmrireg",
+      "method developers experimenting with shared template bases and subject-native inference",
+      "advanced users who need reproducible latent encoding across subjects"
+    ],
+    "core_user_story": "As a developer, I want to encode native-space subject data against a shared template basis using a compiled observation operator so that I can fit models in coefficient space and render native or template maps only when needed.",
+    "primary_use_cases": [
+      "Shared template spectral basis with subject-specific native-space coefficient recovery",
+      "Operator-backed reconstruction of native or template maps from latent coefficients",
+      "Downstream coefficient-space GLM fitting in fmrireg",
+      "Template-based reuse of fixed dictionaries across subjects without dense back-warped basis materialization"
+    ]
+  },
+  "goals": [
+    {
+      "id": "G1",
+      "goal": "Make operator-backed latent representations a first-class concept in fmrilatent."
+    },
+    {
+      "id": "G2",
+      "goal": "Preserve existing LatentNeuroVec and current ImplicitLatent workflows while adding a stronger latent protocol."
+    },
+    {
+      "id": "G3",
+      "goal": "Allow fmrireg to consume coefficient-space responses transparently through a stable latent interface."
+    },
+    {
+      "id": "G4",
+      "goal": "Keep package boundaries clean: geometry in neurotransform, operator compilation in neurofunctor, latent semantics in fmrilatent, GLM fitting in fmrireg."
+    },
+    {
+      "id": "G5",
+      "goal": "Deliver a thin vertical slice before broadening basis-family coverage."
+    }
+  ],
+  "non_goals": [
+    {
+      "id": "NG1",
+      "non_goal": "Do not move warp composition, interpolation kernels, or Jacobian math into fmrilatent."
+    },
+    {
+      "id": "NG2",
+      "non_goal": "Do not add GLM fitting, contrasts, AR models, or group inference to fmrilatent."
+    },
+    {
+      "id": "NG3",
+      "non_goal": "Do not create a new transport-specific top-level package in v1."
+    },
+    {
+      "id": "NG4",
+      "non_goal": "Do not require all basis families to support transport-backed operation in the first release."
+    },
+    {
+      "id": "NG5",
+      "non_goal": "Do not hard-wire half-density transport as the only amplitude policy in v1."
+    }
+  ],
+  "scope": {
+    "in_scope": [
+      "A generalized BasisTemplate abstraction in fmrilatent",
+      "Operator-aware encoding for Y ~= HZ",
+      "A transport-backed ImplicitLatent family",
+      "Coefficient-space analysis coordinate support",
+      "Effect and covariance projection helpers",
+      "Cross-package contract definition for fmrireg integration",
+      "Tests and benchmarks for operator-backed latent recovery and reconstruction"
+    ],
+    "out_of_scope": [
+      "New registration algorithms",
+      "New group-level statistics machinery",
+      "Generalized manifold metric estimation beyond optional placeholders",
+      "Automatic basis discovery pipelines inside neurofunctor",
+      "A full user-facing workflow wrapper spanning all packages in v1"
+    ],
+    "assumptions": [
+      "neurofunctor operator support remains stable enough to target.",
+      "fmrireg will consume a latent protocol rather than reaching into fmrilatent internals.",
+      "Shared basis estimation may come from fmrilatent builders or external tools such as genpca.",
+      "Matrix-free operator application is acceptable for v1 and may be preferable to dense basis materialization."
+    ]
+  },
+  "package_boundaries": {
+    "neurotransform": {
+      "owns": [
+        "morphism semantics",
+        "pullback and Jacobian semantics",
+        "inverse paths",
+        "resampling plans"
+      ],
+      "must_not_own": [
+        "latent coefficients",
+        "basis families",
+        "GLM fitting"
+      ]
+    },
+    "neurofunctor": {
+      "owns": [
+        "domain graph compilation",
+        "TransportOperator construction",
+        "ObservationOperator construction",
+        "operator caching",
+        "operator provenance",
+        "operator QC"
+      ],
+      "must_not_own": [
+        "template basis estimation",
+        "latent regularization semantics",
+        "GLM fitting"
+      ]
+    },
+    "fmrilatent": {
+      "owns": [
+        "shared basis assets",
+        "latent object semantics",
+        "operator-aware coefficient recovery",
+        "analysis coordinate definitions",
+        "reconstruction and projection helpers"
+      ],
+      "must_not_own": [
+        "warp math",
+        "path search",
+        "statistical model fitting"
+      ]
+    },
+    "fmrireg": {
+      "owns": [
+        "design matrices",
+        "temporal GLM fitting",
+        "contrasts",
+        "inference surfaces",
+        "engine integration"
+      ],
+      "must_not_own": [
+        "latent basis definitions",
+        "operator compilation",
+        "warp semantics"
+      ]
+    },
+    "genpca_optional": {
+      "owns": [
+        "shared basis estimation when generalized metrics or matrix-free decomposition are needed"
+      ],
+      "must_not_own": [
+        "runtime latent object semantics"
+      ]
+    }
+  },
+  "proposed_architecture": {
+    "object_model": [
+      {
+        "name": "BasisTemplate",
+        "kind": "abstract_contract",
+        "purpose": "Common contract for reusable shared template basis assets.",
+        "initial_implementations": [
+          "ParcelBasisTemplate",
+          "HierarchicalBasisTemplate"
+        ],
+        "future_implementations": [
+          "spectral template basis",
+          "wavelet template basis",
+          "genpca-derived template basis"
+        ]
+      },
+      {
+        "name": "TransportBackedImplicitLatent",
+        "kind": "ImplicitLatent family, not necessarily a new S4 class in v1",
+        "purpose": "An analysis-ready latent object storing coefficients, basis asset reference, observation operator handle, and projection semantics."
+      },
+      {
+        "name": "ObservationOperator",
+        "kind": "external dependency contract",
+        "owner": "neurofunctor",
+        "purpose": "Coefficient-space to sampled-domain operator with forward and adjoint access."
+      }
+    ],
+    "design_principles": [
+      "Prefer protocol extension over ontology explosion.",
+      "Keep transport-backed support within the existing explicit vs implicit latent split.",
+      "Store enough metadata to make coefficient-space analysis reproducible.",
+      "Require explicit handling of coefficient metrics and projection covariance."
+    ],
+    "v1_decisions": [
+      "Transport-backed latent objects should be implemented as an ImplicitLatent family first.",
+      "fmrilatent should consume operators through generic forward/adjoint contracts rather than hard-coding neurofunctor internals.",
+      "Half-density amplitude correction should be an operator option, not an invariant assumption.",
+      "Basis assets may be explicit or handle-backed."
+    ],
+    "deferred_decisions": [
+      "Whether a dedicated S4 TransportedLatent class becomes necessary later.",
+      "Whether BasisTemplate should become S4 immediately or remain an S3/S4 mixed contract at first.",
+      "Whether residual covariance across coefficients should be modeled directly inside fmrireg v1 or deferred to v2."
+    ]
+  },
+  "required_interfaces": {
+    "latent_generics_to_add_in_fmrilatent": [
+      {
+        "name": "coef_time",
+        "signature": "coef_time(x, coordinates = c(\"analysis\", \"raw\"), ...)",
+        "purpose": "Return time by component coefficient matrices in either raw or analysis coordinates."
+      },
+      {
+        "name": "coef_metric",
+        "signature": "coef_metric(x, coordinates = c(\"raw\", \"analysis\"), ...)",
+        "purpose": "Return the coefficient-space metric or NULL/identity when analysis coordinates are Euclidean."
+      },
+      {
+        "name": "analysis_transform",
+        "signature": "analysis_transform(x, ...)",
+        "purpose": "Describe how raw coefficients are mapped into analysis coordinates."
+      },
+      {
+        "name": "basis_asset",
+        "signature": "basis_asset(x, ...)",
+        "purpose": "Return the shared basis asset behind a latent object."
+      },
+      {
+        "name": "decoder",
+        "signature": "decoder(x, space = c(\"native\", \"template\"), ...)",
+        "purpose": "Return a callable decoder or operator-backed view for a requested output space."
+      },
+      {
+        "name": "project_effect",
+        "signature": "project_effect(x, gamma, space = c(\"native\", \"template\"), ...)",
+        "purpose": "Project coefficient-space effect vectors to a requested image/sample space."
+      },
+      {
+        "name": "project_vcov",
+        "signature": "project_vcov(x, Sigma, space = c(\"native\", \"template\"), diag_only = TRUE, ...)",
+        "purpose": "Push coefficient-space covariance into the requested output space."
+      }
+    ],
+    "template_generics_to_add_or_generalize": [
+      {
+        "name": "template_project_operator",
+        "purpose": "Generalize template projection beyond explicit loadings so a basis asset can pair with an external observation operator."
+      },
+      {
+        "name": "template_rank",
+        "purpose": "Provide a canonical basis rank query for templates."
+      },
+      {
+        "name": "template_domain",
+        "purpose": "Return the domain/hash/space associated with the template asset."
+      }
+    ],
+    "encoding_entry_points": [
+      {
+        "name": "encode_operator",
+        "purpose": "Solve Y ~= HZ for a provided observation operator."
+      },
+      {
+        "name": "encode_transport",
+        "purpose": "User-facing wrapper for transport-backed encoding using basis assets and compiled operators."
+      }
+    ],
+    "expected_external_operator_contract": [
+      "forward(operator, data)",
+      "adjoint(operator)",
+      "n_source(operator)",
+      "n_target(operator)",
+      "provenance or metadata access where available"
+    ]
+  },
+  "functional_requirements": [
+    {
+      "id": "FR1",
+      "requirement": "fmrilatent must support a transport-backed latent object that stores coefficient payload, shared basis asset reference, and observation operator reference."
+    },
+    {
+      "id": "FR2",
+      "requirement": "fmrilatent must support operator-aware coefficient recovery for Y ~= HZ with configurable regularization."
+    },
+    {
+      "id": "FR3",
+      "requirement": "fmrilatent must expose analysis coordinates distinct from raw coefficient coordinates when the underlying basis geometry is non-Euclidean."
+    },
+    {
+      "id": "FR4",
+      "requirement": "fmrilatent must reconstruct native-space and template-space views on demand without requiring permanent dense materialization of back-warped basis images."
+    },
+    {
+      "id": "FR5",
+      "requirement": "fmrilatent must project coefficient-space effect vectors and covariance matrices into output spaces for downstream inference."
+    },
+    {
+      "id": "FR6",
+      "requirement": "BasisTemplate implementations must provide enough metadata for reproducible replay across subjects."
+    },
+    {
+      "id": "FR7",
+      "requirement": "Existing explicit latent workflows using LatentNeuroVec must continue to function unchanged."
+    },
+    {
+      "id": "FR8",
+      "requirement": "Existing decoder-only ImplicitLatent workflows must remain compatible with reconstruct_matrix() and reconstruct_array()."
+    },
+    {
+      "id": "FR9",
+      "requirement": "The integration point with fmrireg must be package-level generics and data contracts, not direct knowledge of neurofunctor implementation details."
+    },
+    {
+      "id": "FR10",
+      "requirement": "The first supported transport-backed workflow must include at least one reusable shared template basis family."
+    }
+  ],
+  "non_functional_requirements": [
+    {
+      "id": "NFR1",
+      "requirement": "Transport-backed encoding must support matrix-free operator application."
+    },
+    {
+      "id": "NFR2",
+      "requirement": "The new APIs must be deterministic for fixed basis assets, operators, and solver seeds."
+    },
+    {
+      "id": "NFR3",
+      "requirement": "Operator-backed latent workflows must carry provenance sufficient for debugging and reviewer inspection."
+    },
+    {
+      "id": "NFR4",
+      "requirement": "The extension should avoid unnecessary hard imports if a generic contract can be used instead."
+    },
+    {
+      "id": "NFR5",
+      "requirement": "The implementation must scale to moderate component counts without materializing dense voxel by component matrices unless explicitly requested."
+    },
+    {
+      "id": "NFR6",
+      "requirement": "The API should keep backward-compatible defaults for existing families."
+    }
+  ],
+  "success_metrics": [
+    {
+      "id": "SM1",
+      "metric": "Vertical slice completeness",
+      "target": "One end-to-end transport-backed workflow passes tests from basis asset through latent encoding and projection.",
+      "measurement": "Automated integration tests."
+    },
+    {
+      "id": "SM2",
+      "metric": "Protocol clarity",
+      "target": "A third-party reviewer can identify package boundaries and core contracts without ambiguity.",
+      "measurement": "Review checklist sign-off."
+    },
+    {
+      "id": "SM3",
+      "metric": "Backward compatibility",
+      "target": "Existing LatentNeuroVec and current ImplicitLatent test suites remain green.",
+      "measurement": "Package test suite results."
+    },
+    {
+      "id": "SM4",
+      "metric": "Projection correctness",
+      "target": "project_effect() and project_vcov() agree with materialized reference computations within numerical tolerance on toy problems.",
+      "measurement": "Unit and integration tests."
+    },
+    {
+      "id": "SM5",
+      "metric": "Operator realism",
+      "target": "At least one matrix-free observation operator path is used in tests rather than only explicit basis multiplication.",
+      "measurement": "Test coverage and fixture design."
+    }
+  ],
+  "delivery_plan": {
+    "overall_strategy": "Deliver in phases, starting with protocol and one end-to-end vertical slice, then broaden basis support and downstream integration.",
+    "phases": [
+      {
+        "phase_id": "P0",
+        "name": "Protocol Design and Contract Freeze",
+        "objective": "Define the minimal latent protocol fmrilatent will expose for transport-backed analysis.",
+        "tasks": [
+          "Finalize the list of new generics.",
+          "Define BasisTemplate common contract.",
+          "Define the minimum external operator contract fmrilatent will rely on.",
+          "Document raw versus analysis coordinate semantics."
+        ],
+        "dependencies": [],
+        "deliverables": [
+          "Protocol note in repo",
+          "API signatures",
+          "Third-party review feedback incorporated"
+        ],
+        "exit_criteria": [
+          "Maintainer agrees no new top-level package is needed.",
+          "Maintainer agrees transport-backed support will begin as an ImplicitLatent family.",
+          "A stable minimal API list is approved."
+        ],
+        "risk_level": "medium"
+      },
+      {
+        "phase_id": "P1",
+        "name": "BasisTemplate Generalization",
+        "objective": "Generalize current template assets into a reusable basis-asset protocol.",
+        "tasks": [
+          "Add BasisTemplate contract methods.",
+          "Adapt ParcelBasisTemplate to the shared contract.",
+          "Adapt HierarchicalBasisTemplate to the shared contract.",
+          "Add template rank/domain/provenance helpers."
+        ],
+        "dependencies": [
+          "P0"
+        ],
+        "deliverables": [
+          "Generalized template API",
+          "Updated tests for parcel and hierarchical templates"
+        ],
+        "exit_criteria": [
+          "Existing template-backed encoding still passes.",
+          "At least two template asset types satisfy the same contract."
+        ],
+        "risk_level": "low"
+      },
+      {
+        "phase_id": "P2",
+        "name": "Operator-Aware Latent Core",
+        "objective": "Introduce transport-backed latent semantics into fmrilatent without breaking existing families.",
+        "tasks": [
+          "Add coef_time(), coef_metric(), analysis_transform(), basis_asset(), decoder(), project_effect(), and project_vcov().",
+          "Extend ImplicitLatent metadata and helper constructors to store operator-backed semantics.",
+          "Implement a transport-backed ImplicitLatent family constructor.",
+          "Define provenance fields for operator-backed latent objects."
+        ],
+        "dependencies": [
+          "P0",
+          "P1"
+        ],
+        "deliverables": [
+          "Operator-backed latent object support",
+          "Unit tests for protocol methods"
+        ],
+        "exit_criteria": [
+          "A transport-backed latent object can return coefficients in analysis coordinates.",
+          "project_effect() can emit native and template views on toy examples."
+        ],
+        "risk_level": "medium"
+      },
+      {
+        "phase_id": "P3",
+        "name": "Operator-Aware Encoding",
+        "objective": "Recover coefficients from observed data through external operators.",
+        "tasks": [
+          "Implement encode_operator() / encode_transport().",
+          "Add ridge and optional temporal smoothing penalties.",
+          "Support explicit offsets and reproducible centering.",
+          "Add solver diagnostics and conditioning checks."
+        ],
+        "dependencies": [
+          "P2"
+        ],
+        "deliverables": [
+          "Working operator-aware encoder",
+          "Reference tests against explicit small-matrix solves"
+        ],
+        "exit_criteria": [
+          "Y ~= HZ recovery works on toy and integration fixtures.",
+          "Recovered coefficients reconstruct expected outputs within tolerance."
+        ],
+        "risk_level": "high"
+      },
+      {
+        "phase_id": "P4",
+        "name": "fmrireg Vertical Slice",
+        "objective": "Prove that coefficient-space modeling can consume the new latent protocol cleanly.",
+        "tasks": [
+          "Align with fmrireg latent dataset expectations.",
+          "Prototype a coefficient-space engine using the new protocol.",
+          "Validate effect and covariance projection into native/template views."
+        ],
+        "dependencies": [
+          "P3"
+        ],
+        "deliverables": [
+          "One end-to-end engine demo",
+          "One or more integration tests spanning packages"
+        ],
+        "exit_criteria": [
+          "A coefficient-space GLM can run without bespoke one-off adapters.",
+          "Beta and SE maps can be projected from coefficient space."
+        ],
+        "risk_level": "high"
+      },
+      {
+        "phase_id": "P5",
+        "name": "Hardening and Expansion",
+        "objective": "Broaden basis-family coverage and improve performance, diagnostics, and documentation.",
+        "tasks": [
+          "Add more basis-asset implementations as needed.",
+          "Benchmark matrix-free versus materialized paths.",
+          "Add vignette-level documentation.",
+          "Expand provenance, QC, and reviewer-facing documentation."
+        ],
+        "dependencies": [
+          "P4"
+        ],
+        "deliverables": [
+          "Expanded support matrix",
+          "Documentation",
+          "Performance notes"
+        ],
+        "exit_criteria": [
+          "At least one additional basis family beyond the initial slice is supported.",
+          "Documentation is sufficient for external contributors."
+        ],
+        "risk_level": "medium"
+      }
+    ]
+  },
+  "implementation_details": {
+    "initial_basis_family_recommendation": {
+      "recommended_choice": "Start with an existing reusable shared basis asset already natural to fmrilatent, preferably hierarchical or parcel-based, before moving to a more ambitious template spectral basis estimated externally.",
+      "rationale": [
+        "The asset and dual-solve patterns already exist.",
+        "The initial problem should test operator-backed latent semantics, not basis estimation novelty.",
+        "This keeps the first vertical slice small and reviewable."
+      ]
+    },
+    "initial_solver_strategy": {
+      "approach": "Use regularized least squares in coefficient space with optional temporal smoothing. Keep the first implementation deterministic and debuggable.",
+      "must_support": [
+        "ridge penalty",
+        "optional centering/offset handling",
+        "solver diagnostics",
+        "matrix-free forward/adjoint use"
+      ],
+      "defer": [
+        "full residual covariance modeling",
+        "adaptive hyperparameter tuning",
+        "large-scale distributed solving"
+      ]
+    },
+    "metadata_requirements_for_operator_backed_latent_objects": [
+      "family",
+      "basis_asset_id",
+      "basis_asset_class",
+      "operator_id",
+      "operator_provenance_digest",
+      "coordinate_mode",
+      "coefficient_metric_summary",
+      "offset_mode",
+      "native_domain_id",
+      "template_domain_id"
+    ],
+    "dependency_strategy": {
+      "preferred": "Depend on a generic operator contract rather than importing neurofunctor internals broadly.",
+      "acceptable_v1": "A soft or suggested dependency if needed for examples and tests.",
+      "avoid": [
+        "hard-coding knowledge of neurofunctor cache structure",
+        "hard-coding provenance list shape beyond stable public fields"
+      ]
+    }
+  },
+  "testing_and_validation": {
+    "test_layers": [
+      {
+        "layer": "unit",
+        "focus": [
+          "new generics",
+          "analysis coordinate transforms",
+          "effect projection",
+          "covariance pushforward"
+        ]
+      },
+      {
+        "layer": "integration",
+        "focus": [
+          "BasisTemplate plus ObservationOperator plus transport-backed latent object",
+          "encode_transport() against explicit reference solves",
+          "native/template reconstruction paths"
+        ]
+      },
+      {
+        "layer": "cross_package",
+        "focus": [
+          "fmrireg engine interoperability",
+          "operator provenance visibility",
+          "coefficient-space to map-space inference"
+        ]
+      },
+      {
+        "layer": "regression",
+        "focus": [
+          "existing LatentNeuroVec tests",
+          "existing ImplicitLatent tests",
+          "existing template projection tests"
+        ]
+      }
+    ],
+    "required_test_fixtures": [
+      "Toy explicit observation operator with known closed-form solution",
+      "Toy transport operator path from neurofunctor",
+      "A small reusable template basis fixture",
+      "A coefficient covariance fixture for projection tests"
+    ],
+    "numerical_checks": [
+      "forward/adjoint consistency on operator-backed paths",
+      "reconstruction fidelity against materialized references",
+      "projection covariance agreement against dense formulas",
+      "conditioning warnings on ill-posed examples"
+    ],
+    "quality_gates": [
+      "devtools::load_all() after API changes",
+      "devtools::test() before merge",
+      "Focused integration tests spanning operator-backed latent paths",
+      "Optional devtools::check() before release candidate"
+    ]
+  },
+  "risks_and_mitigations": [
+    {
+      "risk": "The new operator layer in neurofunctor changes before fmrilatent integration stabilizes.",
+      "impact": "medium",
+      "mitigation": "Target the smallest stable public contract only: forward, adjoint, n_source, n_target, and basic provenance."
+    },
+    {
+      "risk": "ImplicitLatent becomes overloaded and semantically inconsistent.",
+      "impact": "high",
+      "mitigation": "Define a strict transport-backed family contract and add protocol generics rather than encoding everything in ad hoc metadata."
+    },
+    {
+      "risk": "fmrireg integration leaks package responsibilities back into fmrilatent.",
+      "impact": "high",
+      "mitigation": "Keep modeling logic in fmrireg and limit fmrilatent responsibilities to representation, encoding, and projection."
+    },
+    {
+      "risk": "Coefficient metrics are ignored or inconsistently handled.",
+      "impact": "high",
+      "mitigation": "Make analysis coordinates and coefficient metrics explicit API concepts in v1."
+    },
+    {
+      "risk": "Matrix-free implementations are hard to debug.",
+      "impact": "medium",
+      "mitigation": "Keep small explicit reference fixtures and require dense-agreement tests on toy examples."
+    },
+    {
+      "risk": "A new abstraction layer creates unnecessary API complexity.",
+      "impact": "medium",
+      "mitigation": "Prefer extension of existing classes and generics over introducing many new public classes."
+    }
+  ],
+  "alternatives_considered": [
+    {
+      "alternative": "Create a new top-level transport framework package",
+      "decision": "rejected_for_v1",
+      "reason": "Too much ontology too early; the existing ecosystem already has a natural decomposition."
+    },
+    {
+      "alternative": "Make transport-backed support a new concrete class hierarchy immediately",
+      "decision": "deferred",
+      "reason": "Transport-backed support can begin as an ImplicitLatent family while the protocol stabilizes."
+    },
+    {
+      "alternative": "Materialize back-warped basis images and treat them as ordinary explicit loadings",
+      "decision": "rejected_as_default",
+      "reason": "This hides operator geometry, makes coefficient-space semantics harder to reason about, and can force unnecessary dense materialization."
+    }
+  ],
+  "open_questions": [
+    {
+      "id": "OQ1",
+      "question": "Should BasisTemplate become a formal S4 class now, or remain a shared method contract across existing template asset types in v1?",
+      "owner": "fmrilatent maintainer"
+    },
+    {
+      "id": "OQ2",
+      "question": "Should fmrilatent add neurofunctor as an Imports dependency, a Suggests dependency, or rely on generic interoperability only?",
+      "owner": "cross-package architecture reviewer"
+    },
+    {
+      "id": "OQ3",
+      "question": "Which basis asset should anchor the first end-to-end slice: hierarchical, parcel, or an externally estimated spectral basis?",
+      "owner": "method lead"
+    },
+    {
+      "id": "OQ4",
+      "question": "Should analysis coordinates always be Euclideanized in fmrilatent, or should fmrireg be allowed to consume explicit coefficient metrics?",
+      "owner": "fmrilatent and fmrireg maintainers"
+    },
+    {
+      "id": "OQ5",
+      "question": "How much operator provenance must be preserved in latent objects versus queried lazily from external operator instances?",
+      "owner": "implementation lead"
+    }
+  ],
+  "acceptance_criteria": [
+    "A third-party reviewer agrees the package boundaries are coherent and non-overlapping.",
+    "fmrilatent exposes a documented latent protocol for operator-backed coefficient-space analysis.",
+    "At least one reusable basis asset can be paired with an external observation operator to recover coefficients and reconstruct views.",
+    "project_effect() and project_vcov() work on operator-backed latent objects and are numerically validated.",
+    "Existing explicit and current implicit latent workflows remain green.",
+    "A documented path into fmrireg exists without pushing GLM logic into fmrilatent."
+  ],
+  "review_checklist": [
+    {
+      "question": "Are package responsibilities separated cleanly across neurotransform, neurofunctor, fmrilatent, and fmrireg?",
+      "expected_answer_type": "yes_no_with_notes"
+    },
+    {
+      "question": "Is the choice to use an ImplicitLatent family first defensible, or should a dedicated class be introduced immediately?",
+      "expected_answer_type": "recommendation"
+    },
+    {
+      "question": "Are the proposed fmrilatent generics sufficient for downstream modeling and reconstruction?",
+      "expected_answer_type": "gap_analysis"
+    },
+    {
+      "question": "Does the delivery plan prove value early enough with a thin vertical slice?",
+      "expected_answer_type": "yes_no_with_notes"
+    },
+    {
+      "question": "Are there hidden coupling risks in the dependency strategy?",
+      "expected_answer_type": "risk_review"
+    },
+    {
+      "question": "Is there any missing acceptance criterion required before implementation should start?",
+      "expected_answer_type": "open_feedback"
+    }
+  ],
+  "recommended_next_action": {
+    "action": "Review and approve Phase P0 plus the required fmrilatent protocol surface before implementation begins.",
+    "why": "The critical risk is not missing geometry support; it is letting transport-backed latent semantics remain implicit and ad hoc."
+  }
+}

@@ -2633,11 +2633,10 @@ test_that("[ with ANY,ANY signature handles conversion to integer indices", {
 test_that("[ with ANY,ANY signature handles character indices gracefully", {
   lvec <- create_test_lvec(nx = 3, ny = 3, nz = 2, nt = 5)
 
-  # Character indices should error when trying to convert to integer
-  # The error occurs in the lookup function checking for finite numeric values
+  # Character indices should error cleanly without emitting coercion warnings
   expect_error(
     lvec["a", "b", "c", "d"],
-    "finite numeric|coerced|NAs"
+    "numeric or logical|finite numeric|coerced|NAs"
   )
 })
 

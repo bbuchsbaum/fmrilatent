@@ -19,7 +19,7 @@
 #' - Provide the volumetric Schaefer atlas aligned to the MNI mask (via `neuroatlas::get_schaefer_atlas`).
 #' - Ensure mask and volumetric atlas share resolution/origin/spacing; this function assumes 2 mm MNI unless you pass a custom `vol_atlas`.
 #' - Subcortex is **not** handled here; add it separately when assembling the full template.
-#' 
+#'
 #' @param mask LogicalNeuroVol defining the 3D brain mask (MNI space).
 #' @param parcels Integer. Number of Schaefer parcels (100, 200, 300, 400, 500, 600, 800, 1000).
 #' @param networks Integer. Yeo network variant (7 or 17).
@@ -42,24 +42,24 @@
 #'   \item{hemi}{Character vector of hemisphere ("L"/"R") per finest-level parcel.}
 #'   \item{geo_dist_lh, geo_dist_rh}{Parcel geodesic distance matrices (for diagnostics).}
 #'   \item{boundary_lh, boundary_rh}{Boundary contact matrices (LH/RH).}
-#' 
+#'
 #' @details
 #' Requires `neuroatlas` and `neurosurf` packages. The surface atlas provides geodesic
 #' distances and boundary topology; the volumetric atlas maps parcels to mask voxels.
 #'
 #' @export
 build_schaefer_levels <- function(mask,
-                                   parcels = 400,
-                                   networks = 17,
-                                   space = "fsaverage6",
-                                   k_levels = c(16, 32, 64),
-                                   vol_atlas = NULL,
-                                   alpha = 0.5,
-                                   beta = 0.3,
-                                   gamma = 0.2,
-                                   d0 = 30,
-                                   component_policy = c("largest", "error", "each", "merge"),
-                                   cache = TRUE) {
+                                  parcels = 400,
+                                  networks = 17,
+                                  space = "fsaverage6",
+                                  k_levels = c(16, 32, 64),
+                                  vol_atlas = NULL,
+                                  alpha = 0.5,
+                                  beta = 0.3,
+                                  gamma = 0.2,
+                                  d0 = 30,
+                                  component_policy = c("largest", "error", "each", "merge"),
+                                  cache = TRUE) {
 
 
   component_policy <- match.arg(component_policy)
@@ -359,8 +359,10 @@ parcel_similarity_matrix <- function(boundary_contact, geo_dist, yeo17,
 #'
 #' @param W Similarity matrix (symmetric).
 #' @param k_embed Embedding dimension (2 or 3).
-#' @param hemi Optional factor/character vector (n_parc) to enforce within-hemisphere merges first.
-#' @param network Optional factor/character vector (n_parc) (e.g., Yeo17) to enforce within-network merges until relaxed.
+#' @param hemi Optional factor/character vector (n_parc) to enforce
+#'   within-hemisphere merges first.
+#' @param network Optional factor/character vector (n_parc) (e.g., Yeo17) to
+#'   enforce within-network merges until relaxed.
 #' @return hclust object.
 #' @export
 spectral_ward_hclust <- function(W, k_embed = 3, hemi = NULL, network = NULL) {
@@ -368,7 +370,6 @@ spectral_ward_hclust <- function(W, k_embed = 3, hemi = NULL, network = NULL) {
   n <- nrow(W)
   if (n != ncol(W)) stop("W must be square")
 
-  # Degree & Laplacian
   d <- rowSums(W)
   D_inv_sqrt <- 1 / sqrt(pmax(d, .Machine$double.eps))
   L <- diag(n) - (D_inv_sqrt * W) * D_inv_sqrt
@@ -401,8 +402,10 @@ spectral_ward_hclust <- function(W, k_embed = 3, hemi = NULL, network = NULL) {
 
 #' Derive parent maps for a nested set of parcellations
 #'
-#' @param levels List of integer label vectors (all same length), coarse→fine or fine→coarse; order agnostic.
-#' @return List of integer named vectors: parents[[lvl]] maps child ids (names) at level lvl to parent ids at lvl-1; parents[[1]] is integer(0).
+#' @param levels List of integer label vectors (all same length), coarse to fine
+#'   or fine to coarse; order agnostic.
+#' @return List of integer named vectors: parents[[lvl]] maps child ids (names)
+#'   at level lvl to parent ids at lvl-1; parents[[1]] is integer(0).
 #' @export
 parent_maps_from_levels <- function(levels) {
   validate_nested_parcellations(levels)

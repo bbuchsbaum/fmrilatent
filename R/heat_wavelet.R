@@ -1,3 +1,6 @@
+#' @include reduction.R
+NULL
+
 # Heat / diffusion graph wavelets (rgsp-backed)
 
 #' Heat wavelet basis specification
@@ -31,7 +34,10 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_h
     ids <- reduction@cluster_ids
     n_vox <- length(map)
 
-    i_list <- list(); j_list <- list(); x_list <- list(); col_offset <- 0L
+    i_list <- list()
+    j_list <- list()
+    x_list <- list()
+    col_offset <- 0L
 
     for (cid in ids) {
       vox_idx <- which(map == cid)
@@ -101,7 +107,11 @@ heat_wavelet_latent <- function(X, mask, reduction = NULL, spec = basis_heat_wav
   loadings <- lift(reduction, spec, k_neighbors = k_neighbors)
   basis <- as.matrix(X) %*% as.matrix(loadings)
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(X)))
-  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) mask else LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) {
+    mask
+  } else {
+    LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  }
   meta <- list(family = "heat_wavelet", spec = spec, k_neighbors = k_neighbors)
   LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask_vol, label = label, meta = meta)
 }

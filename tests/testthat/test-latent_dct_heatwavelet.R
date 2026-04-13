@@ -387,7 +387,7 @@ test_that("manual DCT + heat wavelet roundtrip preserves data structure", {
 
 test_that("latent_dct_heatwavelet returns LatentNeuroVec with correct structure", {
   skip_if_not_installed("rgsp")
-  
+
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 10L
   k_time <- 4L
@@ -435,7 +435,7 @@ test_that("latent_dct_heatwavelet creates correct metadata", {
 
 test_that("latent_dct_heatwavelet works with explicit cluster_map", {
   skip_if_not_installed("rgsp")
-  
+
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
@@ -456,7 +456,7 @@ test_that("latent_dct_heatwavelet works with explicit cluster_map", {
 
 test_that("latent_dct_heatwavelet works with custom reduction", {
   skip_if_not_installed("rgsp")
-  
+
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
@@ -476,7 +476,7 @@ test_that("latent_dct_heatwavelet works with custom reduction", {
 
 test_that("latent_dct_heatwavelet respects custom hw_basis_spec", {
   skip_if_not_installed("rgsp")
-  
+
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 6L
   k_time <- 2L
@@ -498,7 +498,7 @@ test_that("latent_dct_heatwavelet respects custom hw_basis_spec", {
 
 test_that("latent_dct_heatwavelet accepts valid offset", {
   skip_if_not_installed("rgsp")
-  
+
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
@@ -559,7 +559,7 @@ test_that("latent_dct_heatwavelet uses explicit basis matrix", {
 
 test_that("latent_dct_heatwavelet uses LoadingsHandle for spatial loadings", {
   skip_if_not_installed("rgsp")
-  
+
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 6L
   k_time <- 2L
@@ -576,7 +576,7 @@ test_that("latent_dct_heatwavelet uses LoadingsHandle for spatial loadings", {
 
 test_that("latent_dct_heatwavelet works with LogicalNeuroVol mask", {
   skip_if_not_installed("rgsp")
-  
+
   mask_arr <- make_test_mask(c(2, 2, 2))
   mask_vol <- neuroim2::LogicalNeuroVol(
     mask_arr,

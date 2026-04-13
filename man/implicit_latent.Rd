@@ -4,7 +4,14 @@
 \alias{implicit_latent}
 \title{Construct an ImplicitLatent object}
 \usage{
-implicit_latent(coeff, decoder, meta, mask)
+implicit_latent(
+  coeff,
+  decoder,
+  meta,
+  mask = NULL,
+  domain = NULL,
+  support = NULL
+)
 }
 \arguments{
 \item{coeff}{Arbitrary coefficient payload (list or matrix) needed by decoder.}
@@ -13,7 +20,15 @@ implicit_latent(coeff, decoder, meta, mask)
 
 \item{meta}{List metadata; must include `family` string.}
 
-\item{mask}{Logical 3D array (or LogicalNeuroVol) describing voxel support.}
+\item{mask}{Logical 3D array (or LogicalNeuroVol) describing volumetric support.}
+
+\item{domain}{Optional decoded output domain. For non-volumetric latent objects,
+supply a domain such as a \code{neurosurf::SurfaceGeometry} together with
+\code{support}.}
+
+\item{support}{Optional decoded output support. For volumetric latent objects this
+is usually derived from \code{mask}; for surface-like latent objects it should be
+a vector of vertex indices (or a logical mask over vertices).}
 }
 \value{
 An object of class `ImplicitLatent`.

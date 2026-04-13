@@ -19,7 +19,10 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_s
     k_per_cluster <- as.integer(basis_spec$k %||% 3L)
     type <- basis_spec$type %||% "laplacian"
 
-    i_list <- list(); j_list <- list(); x_list <- list(); col_offset <- 0L
+    i_list <- list()
+    j_list <- list()
+    x_list <- list()
+    col_offset <- 0L
 
     for (cid in ids) {
       vox_idx <- which(map == cid)
@@ -87,7 +90,11 @@ slepian_spatial_latent <- function(X, mask, reduction = NULL, spec = basis_slepi
   loadings <- lift(reduction, spec, k_neighbors = k_neighbors)
   basis <- as.matrix(X) %*% as.matrix(loadings)
   spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(X)))
-  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) mask else LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) {
+    mask
+  } else {
+    LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  }
   meta <- list(family = "slepian_spatial", spec = spec, k_neighbors = k_neighbors)
   LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask_vol, label = label, meta = meta)
 }

@@ -11,8 +11,13 @@ setOldClass("spec_heat_wavelet")
 setOldClass("spec_diffusion_wavelet")
 setOldClass("spec_pca")
 setOldClass("spec_flat")
+setOldClass("spec_awpt_wavelet")
 setOldClass("ImplicitLatent")
+setOldClass(c("TransportLatent", "ImplicitLatent"))
 setOldClass("ParcelBasisTemplate")
+setOldClass("AWPTBasisTemplate")
+setOldClass("SurfaceBasisTemplate")
+setOldClass("SurfaceAWPTBasisTemplate")
 
 #' LatentNeuroVec Class
 #'
@@ -111,6 +116,75 @@ setClass("LatentNeuroVec",
     meta = "list"
   ),
   contains = c("NeuroVec", "AbstractSparseNeuroVec")
+)
+
+#' LatentNeuroSurfaceVector Class
+#'
+#' @description
+#' An explicit latent representation for surface-domain neuroimaging data. The
+#' data are stored as a temporal basis matrix and a surface loadings matrix over
+#' a supported set of vertices on a \code{neurosurf} geometry.
+#'
+#' @slot basis A \code{Matrix} or \code{BasisHandle} with dimensions
+#'   (nTime x k).
+#' @slot loadings A \code{Matrix} or \code{LoadingsHandle} with dimensions
+#'   (nVerticesInSupport x k).
+#' @slot offset Optional numeric vector of length \code{nVerticesInSupport}.
+#' @slot geometry Surface domain object, typically a
+#'   \code{neurosurf::SurfaceGeometry} or \code{neurosurf::SurfaceSet}.
+#' @slot support Integer vector of vertex indices within \code{geometry}.
+#' @slot label Character label.
+#' @slot meta Lightweight metadata list.
+#' @export
+setClass("LatentNeuroSurfaceVector",
+  slots = c(
+    basis = "MatrixOrBasisHandle",
+    loadings = "MatrixOrLoadingsHandle",
+    offset = "numeric",
+    geometry = "ANY",
+    support = "integer",
+    label = "character",
+    meta = "list"
+  )
+)
+
+#' BilatLatentNeuroSurfaceVector Class
+#'
+#' @description
+#' An explicit bilateral surface latent representation composed of left and
+#' right \code{LatentNeuroSurfaceVector} objects.
+#'
+#' @slot left Left-hemisphere latent surface object.
+#' @slot right Right-hemisphere latent surface object.
+#' @slot label Character label.
+#' @slot meta Lightweight metadata list.
+#' @export
+setClass("BilatLatentNeuroSurfaceVector",
+  slots = c(
+    left = "LatentNeuroSurfaceVector",
+    right = "LatentNeuroSurfaceVector",
+    label = "character",
+    meta = "list"
+  )
+)
+
+#' BlockLatentNeuroVector Class
+#'
+#' @description
+#' An explicit block-domain latent representation composed of multiple named
+#' latent blocks sharing a common coefficient basis. Intended for hybrid
+#' domains such as bilateral cortical surfaces plus volumetric subcortex.
+#'
+#' @slot blocks Named list of explicit latent objects.
+#' @slot label Character label.
+#' @slot meta Lightweight metadata list.
+#' @export
+setClass("BlockLatentNeuroVector",
+  slots = c(
+    blocks = "list",
+    label = "character",
+    meta = "list"
+  )
 )
 
 #' HierarchicalBasisTemplate Class

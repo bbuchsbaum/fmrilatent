@@ -1,8 +1,21 @@
+#' fmrilatent: Latent Space Representations of fMRI Data
+#'
+#' `fmrilatent` owns latent representations for neuroimaging data, including
+#' explicit factorized objects, shared basis assets, operator-backed latent
+#' objects, coefficient recovery, and coefficient-to-map projection.
+#'
+#' The package deliberately stops at the latent-method layer. It does not own
+#' first-level GLM fitting, contrasts, temporal autocorrelation modeling, or
+#' statistical inference. Downstream modeling packages should consume
+#' `coef_time(x, "analysis")` plus the decoder and projection generics exposed
+#' here.
+#'
 #' @useDynLib fmrilatent, .registration = TRUE
 #' @importFrom Rcpp sourceCpp
 #' @importFrom Rcpp evalCpp
 #' @importFrom neuroim2 NeuroSpace LogicalNeuroVol SparseNeuroVol IndexLookupVol NeuroVecSeq
-#' @importFrom neuroim2 drop_dim space spacing origin trans axes indices lookup matricized_access linear_access series concat mask
+#' @importFrom neuroim2 drop_dim space spacing origin trans axes indices
+#'   lookup matricized_access linear_access series concat mask
 #' @importFrom graphics image legend matplot
 #' @importFrom stats aggregate predict rnorm
 #' @keywords internal

@@ -10,7 +10,10 @@ is_hierarchical_template <- function(x) inherits(x, "HierarchicalBasisTemplate")
 #' @return Logical scalar.
 #' @export
 is_template <- function(x) {
-  is_hierarchical_template(x) || inherits(x, "ParcelBasisTemplate")
+  is_hierarchical_template(x) || inherits(x, "ParcelBasisTemplate") ||
+    inherits(x, "AWPTBasisTemplate") ||
+    inherits(x, "SurfaceBasisTemplate") ||
+    inherits(x, "SurfaceAWPTBasisTemplate")
 }
 
 #' Build a hierarchical Laplacian template (offline)
@@ -37,7 +40,11 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
   solver <- match.arg(solver)
 
   mask_arr <- .mask_to_array(mask, "build_hierarchical_template")
-  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) mask else LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) {
+    mask
+  } else {
+    LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
+  }
 
   n_vox <- sum(mask_arr)
 
@@ -131,6 +138,10 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
 }
 
 #' Encode data using a hierarchical template
+#'
+#' Note: unlike parcel and AWPT encoding, hierarchical encoding does not
+#' center the data. The returned offset is always \code{numeric(0)}.
+#'
 #' @param X matrix time x voxels (mask order) matching template mask
 #' @param template HierarchicalBasisTemplate
 #' @param mask Optional mask to validate against the template mask before
@@ -160,11 +171,18 @@ encode_hierarchical <- function(X, template, label = NULL, mask = NULL) {
   spc <- .space_with_time_from_mask(tmpl_mask, n_time, "encode_hierarchical")
   meta_tmpl <- template_meta(template)
   lbl <- label %||% meta_tmpl$label %||% "hierarchical_latent"
-  meta <- list(family = "hierarchical_laplacian", template = meta_tmpl)
+  meta <- list(
+    family = "hierarchical_laplacian",
+    template = meta_tmpl,
+    coordinate_mode = "analysis_euclidean",
+    basis_asset = template,
+    analysis_transform = proj$analysis_transform,
+    raw_metric = proj$raw_metric
+  )
 
   LatentNeuroVec(
     basis = coeff_t,
-    loadings = template_loadings(template),
+    loadings = proj$analysis_loadings,
     space = spc,
     mask = tmpl_mask,
     offset = proj$offset,
@@ -185,7 +203,7 @@ project_hierarchical <- function(template, X) {
   if (ncol(X_mat) != sum(mask_arr)) stop("X voxel dimension does not match template mask")
 
   B <- template_loadings(template)
-  G_factor <- template@gram_factor
+  G_factor <- template@gram_factor   # S4 slot; no generic getter for gram_factor
   proj <- Matrix::crossprod(B, Matrix::t(X_mat))
   Matrix::t(Matrix::solve(G_factor, proj))  # time x atoms
 }
@@ -233,12 +251,71 @@ setMethod("template_mask", "HierarchicalBasisTemplate", function(x, ...) x@mask)
 setMethod("template_meta", "HierarchicalBasisTemplate", function(x, ...) x@meta %||% list())
 
 #' @export
+#' @rdname basis_decoder
+setMethod("basis_decoder", "HierarchicalBasisTemplate",
+          function(template, ...) {
+            decoder_map <- template_meta(template)$decoder_map %||% NULL
+            if (!is.null(decoder_map)) {
+              return(.normalize_linear_map(decoder_map, context = "basis decoder"))
+            }
+            payload <- .template_coordinate_payload(
+              raw_loadings = template_loadings(template),
+              measure = template_measure(template),
+              analysis_transform = template_meta(template)$analysis_transform %||% NULL,
+              default_measure = "unit"
+            )
+            B <- payload$analysis_loadings
+            .linear_map_from_matrix(
+              B,
+              source_domain_id = "latent:hierarchical",
+              target_domain_id = digest::digest(list(
+                mask = as.array(template_mask(template)),
+                meta = template_meta(template)
+              )),
+              provenance = list(
+                basis_asset_class = "HierarchicalBasisTemplate",
+                basis_family = template_meta(template)$family %||% "hierarchical_laplacian",
+                basis_id = digest::digest(B)
+              )
+            )
+          })
+
+#' @export
+#' @rdname template_rank
+setMethod("template_rank", "HierarchicalBasisTemplate",
+          function(template, ...) ncol(template_loadings(template)))
+
+#' @export
+#' @rdname template_domain
+setMethod("template_domain", "HierarchicalBasisTemplate",
+          function(template, ...) neuroim2::space(template_mask(template)))
+
+#' @export
+#' @rdname template_support
+setMethod("template_support", "HierarchicalBasisTemplate",
+          function(template, ...) template_mask(template))
+
+#' @export
+#' @rdname template_measure
+setMethod("template_measure", "HierarchicalBasisTemplate",
+          function(template, ...) rep(1, nrow(template_loadings(template))))
+
+#' @export
+#' @rdname template_roughness
+setMethod("template_roughness", "HierarchicalBasisTemplate",
+          function(template, coordinates = c("analysis", "raw"), ...) NULL)
+
+#' @export
 #' @rdname template_project
 setMethod("template_project", signature(x = "HierarchicalBasisTemplate", data = "ANY"),
           function(x, data, ...) {
-            list(
-              coefficients = project_hierarchical(x, as.matrix(data)),
-              offset = numeric(0)
+            .template_projection_payload(
+              data = as.matrix(data),
+              raw_loadings = template_loadings(x),
+              measure = template_measure(x),
+              center = FALSE,
+              analysis_transform = template_meta(x)$analysis_transform %||% NULL,
+              default_measure = "unit"
             )
           })
 
@@ -262,7 +339,8 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
     p_ids <- unique(parent[vox_idx])
     p_ids <- p_ids[!is.na(p_ids)]
     if (length(p_ids) != 1L) {
-      stop("Parcellations are not nested at level ", lvl, ": child ", cid, " maps to parents ", paste(p_ids, collapse = ","))
+      stop("Parcellations are not nested at level ", lvl, ": child ", cid,
+           " maps to parents ", paste(p_ids, collapse = ","))
     }
     parent_map[as.character(cid)] <- p_ids
   }
@@ -273,7 +351,9 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
   ids <- sort(unique(labels))
   n_vox <- length(labels)
 
-  i_list <- list(); j_list <- list(); x_list <- list()
+  i_list <- list()
+  j_list <- list()
+  x_list <- list()
   atom_rows <- list()
   current_col <- col_offset
 

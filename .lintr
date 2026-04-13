@@ -1,0 +1,14 @@
+linters: linters_with_defaults(
+    line_length_linter(120),
+    object_name_linter = NULL
+  )
+exclusions: list(
+    "R/RcppExports.R",
+    "data-raw" = list(
+      line_length_linter = Inf
+    ),
+    "inst/scripts" = list(
+      line_length_linter = Inf,
+      commented_code_linter = Inf
+    )
+  )

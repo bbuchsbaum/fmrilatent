@@ -213,7 +213,7 @@ setMethod(
     linear_indices_in_block <- row_indices_in_block + (col_indices_in_block - 1) * nrow(data_block)
     ovals[in_mask_selector] <- data_block[linear_indices_in_block]
 
-    return(ovals)
+    ovals
   }
 )
 
@@ -291,7 +291,7 @@ setMethod(
     if (is.logical(l)) l <- which(l)
 
     if (any(i < 1 | i > dims_full[1]) || any(j < 1 | j > dims_full[2]) ||
-      any(k < 1 | k > dims_full[3]) || any(l < 1 | l > dims_full[4])) {
+        any(k < 1 | k > dims_full[3]) || any(l < 1 | l > dims_full[4])) {
       stop("Subscript out of range for LatentNeuroVec.")
     }
 
@@ -359,6 +359,21 @@ setMethod(
   definition = function(x, i, j, k, l, ..., drop = TRUE) {
     dims <- dim(x)
 
+    normalize_subscript <- function(idx, extent, name) {
+      if (is.logical(idx)) {
+        return(which(idx))
+      }
+      if (!is.numeric(idx)) {
+        stop("Subscript '", name, "' must be numeric or logical for LatentNeuroVec.",
+             call. = FALSE)
+      }
+      idx_int <- as.integer(idx)
+      if (anyNA(idx_int) || any(idx_int < 1L | idx_int > extent)) {
+        stop("Subscript out of range for LatentNeuroVec.", call. = FALSE)
+      }
+      idx_int
+    }
+
     # Handle matrix indexing: each row is a coordinate tuple
     if (!missing(i) && is.matrix(i) && missing(j)) {
       nc <- ncol(i)
@@ -379,16 +394,10 @@ setMethod(
     if (missing(k)) k <- seq_len(dims[3])
     if (missing(l)) l <- seq_len(dims[4])
 
-    # Convert logical indices to positions
-    if (is.logical(i)) i <- which(i)
-    if (is.logical(j)) j <- which(j)
-    if (is.logical(k)) k <- which(k)
-    if (is.logical(l)) l <- which(l)
-
-    i <- as.integer(i)
-    j <- as.integer(j)
-    k <- as.integer(k)
-    l <- as.integer(l)
+    i <- normalize_subscript(i, dims[1], "i")
+    j <- normalize_subscript(j, dims[2], "j")
+    k <- normalize_subscript(k, dims[3], "k")
+    l <- normalize_subscript(l, dims[4], "l")
 
     out_dims <- c(length(i), length(j), length(k), length(l))
     result <- array(0, dim = out_dims)

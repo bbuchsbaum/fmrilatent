@@ -191,22 +191,82 @@ setMethod("template_mask", "ParcelBasisTemplate", function(x, ...) x$reduction@m
 setMethod("template_meta", "ParcelBasisTemplate", function(x, ...) x$meta %||% list())
 
 #' @export
+#' @rdname basis_decoder
+setMethod("basis_decoder", "ParcelBasisTemplate",
+          function(template, ...) {
+            decoder_map <- .template_custom_field(template, "decoder_map") %||%
+              template_meta(template)$decoder_map %||% NULL
+            if (!is.null(decoder_map)) {
+              return(.normalize_linear_map(decoder_map, context = "basis decoder"))
+            }
+            payload <- .template_coordinate_payload(
+              raw_loadings = template_loadings(template),
+              measure = template_measure(template),
+              analysis_transform = .template_custom_field(template, "analysis_transform") %||%
+                template_meta(template)$analysis_transform %||% NULL,
+              default_measure = "unit"
+            )
+            L <- payload$analysis_loadings
+            .linear_map_from_matrix(
+              L,
+              source_domain_id = paste0("latent:", template_meta(template)$family %||% "parcel"),
+              target_domain_id = digest::digest(list(
+                mask = as.array(template_mask(template)),
+                meta = template_meta(template)
+              )),
+              provenance = list(
+                basis_asset_class = "ParcelBasisTemplate",
+                basis_family = template_meta(template)$family %||% "",
+                basis_id = digest::digest(L)
+              )
+            )
+          })
+
+#' @export
+#' @rdname template_rank
+setMethod("template_rank", "ParcelBasisTemplate",
+          function(template, ...) ncol(template_loadings(template)))
+
+#' @export
+#' @rdname template_domain
+setMethod("template_domain", "ParcelBasisTemplate",
+          function(template, ...) neuroim2::space(template_mask(template)))
+
+#' @export
+#' @rdname template_support
+setMethod("template_support", "ParcelBasisTemplate",
+          function(template, ...) template_mask(template))
+
+#' @export
+#' @rdname template_measure
+setMethod("template_measure", "ParcelBasisTemplate",
+          function(template, ...) {
+            template_meta(template)$measure %||% rep(1, nrow(template_loadings(template)))
+          })
+
+#' @export
+#' @rdname template_roughness
+setMethod("template_roughness", "ParcelBasisTemplate",
+          function(template, coordinates = c("analysis", "raw"), ...) NULL)
+
+#' @export
 #' @rdname template_project
 setMethod("template_project", signature(x = "ParcelBasisTemplate", data = "ANY"),
           function(x, data, ...) {
             X <- as.matrix(data)
             L <- template_loadings(x)
-            offset <- numeric(0)
-            X_proj <- X
-            if (isTRUE(x$center)) {
-              offset <- colMeans(X)
-              X_proj <- sweep(X, 2L, offset, "-")
+            if (ncol(X) != nrow(L)) {
+              stop("Data has ", ncol(X), " columns but template loadings have ",
+                   nrow(L), " rows.", call. = FALSE)
             }
-            proj <- X_proj %*% L
-            coeff <- t(Matrix::solve(x$gram_factor, Matrix::t(proj)))
-            list(
-              coefficients = Matrix::Matrix(as.matrix(coeff), sparse = FALSE),
-              offset = offset
+            .template_projection_payload(
+              data = X,
+              raw_loadings = L,
+              measure = template_measure(x),
+              center = isTRUE(x$center),
+              analysis_transform = .template_custom_field(x, "analysis_transform") %||%
+                template_meta(x)$analysis_transform %||% NULL,
+              default_measure = "unit"
             )
           })
 
@@ -275,16 +335,20 @@ encode_spec.spec_space_parcel <- function(x, spec, mask, reduction, materialize,
   meta <- list(
     family = "parcel_basis",
     basis_family = meta_tmpl$family,
+    coordinate_mode = "analysis_euclidean",
     k = meta_tmpl$k,
     center = tmpl$center,
     n_parcels = length(tmpl$reduction@cluster_ids),
     label_map = meta_tmpl$label_map,
-    cluster_map = meta_tmpl$cluster_map
+    cluster_map = meta_tmpl$cluster_map,
+    basis_asset = tmpl,
+    analysis_transform = proj$analysis_transform,
+    raw_metric = proj$raw_metric
   )
 
   LatentNeuroVec(
     basis = basis,
-    loadings = L,
+    loadings = proj$analysis_loadings,
     space = spc,
     mask = template_mask,
     offset = proj$offset,

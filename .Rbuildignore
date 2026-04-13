@@ -26,7 +26,9 @@
 ^src/.*\.so$
 ^\.covr_result\.rds$
 ^\.rcmdcheck_result\.rds$
+^\.lintr$
 ^\.omc($|/)
 ^\.planning($|/)
 ^src/AGENTS\.md$
 ^vignettes/AGENTS\.md$
+^transport_latent_prd\.json$

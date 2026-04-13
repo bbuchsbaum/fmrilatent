@@ -154,7 +154,8 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
     )
     # Keep the check for space equality separate for now
     if (!isTRUE(all.equal(mask_space, space_3d))) {
-      stop("Space object of provided mask does not match the space derived from the main 4D space. Cannot create IndexLookupVol.")
+      stop("Space object of provided mask does not match the space derived ",
+        "from the main 4D space. Cannot create IndexLookupVol.")
     }
   }
 

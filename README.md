@@ -2,7 +2,6 @@
 
 <!-- badges: start -->
 [![R-CMD-check](https://github.com/bbuchsbaum/fmrilatent/actions/workflows/R-CMD-check.yaml/badge.svg)](https://github.com/bbuchsbaum/fmrilatent/actions/workflows/R-CMD-check.yaml)
-[![pkgdown](https://github.com/bbuchsbaum/fmrilatent/actions/workflows/pkgdown.yaml/badge.svg)](https://bbuchsbaum.github.io/fmrilatent/)
 <!-- badges: end -->
 
 Memory-efficient latent space representations for fMRI data in R.
@@ -16,6 +15,19 @@ X[v,t] = Σ basis[t,k] × loadings[v,k] + offset[v]
 ```
 
 This enables compact storage and efficient computation for dimensionality-reduced fMRI data (PCA, ICA, wavelet decompositions, etc.).
+
+The package also provides operator-backed latent representations for
+transport-aware workflows. In that role, `fmrilatent` owns:
+
+- shared basis assets on template anatomy
+- latent objects with stable coefficient semantics
+- coefficient recovery from observed data
+- coefficient-to-map projection into native or template space
+
+It does not own first-level GLM fitting, contrast handling, temporal
+autocorrelation models, or inference. Downstream modeling packages should
+consume `coef_time(x, "analysis")` together with the decoder and projection
+generics.
 
 ## Installation
 
@@ -92,6 +104,25 @@ lvec_st <- encode(X,
   mask = mask
 )
 ```
+
+### Transport-Backed Encoding
+
+Transport-backed encoding uses a shared basis asset together with a
+subject-specific field operator. The target mask must describe the
+field operator target domain. Pass it explicitly, or attach it to
+`field_operator$provenance$target_mask`.
+
+### Downstream Handoff
+
+The stable handoff to downstream model-fitting code is:
+
+- `coef_time(x, "analysis")` for the response matrix
+- `decode_coefficients()` / `project_effect()` for coefficient-to-map effects
+- `decode_covariance()` / `project_vcov()` for coefficient-to-map uncertainty
+
+In v1, analysis coordinates are Euclidean by contract. Raw-coordinate metrics
+are only exposed when the raw-to-analysis transform has an explicit linear
+matrix representation.
 
 ### Available Basis Families
 

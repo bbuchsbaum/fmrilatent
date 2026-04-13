@@ -160,7 +160,11 @@ extract_spacing_origin <- function(mask_neurovol, ndims, location) {
   spacing_default <- rep(1, ndims)
   origin_default <- rep(0, ndims)
   sp <- tryCatch(neuroim2::space(mask_neurovol), error = function(e) NULL)
-  spacing_vec <- if (is.null(sp)) spacing_default else tryCatch(neuroim2::spacing(sp), error = function(e) spacing_default)
+  spacing_vec <- if (is.null(sp)) {
+    spacing_default
+  } else {
+    tryCatch(neuroim2::spacing(sp), error = function(e) spacing_default)
+  }
   origin_vec <- if (is.null(sp)) origin_default else tryCatch(neuroim2::origin(sp), error = function(e) origin_default)
   list(spacing = spacing_vec, origin = origin_vec)
 }
@@ -170,26 +174,31 @@ label_components <- function(mask_arr_3d) {
   visited <- array(FALSE, dim = dims)
   labels <- array(0L, dim = dims)
   comp_id <- 0L
-  neighbours <- matrix(c(1,0,0,-1,0,0,0,1,0,0,-1,0,0,0,1,0,0,-1),
+  neighbours <- matrix(c(1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1, 0, 0, 0, 1, 0, 0, -1),
                        ncol = 3, byrow = TRUE)
   for (i in seq_len(dims[1])) for (j in seq_len(dims[2])) for (k in seq_len(dims[3])) {
-    if (isTRUE(mask_arr_3d[i,j,k]) && !visited[i,j,k]) {
+    if (isTRUE(mask_arr_3d[i, j, k]) && !visited[i, j, k]) {
       comp_id <- comp_id + 1L
-      q <- list(c(i,j,k))
+      q <- list(c(i, j, k))
       while (length(q) > 0) {
-        pt <- q[[1]]; q <- q[-1]
-        ii <- pt[1]; jj <- pt[2]; kk <- pt[3]
-        if (visited[ii,jj,kk]) next
-        visited[ii,jj,kk] <- TRUE
-        labels[ii,jj,kk] <- comp_id
+        pt <- q[[1]]
+        q <- q[-1]
+        ii <- pt[1]
+        jj <- pt[2]
+        kk <- pt[3]
+        if (visited[ii, jj, kk]) next
+        visited[ii, jj, kk] <- TRUE
+        labels[ii, jj, kk] <- comp_id
         for (n in seq_len(nrow(neighbours))) {
           nn <- pt + neighbours[n, ]
-          ni <- nn[1]; nj <- nn[2]; nk <- nn[3]
+          ni <- nn[1]
+          nj <- nn[2]
+          nk <- nn[3]
           if (ni >= 1 && ni <= dims[1] &&
-              nj >= 1 && nj <= dims[2] &&
-              nk >= 1 && nk <= dims[3] &&
-              isTRUE(mask_arr_3d[ni,nj,nk]) && !visited[ni,nj,nk]) {
-            q[[length(q) + 1L]] <- c(ni,nj,nk)
+                nj >= 1 && nj <= dims[2] &&
+                nk >= 1 && nk <= dims[3] &&
+                isTRUE(mask_arr_3d[ni, nj, nk]) && !visited[ni, nj, nk]) {
+            q[[length(q) + 1L]] <- c(ni, nj, nk)
           }
         }
       }
@@ -243,13 +252,13 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
     })
     res <- do.call(rbind, centres)
     res <- if (nrow(res) > 0) matrix(as.numeric(res), ncol = 3) else matrix(numeric(0), ncol = 3)
-    colnames(res) <- c("i","j","k")
+    colnames(res) <- c("i", "j", "k")
     return(res)
   }
 
   vox_coords <- which(mask_arr, arr.ind = TRUE)
   if (nrow(vox_coords) == 0) {
-    return(matrix(integer(0), ncol = 3, dimnames = list(NULL, c("i","j","k"))))
+    return(matrix(integer(0), ncol = 3, dimnames = list(NULL, c("i", "j", "k"))))
   }
 
   remaining <- vox_coords  # deterministic order
@@ -267,7 +276,7 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
     }
   }
   selected <- if (nrow(selected) > 0) matrix(as.numeric(selected), ncol = 3) else selected
-  colnames(selected) <- c("i","j","k")
+  colnames(selected) <- c("i", "j", "k")
   selected
 }
 
@@ -400,6 +409,9 @@ lna_hrbf_centres_from_params <- function(params,
   seed <- params$seed
 
   voxel_to_world <- function(vox_mat) {
+    if (nrow(vox_mat) == 0L) {
+      return(matrix(numeric(0), ncol = ncol(vox_mat)))
+    }
     so <- extract_spacing_origin(mask, ncol(vox_mat),
                                  "lna_hrbf_centres_from_params:mask_space")
     sweep(vox_mat - 1, 2, so$spacing, `*`) +
@@ -419,8 +431,9 @@ lna_hrbf_centres_from_params <- function(params,
     if (nrow(C_total) != length(sigma_vec)) {
       stop("length(sigmas) must equal nrow(centres)", call. = FALSE)
     }
-    level_vec <- as.integer(round(log2(sigma0 / sigma_vec)))
-    level_vec[!is.finite(level_vec)] <- 0L
+    level_num <- round(log2(sigma0 / sigma_vec))
+    level_num[!is.finite(level_num)] <- 0
+    level_vec <- as.integer(level_num)
     return(list(
       centres = C_total,
       sigmas = sigma_vec,
@@ -545,6 +558,9 @@ lna_hrbf_basis_from_params <- function(params,
   seed <- params$seed
 
   voxel_to_world <- function(vox_mat) {
+    if (nrow(vox_mat) == 0L) {
+      return(matrix(numeric(0), ncol = ncol(vox_mat)))
+    }
     so <- extract_spacing_origin(mask, ncol(vox_mat),
                                  "lna_hrbf_basis_from_params:mask_space")
     sweep(vox_mat - 1, 2, so$spacing, `*`) +
@@ -749,6 +765,9 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
   seed <- params$seed
 
   voxel_to_world <- function(vox_mat) {
+    if (nrow(vox_mat) == 0L) {
+      return(matrix(numeric(0), ncol = ncol(vox_mat)))
+    }
     so <- extract_spacing_origin(mask_neurovol, ncol(vox_mat),
                                  "hrbf_basis_from_params:mask_space")
     sweep(vox_mat - 1, 2, so$spacing, `*`) +
@@ -807,7 +826,9 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
         triplet_j_list[[kk]] <- mask_linear_indices[nz]
         triplet_x_list[[kk]] <- atom$values[nz]
       } else {
-        triplet_i_list[[kk]] <- integer(); triplet_j_list[[kk]] <- integer(); triplet_x_list[[kk]] <- numeric()
+        triplet_i_list[[kk]] <- integer()
+        triplet_j_list[[kk]] <- integer()
+        triplet_x_list[[kk]] <- numeric()
       }
     }
     i_idx <- unlist(triplet_i_list, use.names = FALSE)
@@ -819,7 +840,9 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
 
   if (is.null(seed)) stop("hrbf_basis_from_params requires a seed for centre generation")
 
-  centres_list <- list(); sigs <- numeric(); level_vec <- integer()
+  centres_list <- list()
+  sigs <- numeric()
+  level_vec <- integer()
   for (j in seq_len(levels + 1L) - 1L) {
     sigma_j <- sigma0 / (2^j)
     r_j <- radius_factor * sigma_j
@@ -849,8 +872,11 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
       }
     }
   }
-  C_total <- if (length(centres_list) > 0) do.call(rbind, centres_list)
-             else matrix(numeric(0), ncol = 3)
+  C_total <- if (length(centres_list) > 0) {
+    do.call(rbind, centres_list)
+  } else {
+    matrix(numeric(0), ncol = 3)
+  }
   sigma_vec <- sigs
   k_actual <- nrow(C_total)
 

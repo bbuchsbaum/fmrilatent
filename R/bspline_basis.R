@@ -23,7 +23,10 @@ build_bspline_basis <- function(n_time,
   degree <- as.integer(degree)
   if (k > n_time) stop("k (", k, ") cannot exceed n_time (", n_time, ").")
   if (degree < 1) stop("degree must be >= 1")
-  if (k <= degree && !include_intercept) stop("k (", k, ") must be greater than degree (", degree, ") for a valid B-spline basis.")
+  if (k <= degree && !include_intercept) {
+    stop("k (", k, ") must be greater than degree (", degree,
+      ") for a valid B-spline basis.")
+  }
 
   # Ensure boundary knots defined
   if (is.null(boundary_knots)) boundary_knots <- c(0, 1)

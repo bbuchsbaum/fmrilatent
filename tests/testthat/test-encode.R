@@ -479,6 +479,15 @@ test_that("latent_factory with label parameter sets label", {
   expect_equal(lv@label, "factory_test")
 })
 
+test_that("latent_factory rejects AWPT family with a direct handoff message", {
+  td <- make_test_data()
+
+  expect_error(
+    latent_factory("awpt", x = td$X, mask = td$mask_vol),
+    "does not support AWPT because AWPT requires a shared basis_asset and subject field_operator"
+  )
+})
+
 # ---------------------------------------------------------------------------
 # Edge cases
 # ---------------------------------------------------------------------------

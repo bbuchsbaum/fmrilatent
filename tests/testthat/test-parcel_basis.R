@@ -70,6 +70,7 @@ test_that("as_cluster_reduction rejects non-ClusteredNeuroVol", {
 # --- parcel_basis_template tests with Slepian (geometric, no data needed) ---
 
 test_that("parcel_basis_template builds Slepian template", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 30, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
 
@@ -97,6 +98,7 @@ test_that("parcel_basis_template builds PCA template from data", {
 })
 
 test_that("parcel_basis_template accepts ClusteredNeuroVol", {
+  skip_if_not_installed("rgsp")
   dims <- c(4, 4, 4)
   mask_vol <- LogicalNeuroVol(array(TRUE, dim = dims), NeuroSpace(dims))
   n_vox <- prod(dims)
@@ -114,6 +116,7 @@ test_that("parcel_basis_template rejects invalid parcellation", {
 })
 
 test_that("parcel_basis_template center=FALSE works", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 20, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 2), center = FALSE)
@@ -159,6 +162,7 @@ test_that("parcel_basis_template rejects unsupported PCA whitening", {
 # --- print method ---
 
 test_that("print.ParcelBasisTemplate runs without error", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 20, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 2))
@@ -170,6 +174,7 @@ test_that("print.ParcelBasisTemplate runs without error", {
 # --- spec_space_parcel + encode tests ---
 
 test_that("spec_space_parcel creates valid spec", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 20, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 2))
@@ -184,6 +189,7 @@ test_that("spec_space_parcel rejects non-template", {
 })
 
 test_that("encode with spec_space_parcel produces valid LatentNeuroVec", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 30, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 3))
@@ -197,6 +203,7 @@ test_that("encode with spec_space_parcel produces valid LatentNeuroVec", {
 })
 
 test_that("encode with spec_space_parcel preserves atlas labels in metadata", {
+  skip_if_not_installed("rgsp")
   dims <- c(4, 4, 4)
   mask_vol <- LogicalNeuroVol(array(TRUE, dim = dims), NeuroSpace(dims))
   n_vox <- prod(dims)
@@ -213,6 +220,7 @@ test_that("encode with spec_space_parcel preserves atlas labels in metadata", {
 })
 
 test_that("encode with spec_space_parcel preserves custom mask geometry", {
+  skip_if_not_installed("rgsp")
   dims <- c(2, 2, 1)
   spc3 <- NeuroSpace(dims, spacing = c(2, 3, 4), origin = c(10, 20, 30))
   mask_vol <- LogicalNeuroVol(array(TRUE, dim = dims), spc3)
@@ -227,6 +235,7 @@ test_that("encode with spec_space_parcel preserves custom mask geometry", {
 })
 
 test_that("encode with spec_space_parcel center=FALSE produces zero offset", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 30, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 3), center = FALSE)
@@ -237,6 +246,7 @@ test_that("encode with spec_space_parcel center=FALSE produces zero offset", {
 })
 
 test_that("shared template gives same loadings for different subjects", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 30, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 3))
@@ -253,6 +263,7 @@ test_that("shared template gives same loadings for different subjects", {
 })
 
 test_that("reconstruction via shared Slepian template is reasonable", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 30, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   # Use enough components to get a decent reconstruction
@@ -283,6 +294,7 @@ test_that("encode with shared PCA template produces valid LatentNeuroVec", {
 })
 
 test_that("encode rejects a mask that differs from the template mask", {
+  skip_if_not_installed("rgsp")
   dims <- c(4, 4, 4)
   mask_arr <- array(FALSE, dim = dims)
   mask_arr[1:2, , ] <- TRUE
@@ -307,6 +319,7 @@ test_that("encode rejects a mask that differs from the template mask", {
 })
 
 test_that("encode rejects data with wrong number of voxels", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 20, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 2))
@@ -322,6 +335,7 @@ test_that("encode rejects data with wrong number of voxels", {
 # --- latent_factory integration ---
 
 test_that("latent_factory with parcel_space works", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data(n_time = 30, dims = c(4, 4, 4), n_parcels = 2)
   red <- make_cluster_reduction(td$mask, td$map)
   tmpl <- parcel_basis_template(red, basis_slepian(k = 3))

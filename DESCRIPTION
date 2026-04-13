@@ -16,7 +16,7 @@ Description: Provides S4 classes and methods for representing neuroimaging data
     fMRI data such as PCA or ICA decompositions. Integrates with the neuroim2
     package for standard neuroimaging data structures.
 License: GPL (>= 3)
-URL: https://bbuchsbaum.github.io/fmrilatent/, https://github.com/bbuchsbaum/fmrilatent
+URL: https://github.com/bbuchsbaum/fmrilatent
 BugReports: https://github.com/bbuchsbaum/fmrilatent/issues
 Encoding: UTF-8
 LazyData: false
@@ -53,27 +53,32 @@ Collate:
     'latent_handles.R'
     'all_class.R'
     'all_generic.R'
+    'encode.R'
+    'reduction.R'
+    'heat_wavelet.R'
+    'awpt.R'
     'benchmark_roundtrip.R'
     'bspline_basis.R'
     'compat_profile.R'
     'dct_basis.R'
-    'reduction.R'
     'diffusion_wavelet.R'
     'diffusion_wavelet_handle.R'
-    'encode.R'
     'encoder_registry.R'
     'fmrilatent-package.R'
     'graph_bridge.R'
     'haar_wavelet.R'
-    'heat_wavelet.R'
     'heat_wavelet_handle.R'
     'hierarchical_helpers.R'
     'hierarchical_template.R'
     'hrbf.R'
     'implicit_latent.R'
-    'latent_dct_heatwavelet.R'
     'slepian_handles.R'
     'latent_neurovec_materialize.R'
+    'latent_surface_vector.R'
+    'latent_bilateral_surface_vector.R'
+    'transport_latent.R'
+    'latent_block_vector.R'
+    'latent_dct_heatwavelet.R'
     'latent_neurovector.R'
     'latent_indexing.R'
     'latent_methods.R'
@@ -85,6 +90,7 @@ Collate:
     'slepian_spatiotemporal.R'
     'slepian_temporal.R'
     'spatial_plot.R'
+    'surface_template.R'
     'wavelet_active.R'
     'zzz.R'
     'zzz_haar_aliases.R'

@@ -70,9 +70,9 @@ setMethod(
       out_mat[, map_req_to_valid] <- as.numeric(valid_vox_series)
 
       if (drop && n_vox_req == 1) {
-        return(drop(out_mat))
+        drop(out_mat)
       } else {
-        return(out_mat)
+        out_mat
       }
     } else {
       # CASE B: user gave i,j,k => single voxel
@@ -267,7 +267,9 @@ setMethod(
     } else {
       all_basis_matrix <- lapply(all_basis, as.matrix)
       new_basis_matrix <- do.call(rbind, all_basis_matrix)
-      new_basis <- Matrix::Matrix(new_basis_matrix, sparse = (Matrix::nnzero(new_basis_matrix) / length(new_basis_matrix) < 0.5))
+      new_basis <- Matrix::Matrix(new_basis_matrix,
+        sparse = (Matrix::nnzero(new_basis_matrix) /
+          length(new_basis_matrix) < 0.5))
     }
 
     new_label <- paste0(
@@ -416,6 +418,16 @@ setMethod(
 setMethod("latent_meta", "LatentNeuroVec", function(x, ...) x@meta %||% list())
 
 #' @export
+#' @rdname latent_domain
+setMethod("latent_domain", "LatentNeuroVec",
+          function(x, ...) neuroim2::space(mask(x)))
+
+#' @export
+#' @rdname latent_support
+setMethod("latent_support", "LatentNeuroVec",
+          function(x, ...) mask(x))
+
+#' @export
 #' @rdname is_explicit_latent
 setMethod("is_explicit_latent", "LatentNeuroVec", function(x, ...) TRUE)
 
@@ -445,16 +457,23 @@ setMethod(
     mask_arr <- as.array(mask(x))
     roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "reconstruct_array.LatentNeuroVec")
     rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_arr, ...)
-    n_time <- nrow(rec)
-    arr <- array(0, dim = c(dim(mask_arr), n_time))
     fill_mask <- if (is.null(roi_arr)) mask_arr else (mask_arr & roi_arr)
-    fill_idx <- which(fill_mask)
-    for (t in seq_len(n_time)) {
-      slice <- numeric(prod(dim(mask_arr)))
-      slice[fill_idx] <- rec[t, ]
-      arr[, , , t] <- array(slice, dim = dim(mask_arr))
+    .wrap_decoded_volume(rec, fill_mask, context = "reconstruct_array.LatentNeuroVec")
+  }
+)
+
+#' @export
+#' @rdname wrap_decoded
+setMethod(
+  f = "wrap_decoded",
+  signature = signature(x = "LatentNeuroVec"),
+  definition = function(x, values, time_idx = NULL, space = c("native", "template"), ...) {
+    space <- match.arg(space)
+    if (space != "native") {
+      stop("wrap_decoded() for LatentNeuroVec currently supports only native-space wrapping.",
+           call. = FALSE)
     }
-    arr
+    .wrap_decoded_volume(values, latent_support(x), context = "wrap_decoded.LatentNeuroVec")
   }
 )
 

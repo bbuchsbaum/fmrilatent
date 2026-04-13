@@ -205,6 +205,129 @@ setGeneric("latent_meta", function(x, ...) standardGeneric("latent_meta"))
 #' @export
 setGeneric("is_explicit_latent", function(x, ...) standardGeneric("is_explicit_latent"))
 
+#' Extract coefficient time series from a latent object
+#'
+#' @param x A latent object.
+#' @param coordinates Coordinate system for the returned coefficients.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric matrix with rows = time and columns = latent coefficients.
+#' @export
+setGeneric("coef_time", function(x, coordinates = c("analysis", "raw"), ...) {
+  standardGeneric("coef_time")
+})
+
+#' Extract coefficient-space metric from a latent object
+#'
+#' @param x A latent object.
+#' @param coordinates Coordinate system for the requested metric.
+#' @param ... Additional arguments passed to methods.
+#' @return Matrix-like metric representation or \code{NULL}. For
+#'   transport-backed latent objects, analysis coordinates are Euclidean by
+#'   contract in v1. Raw-coordinate metrics are returned when the
+#'   raw-to-analysis transform exposes a linear matrix representation.
+#' @export
+setGeneric("coef_metric", function(x, coordinates = c("raw", "analysis"), ...) {
+  standardGeneric("coef_metric")
+})
+
+#' Describe the transform from raw to analysis coordinates
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments passed to methods.
+#' @return Transform descriptor or \code{NULL}. Downstream model-fitting code
+#'   should ordinarily consume \code{coef_time(x, "analysis")} rather than
+#'   reasoning about raw coordinates directly.
+#' @export
+setGeneric("analysis_transform", function(x, ...) standardGeneric("analysis_transform"))
+
+#' Extract the basis asset behind a latent object
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments passed to methods.
+#' @return Basis asset object or \code{NULL}.
+#' @export
+setGeneric("basis_asset", function(x, ...) standardGeneric("basis_asset"))
+
+#' Get a decoder view for a latent object
+#'
+#' @param x A latent object.
+#' @param space Output space to decode into.
+#' @param coordinates Coordinate system consumed by the decoder.
+#' @param ... Additional arguments passed to methods.
+#' @return Decoder view object.
+#' @export
+setGeneric("decoder", function(x, space = c("native", "template"),
+                                 coordinates = c("analysis", "raw"), ...) {
+  standardGeneric("decoder")
+})
+
+#' Decode coefficient-space vectors into an output space
+#'
+#' @param x A latent object.
+#' @param gamma Coefficient-space vector or matrix.
+#' @param space Output space to decode into.
+#' @param coordinates Coordinate system used by \code{gamma}.
+#' @param wrap If \code{"auto"}, wrap the decoded values with
+#'   \code{\link{wrap_decoded}()} so the result is domain-aware (for
+#'   example a \code{NeuroVol} for volumetric targets or a surface field
+#'   for surface targets). Defaults to \code{"none"}, which returns the
+#'   raw numeric vector or matrix.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric vector or matrix in the requested output space, or a
+#'   domain-aware wrapper when \code{wrap = "auto"}.
+#' @export
+setGeneric("decode_coefficients", function(x, gamma, space = c("native", "template"),
+                                            coordinates = c("analysis", "raw"),
+                                            wrap = c("none", "auto"), ...) {
+  standardGeneric("decode_coefficients")
+})
+
+#' Push coefficient covariance into an output space
+#'
+#' @param x A latent object.
+#' @param Sigma Coefficient covariance matrix.
+#' @param space Output space to decode into.
+#' @param coordinates Coordinate system used by \code{Sigma}.
+#' @param diag_only Logical; if \code{TRUE}, return only the diagonal.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric vector or matrix in the requested output space.
+#' @export
+setGeneric("decode_covariance", function(x, Sigma, space = c("native", "template"),
+                                          coordinates = c("analysis", "raw"),
+                                          diag_only = TRUE, ...) {
+  standardGeneric("decode_covariance")
+})
+
+#' Compatibility wrapper for decoder-based coefficient projection
+#'
+#' @param x A latent object.
+#' @param gamma Coefficient-space vector or matrix.
+#' @param space Output space to decode into.
+#' @param coordinates Coordinate system used by \code{gamma}.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric vector or matrix in the requested output space.
+#' @export
+setGeneric("project_effect", function(x, gamma, space = c("native", "template"),
+                                       coordinates = c("analysis", "raw"), ...) {
+  standardGeneric("project_effect")
+})
+
+#' Compatibility wrapper for decoder-based covariance pushforward
+#'
+#' @param x A latent object.
+#' @param Sigma Coefficient covariance matrix.
+#' @param space Output space to decode into.
+#' @param coordinates Coordinate system used by \code{Sigma}.
+#' @param diag_only Logical; if \code{TRUE}, return only the diagonal.
+#' @param ... Additional arguments passed to methods.
+#' @return Numeric vector or matrix in the requested output space.
+#' @export
+setGeneric("project_vcov", function(x, Sigma, space = c("native", "template"),
+                                     coordinates = c("analysis", "raw"),
+                                     diag_only = TRUE, ...) {
+  standardGeneric("project_vcov")
+})
+
 #' Extract template loadings
 #'
 #' @param x A template object.
@@ -229,6 +352,57 @@ setGeneric("template_mask", function(x, ...) standardGeneric("template_mask"))
 #' @export
 setGeneric("template_meta", function(x, ...) standardGeneric("template_meta"))
 
+#' Extract a basis decoder from a template asset
+#'
+#' @param template A template object.
+#' @param ... Additional arguments passed to methods.
+#' @return Basis decoder view object.
+#' @export
+setGeneric("basis_decoder", function(template, ...) standardGeneric("basis_decoder"))
+
+#' Query the rank of a template basis
+#'
+#' @param template A template object.
+#' @param ... Additional arguments passed to methods.
+#' @return Integer scalar rank.
+#' @export
+setGeneric("template_rank", function(template, ...) standardGeneric("template_rank"))
+
+#' Extract the domain associated with a template
+#'
+#' @param template A template object.
+#' @param ... Additional arguments passed to methods.
+#' @return Domain object or identifier.
+#' @export
+setGeneric("template_domain", function(template, ...) standardGeneric("template_domain"))
+
+#' Extract the support associated with a template
+#'
+#' @param template A template object.
+#' @param ... Additional arguments passed to methods.
+#' @return Support object describing the decoded support of the template.
+#' @export
+setGeneric("template_support", function(template, ...) standardGeneric("template_support"))
+
+#' Extract optional measure or mass information for a template
+#'
+#' @param template A template object.
+#' @param ... Additional arguments passed to methods.
+#' @return Optional measure or mass object, or \code{NULL}.
+#' @export
+setGeneric("template_measure", function(template, ...) standardGeneric("template_measure"))
+
+#' Extract the spatial roughness operator for a template asset
+#'
+#' @param template A shared basis asset.
+#' @param coordinates Coordinate system for the returned roughness operator.
+#' @param ... Additional arguments passed to methods.
+#' @return Matrix-like roughness operator or \code{NULL}.
+#' @export
+setGeneric("template_roughness", function(template, coordinates = c("analysis", "raw"), ...) {
+  standardGeneric("template_roughness")
+})
+
 #' Project data onto a template
 #'
 #' @param x A template object.
@@ -249,4 +423,34 @@ setGeneric("template_project", function(x, data, ...) standardGeneric("template_
 #' @export
 setGeneric("save_template", function(template, file, compress = "xz", ...) {
   standardGeneric("save_template")
+})
+
+#' Extract the decoded domain associated with a latent object
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments passed to methods.
+#' @return Domain object or identifier.
+#' @export
+setGeneric("latent_domain", function(x, ...) standardGeneric("latent_domain"))
+
+#' Extract the decoded support associated with a latent object
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments passed to methods.
+#' @return Support object for the latent representation.
+#' @export
+setGeneric("latent_support", function(x, ...) standardGeneric("latent_support"))
+
+#' Wrap flat decoded outputs into a domain-native representation
+#'
+#' @param x A latent object.
+#' @param values Flat decoded values, typically as a vector or matrix.
+#' @param time_idx Optional integer time indices associated with \code{values}.
+#' @param space Output space to wrap into.
+#' @param ... Additional arguments passed to methods.
+#' @return Domain-native wrapped representation.
+#' @export
+setGeneric("wrap_decoded", function(x, values, time_idx = NULL,
+                                     space = c("native", "template"), ...) {
+  standardGeneric("wrap_decoded")
 })

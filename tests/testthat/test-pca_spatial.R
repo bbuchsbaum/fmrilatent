@@ -79,4 +79,3 @@ test_that("encode spec_space_pca whitening preserves reconstruction", {
   rec <- as.matrix(lv)
   expect_lt(max(abs(rec - X)), 1e-8)
 })
-

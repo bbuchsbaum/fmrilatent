@@ -115,6 +115,7 @@ test_that("handle-backed spatial encoders preserve k_neighbors on rematerializat
 })
 
 test_that("saved parcel templates replay identical encodings after reload", {
+  skip_if_not_installed("rgsp")
   td <- make_test_data_ci_int(n_time = 10, dims = c(4, 4, 2))
   map <- as.integer(rep_len(1:4, td$n_vox))
   reduction <- make_cluster_reduction(td$mask_vol, map)

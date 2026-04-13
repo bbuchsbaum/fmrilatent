@@ -11,9 +11,11 @@ spectral_ward_hclust(W, k_embed = 3, hemi = NULL, network = NULL)
 
 \item{k_embed}{Embedding dimension (2 or 3).}
 
-\item{hemi}{Optional factor/character vector (n_parc) to enforce within-hemisphere merges first.}
+\item{hemi}{Optional factor/character vector (n_parc) to enforce
+within-hemisphere merges first.}
 
-\item{network}{Optional factor/character vector (n_parc) (e.g., Yeo17) to enforce within-network merges until relaxed.}
+\item{network}{Optional factor/character vector (n_parc) (e.g., Yeo17) to
+enforce within-network merges until relaxed.}
 }
 \value{
 hclust object.

@@ -20,28 +20,43 @@ benchmark_roundtrip <- function(mask_dims = c(16, 16, 8),
 
   res_list <- list()
   for (m in methods) {
-    mark_res <- bench::mark(
-      iterations = iterations,
-      encode_decode = {
-        if (m == "slepian_space") {
-          lv <- encode(X, spec_space_slepian(k = 3L, k_neighbors = 6L), mask = mask_vol, materialize = "matrix")
-          rec <- as.matrix(lv)
-        } else if (m == "hrbf") {
-          lv <- encode(X, spec_space_hrbf(params = list(sigma0 = 2, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)), mask = mask_vol, materialize = "matrix")
-          rec <- as.matrix(lv)
-        } else if (m == "wavelet_active") {
-          lv <- encode(X, spec_space_wavelet_active(levels_space = 1L, levels_time = 0L, threshold = 0), mask = mask_vol, materialize = "matrix")
-          rec <- predict(lv)
-        } else if (m == "bspline_hrbf_st") {
-          lv <- latent_factory("bspline_hrbf_st", x = X, mask = mask_vol,
-                               k_time = min(n_time, 4L),
-                               params = list(sigma0 = 2, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 2L),
-                               materialize = "matrix")
-          rec <- predict(lv)
-        } else {
-          stop("Unknown method: ", m, call. = FALSE)
+    mark_res <- withCallingHandlers(
+      bench::mark(
+        iterations = iterations,
+        encode_decode = {
+          if (m == "slepian_space") {
+            lv <- encode(X, spec_space_slepian(k = 3L, k_neighbors = 6L), mask = mask_vol, materialize = "matrix")
+            rec <- as.matrix(lv)
+          } else if (m == "hrbf") {
+            lv <- encode(X, spec_space_hrbf(params = list(
+              sigma0 = 2, levels = 0L, radius_factor = 2.5,
+              kernel_type = "gaussian", seed = 1L)),
+              mask = mask_vol, materialize = "matrix")
+            rec <- as.matrix(lv)
+          } else if (m == "wavelet_active") {
+            lv <- encode(X,
+              spec_space_wavelet_active(levels_space = 1L,
+                levels_time = 0L, threshold = 0),
+              mask = mask_vol, materialize = "matrix")
+            rec <- predict(lv)
+          } else if (m == "bspline_hrbf_st") {
+            lv <- latent_factory("bspline_hrbf_st", x = X, mask = mask_vol,
+                                 k_time = min(n_time, 4L),
+                                 params = list(sigma0 = 2, levels = 0L,
+                                   radius_factor = 2.5,
+                                   kernel_type = "gaussian", seed = 2L),
+                                 materialize = "matrix")
+            rec <- predict(lv)
+          } else {
+            stop("Unknown method: ", m, call. = FALSE)
+          }
+          list(rec = rec)
         }
-        list(rec = rec)
+      ),
+      warning = function(w) {
+        if (grepl("GC in every iteration", conditionMessage(w), ignore.case = TRUE)) {
+          invokeRestart("muffleWarning")
+        }
       }
     )
     rec <- mark_res$result[[1]]$rec
