@@ -3,6 +3,10 @@ library(Matrix)
 library(neuroim2)
 
 .skip_if_no_neurosurf_block <- function() {
+  skip_if(
+    any(commandArgs() == "-f"),
+    "neurosurf surface examples abort under this local R/BATCH setup"
+  )
   skip_if_not_installed("neurosurf")
 }
 

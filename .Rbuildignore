@@ -8,6 +8,7 @@
 ^_pkgdown\.yml$
 ^data-raw$
 ^\.beads($|/)
+^\.mote($|/)
 ^\.claude($|/)
 ^\.\.Rcheck($|/)
 ^AGENTS\.md$

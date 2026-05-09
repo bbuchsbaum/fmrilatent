@@ -2,6 +2,10 @@ library(testthat)
 library(Matrix)
 
 .skip_if_no_neurosurf_blsv <- function() {
+  skip_if(
+    any(commandArgs() == "-f"),
+    "neurosurf surface examples abort under this local R/BATCH setup"
+  )
   skip_if_not_installed("neurosurf")
 }
 

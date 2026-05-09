@@ -147,6 +147,17 @@ setMethod(
 
 # --- concat Method ---
 
+.latent_neurovecseq_fallback <- function(objects) {
+  dense_objects <- lapply(objects, function(obj) {
+    if (is(obj, "LatentNeuroVec")) {
+      neuroim2::DenseNeuroVec(as.array(obj), space(obj))
+    } else {
+      obj
+    }
+  })
+  do.call(NeuroVecSeq, dense_objects)
+}
+
 #' Concatenate LatentNeuroVec Objects
 #'
 #' @description
@@ -177,7 +188,7 @@ setMethod(
     all_lvecs <- all(sapply(all_objects, is, "LatentNeuroVec"))
 
     if (!all_lvecs) {
-      return(do.call(NeuroVecSeq, list(x, y, ...)))
+      return(.latent_neurovecseq_fallback(all_objects))
     }
 
     # Check dimensions
@@ -196,7 +207,7 @@ setMethod(
     }
 
     if (!compatible_dims) {
-      return(do.call(NeuroVecSeq, list(x, y, ...)))
+      return(.latent_neurovecseq_fallback(all_objects))
     }
 
     # Check masks
@@ -212,7 +223,7 @@ setMethod(
     }
 
     if (!compatible_masks) {
-      return(do.call(NeuroVecSeq, list(x, y, ...)))
+      return(.latent_neurovecseq_fallback(all_objects))
     }
 
     # Check k values
@@ -228,7 +239,7 @@ setMethod(
     }
 
     if (!compatible_k) {
-      return(do.call(NeuroVecSeq, list(x, y, ...)))
+      return(.latent_neurovecseq_fallback(all_objects))
     }
 
     # Check loadings - must be identical
@@ -243,7 +254,7 @@ setMethod(
     }
 
     if (!compatible_loadings) {
-      return(do.call(NeuroVecSeq, list(x, y, ...)))
+      return(.latent_neurovecseq_fallback(all_objects))
     }
 
     # All compatible - create new LatentNeuroVec with concatenated basis
