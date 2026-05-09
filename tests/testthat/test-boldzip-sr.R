@@ -203,6 +203,114 @@ test_that("BOLDZip-SR quantization keeps finite decodable payloads", {
   expect_true(all(is.finite(metrics[c("mse", "rmse", "payload_scalars")])))
 })
 
+test_that("BOLDZip-SR reconstruction is equivariant to voxel permutations", {
+  n_vox <- 7L
+  n_time <- 26L
+  carrier <- sin(2 * pi * seq_len(n_time) / n_time)
+  texture <- seq(0.4, 1.8, length.out = n_vox)
+  X <- texture %*% t(carrier)
+  perm <- c(4L, 1L, 7L, 2L, 6L, 3L, 5L)
+
+  fit <- boldzip_sr_encode(
+    X,
+    k_carriers = 1L,
+    temporal_k = n_time,
+    q_texture = 1L,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+  fit_perm <- boldzip_sr_encode(
+    X[perm, , drop = FALSE],
+    k_carriers = 1L,
+    temporal_k = n_time,
+    q_texture = 1L,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+
+  expect_equal(
+    boldzip_sr_decode(fit_perm),
+    boldzip_sr_decode(fit)[perm, , drop = FALSE],
+    tolerance = 1e-10
+  )
+})
+
+test_that("BOLDZip-SR decoding subsets are consistent with full reconstruction", {
+  set.seed(21)
+  X <- matrix(rnorm(8 * 24), nrow = 8L)
+  fit <- boldzip_sr_encode(
+    X,
+    k_carriers = 3L,
+    temporal_k = 10L,
+    q_texture = 2L,
+    events = boldzip_events(max_events = 5L)
+  )
+  full <- boldzip_sr_decode(fit)
+
+  expect_equal(
+    boldzip_sr_decode(fit, time_idx = c(2L, 5L, 7L), roi = c(1L, 4L, 8L)),
+    full[c(1L, 4L, 8L), c(2L, 5L, 7L), drop = FALSE]
+  )
+  expect_error(boldzip_sr_decode(fit, time_idx = 0L), "time_idx")
+  expect_error(boldzip_sr_decode(fit, roi = 0L), "roi")
+})
+
+test_that("BOLDZip-SR temporal budget has monotone reconstruction quality on smooth signals", {
+  n_vox <- 6L
+  n_time <- 36L
+  tt <- seq_len(n_time)
+  carrier <- sin(2 * pi * tt / n_time) + 0.25 * cos(4 * pi * tt / n_time)
+  X <- seq(0.5, 1.5, length.out = n_vox) %*% t(carrier)
+
+  low_budget <- boldzip_sr_encode(
+    X,
+    k_carriers = 1L,
+    temporal_k = 2L,
+    q_texture = 1L,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+  high_budget <- boldzip_sr_encode(
+    X,
+    k_carriers = 1L,
+    temporal_k = n_time,
+    q_texture = 1L,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+
+  expect_lte(
+    evaluate_boldzip_sr(X, high_budget)[["mse"]],
+    evaluate_boldzip_sr(X, low_budget)[["mse"]] + 1e-12
+  )
+})
+
+test_that("BOLDZip-SR handles extreme but finite magnitudes without non-finite output", {
+  n_time <- 18L
+  base <- sin(2 * pi * seq_len(n_time) / n_time)
+  X <- rbind(
+    1e-8 * base,
+    1e8 * base,
+    rep(1e4, n_time),
+    -1e6 * base
+  )
+
+  fit <- boldzip_sr_encode(
+    X,
+    k_carriers = 2L,
+    temporal_k = 8L,
+    q_texture = 1L,
+    quantization = boldzip_quantization(base_step = 0.01),
+    events = boldzip_events(max_events = 2L)
+  )
+  X_hat <- boldzip_sr_decode(fit)
+  metrics <- evaluate_boldzip_sr(X, fit)
+
+  expect_true(all(is.finite(X_hat)))
+  expect_true(all(is.finite(metrics[c("mse", "rmse")])))
+  expect_equal(dim(X_hat), dim(X))
+})
+
 test_that("evaluate_boldzip_sr accepts raw reconstruction matrices", {
   X <- matrix(rnorm(4 * 10), nrow = 4L)
   metrics <- evaluate_boldzip_sr(X, X)
@@ -253,6 +361,18 @@ test_that("parcel and SVD baselines reconstruct expected reference cases", {
   svd_hat <- boldzip_svd_reconstruct(rank_one, rank = 1L, center = FALSE)
   expect_lt(mean((rank_one - svd_hat)^2), 1e-10)
   expect_error(boldzip_svd_reconstruct(X, rank = 0L), "rank must be")
+})
+
+test_that("SVD baseline error is monotone as rank budget increases", {
+  set.seed(22)
+  X <- matrix(rnorm(8 * 10), nrow = 8L)
+  rank1 <- boldzip_svd_reconstruct(X, rank = 1L, center = TRUE)
+  rank3 <- boldzip_svd_reconstruct(X, rank = 3L, center = TRUE)
+
+  expect_lte(
+    mean((X - rank3)^2),
+    mean((X - rank1)^2) + 1e-12
+  )
 })
 
 test_that("compare_boldzip_sr returns baseline metrics and payload estimates", {

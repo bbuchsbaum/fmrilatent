@@ -793,9 +793,29 @@ boldzip_sr_decode <- function(object, time_idx = NULL, roi = NULL) {
   recon <- sweep(recon, 1L, object$mu, "+")
 
   if (!is.null(time_idx)) {
+    if (!is.numeric(time_idx) || anyNA(time_idx) ||
+        any(time_idx != as.integer(time_idx)) ||
+        any(time_idx < 1L | time_idx > n_time)) {
+      stop("time_idx must contain valid positive integer time indices.",
+           call. = FALSE)
+    }
     recon <- recon[, time_idx, drop = FALSE]
   }
   if (!is.null(roi)) {
+    if (!is.numeric(roi) && !is.logical(roi)) {
+      stop("roi must be integer or logical.", call. = FALSE)
+    }
+    if (is.logical(roi)) {
+      if (length(roi) != n_voxels || anyNA(roi)) {
+        stop("logical roi must have one non-missing value per row.",
+             call. = FALSE)
+      }
+    } else if (anyNA(roi) ||
+               any(roi != as.integer(roi)) ||
+               any(roi < 1L | roi > n_voxels)) {
+      stop("roi must contain valid positive integer row indices.",
+           call. = FALSE)
+    }
     recon <- recon[roi, , drop = FALSE]
   }
   recon

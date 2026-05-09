@@ -56,6 +56,31 @@ test_that("shared component contracts validate dimensions, support, and measures
   expect_false(validate_shared_component_contract(structure(list(), class = "SharedComponentContract"), error = FALSE))
 })
 
+test_that("shared component contracts preserve dimensional invariants across random shapes", {
+  set.seed(40)
+  for (iter in seq_len(10L)) {
+    n_features <- sample(3:8, 1L)
+    n_components <- sample(1:min(4L, n_features), 1L)
+    loadings <- Matrix(
+      matrix(rnorm(n_features * n_components), nrow = n_features),
+      sparse = iter %% 2L == 0L
+    )
+    support <- seq_len(n_features)
+    measure <- runif(n_features, min = 0.1, max = 2)
+
+    contract <- shared_component_contract(
+      loadings,
+      support = support,
+      measure = measure,
+      family = paste0("random_", iter)
+    )
+
+    expect_equal(contract$n_features, n_features)
+    expect_equal(contract$n_components, n_components)
+    expect_identical(validate_shared_component_contract(contract), contract)
+  }
+})
+
 test_that("shared references stay in-session and materialize lazily", {
   shared_reference_clear()
   counter <- new.env(parent = emptyenv())
@@ -78,6 +103,28 @@ test_that("shared references stay in-session and materialize lazily", {
   expect_equal(shared_reference_info(ref)$persistence, "session")
 })
 
+test_that("shared references can bypass caching and clear session state", {
+  shared_reference_clear()
+  counter <- new.env(parent = emptyenv())
+  counter$n <- 0L
+  ref <- shared_reference(
+    id = "uncached-ref",
+    kind = "loadings",
+    materialize = function() {
+      counter$n <- counter$n + 1L
+      matrix(counter$n, nrow = 1, ncol = 1)
+    }
+  )
+
+  expect_equal(resolve_shared_reference(ref, cache = FALSE), matrix(1, 1, 1))
+  expect_equal(resolve_shared_reference(ref, cache = FALSE), matrix(2, 1, 1))
+  expect_false(shared_reference_info(ref)$has_cached_value)
+  expect_equal(resolve_shared_reference(ref, cache = TRUE), matrix(3, 1, 1))
+  expect_true(shared_reference_info(ref)$has_cached_value)
+  shared_reference_clear()
+  expect_false(shared_reference_info(ref)$has_cached_value)
+})
+
 test_that("group-plus-delta loadings materialize and feed component contracts", {
   group <- Matrix(matrix(c(1, 0, 0, 1, 1, 1), nrow = 3, byrow = TRUE), sparse = FALSE)
   delta <- Matrix(matrix(c(0, 1, 1, 0, 0, -1), nrow = 3, byrow = TRUE), sparse = FALSE)
@@ -90,6 +137,19 @@ test_that("group-plus-delta loadings materialize and feed component contracts", 
   expect_equal(contract$n_features, 3L)
   expect_equal(contract$n_components, 2L)
   expect_error(group_delta_loadings(group, delta[1:2, ]), "identical dimensions")
+})
+
+test_that("group-plus-delta materialization is affine in scale", {
+  group <- Matrix(matrix(c(1, 2, 3, 4), nrow = 2), sparse = FALSE)
+  delta <- Matrix(matrix(c(0.5, -0.25, 1, -2), nrow = 2), sparse = TRUE)
+  gd1 <- group_delta_loadings(group, delta, scale = 1)
+  gd2 <- group_delta_loadings(group, delta, scale = 2)
+
+  expect_equal(
+    as.matrix(gd2) - as.matrix(gd1),
+    as.matrix(delta),
+    tolerance = 1e-12
+  )
 })
 
 test_that("shared temporal specs and event dictionaries are executable descriptors", {
@@ -121,6 +181,26 @@ test_that("shared temporal specs and event dictionaries are executable descripto
   expect_error(render_shared_events(dictionary, transform(events, shape_id = "missing"), 2L), "unknown event shape_id")
 })
 
+test_that("shared event rendering is additive under event decomposition", {
+  dictionary <- shared_event_dictionary(
+    shapes = list(impulse = 1, ramp = c(1, 0.5)),
+    n_time = 4L
+  )
+  event_a <- data.frame(atom = 1L, time = 2L, amplitude = 3, shape_id = "ramp")
+  event_b <- data.frame(atom = 1L, time = 3L, amplitude = 2, shape_id = "impulse")
+  together <- rbind(event_a, event_b)
+
+  expect_equal(
+    as.matrix(render_shared_events(dictionary, together, n_atoms = 1L)),
+    as.matrix(render_shared_events(dictionary, event_a, n_atoms = 1L)) +
+      as.matrix(render_shared_events(dictionary, event_b, n_atoms = 1L))
+  )
+  expect_error(
+    render_shared_events(dictionary, data.frame(atom = 2L, time = 1L, amplitude = 1), n_atoms = 1L),
+    "out-of-range"
+  )
+})
+
 test_that("template protocol and neuroarchive handoff enforce the ownership boundary", {
   tmpl <- make_shared_structure_template()
   manifest <- validate_template_protocol(tmpl)
@@ -144,4 +224,19 @@ test_that("template protocol and neuroarchive handoff enforce the ownership boun
   bad_handoff <- handoff
   bad_handoff$archive_locator <- "archive.h5"
   expect_error(validate_neuroarchive_handoff_contract(bad_handoff), "persistent archive locators")
+})
+
+test_that("template and handoff validators reject wrong-contract objects", {
+  tmpl <- make_shared_structure_template()
+  bad_tmpl <- tmpl
+  bad_tmpl$decoder_map <- as_portable_linear_map(matrix(1, nrow = 3L, ncol = 2L))
+
+  expect_error(
+    validate_template_protocol(bad_tmpl),
+    "dimensions do not match template loadings"
+  )
+  expect_error(
+    neuroarchive_handoff_contract(references = list(list(id = "not-shared"))),
+    "SharedReference"
+  )
 })
