@@ -326,6 +326,10 @@ setMethod(
     cat("\n", crayon::bold(crayon::blue("LatentNeuroVec Object")), "\n")
     cat(crayon::silver("======================\n"))
 
+    if (length(object@label) == 1L && nzchar(object@label)) {
+      cat(" ", crayon::silver("*"), " Label: ", crayon::green(object@label), "\n")
+    }
+
     dims <- dim(object)
     spatial_dims <- paste(dims[1:3], collapse = " x ")
     cat("\n", crayon::yellow("Dimensions:"), "\n")
@@ -335,24 +339,30 @@ setMethod(
     basis_dim <- .latent_basis_dim(object@basis)
     loadings_dim <- .latent_loadings_dim(object@loadings)
     n_components <- basis_dim[2L]
-    first_basis_coeffs <- format(basis_mat(object, i = 1:min(5, basis_dim[1L]), j = 1), digits = 3)
+    n_preview <- min(5L, basis_dim[1L])
+    first_basis_coeffs <- format(
+      as.numeric(as.matrix(basis_mat(object, i = seq_len(n_preview), j = 1))),
+      digits = 3
+    )
     cat("\n", crayon::yellow("Components:"), "\n")
     cat(" ", crayon::silver("*"), " Number: ", crayon::green(n_components), "\n")
     cat(
-      " ", crayon::silver("*"), " First component, first 5 coeffs: ",
+      " ", crayon::silver("*"), " First component, first ",
+      length(first_basis_coeffs), " coeffs: ",
       crayon::green(paste(first_basis_coeffs, collapse = ", ")),
-      if (length(first_basis_coeffs) < 5) "" else "...", "\n"
+      if (basis_dim[1L] > n_preview) "..." else "", "\n",
+      sep = ""
     )
 
-    basis_size <- if (is(object@basis, "Matrix")) {
+    basis_size <- if (is(object@basis, "BasisHandle")) {
+      paste0("handle (kind=", object@basis@kind, ", lazy)")
+    } else {
       format(object.size(object@basis), units = "auto")
-    } else {
-      "handle (lazy)"
     }
-    loadings_size <- if (is(object@loadings, "Matrix")) {
-      format(object.size(object@loadings), units = "auto")
+    loadings_size <- if (is(object@loadings, "LoadingsHandle")) {
+      paste0("handle (kind=", object@loadings@kind, ", lazy)")
     } else {
-      "handle (lazy)"
+      format(object.size(object@loadings), units = "auto")
     }
     total_size <- format(object.size(object), units = "auto")
 
