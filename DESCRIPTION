@@ -65,6 +65,7 @@ Collate:
     'diffusion_wavelet.R'
     'diffusion_wavelet_handle.R'
     'encode_spec.R'
+    'encode_template.R'
     'encode_transport_solve.R'
     'encoder_registry.R'
     'fmrilatent-package.R'
