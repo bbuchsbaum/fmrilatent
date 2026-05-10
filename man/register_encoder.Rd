@@ -23,21 +23,50 @@ Registers a spec constructor so it can be discovered via \code{\link{list_encode
 and retrieved via \code{\link{get_encoder}}.
 }
 \details{
-External packages can register their encoders in their \code{.onLoad} hook:
+External packages typically register their encoders in their \code{.onLoad}
+hook so the registry is populated when the package is loaded:
 \preformatted{
 .onLoad <- function(libname, pkgname) {
   if (requireNamespace("fmrilatent", quietly = TRUE)) {
-    fmrilatent::register_encoder("my_encoder", spec_my_encoder,
-                                  description = "My custom encoder",
-                                  package = pkgname)
+    fmrilatent::register_encoder(
+      "my_encoder", spec_my_encoder,
+      description = "My custom encoder",
+      package = pkgname
+    )
   }
 }
 }
+The S3 method itself is exported via the package's NAMESPACE in the usual
+way (\code{S3method(encode_spec, spec_my_encoder)}).
 
-Registering the same family twice issues a warning and overwrites the previous entry.
+Registering the same family twice issues a warning and overwrites the
+previous entry.
 }
+\section{Dispatch model}{
+
+The registry is for \strong{discovery and introspection only}. It does
+\emph{not} participate in actual encoding. \code{\link{encode}} routes work
+through the S3 generic \code{encode_spec}, which dispatches on the class of
+the spec object. That means an external package contributing a new encoder
+family must do \strong{both}:
+\enumerate{
+  \item Define a spec constructor whose return value carries a distinctive
+        class (e.g. \code{class(spec) <- c("spec_my_encoder", "list")}).
+  \item Define an S3 method \code{encode_spec.spec_my_encoder(x, spec, ...)}
+        that builds the actual \code{LatentNeuroVec} (or other latent type).
+  \item Optionally call \code{register_encoder()} so that
+        \code{list_encoders()} surfaces the family for users.
+}
+Calling \code{register_encoder()} alone is \strong{not enough}: without an
+\code{encode_spec.spec_*} method, \code{encode()} will fall through to
+\code{encode_spec.default} and raise an error.
+}
+
 \examples{
 register_encoder("test_enc", identity, "A test encoder", "mypkg")
 list_encoders()
 get_encoder("test_enc")
+}
+\seealso{
+\code{\link{encode}}, \code{\link{list_encoders}}, \code{\link{get_encoder}}
 }
