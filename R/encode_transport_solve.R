@@ -13,6 +13,54 @@
 #' @include encode.R
 NULL
 
+.soft_threshold <- function(x, thresh) {
+  sign(x) * pmax(abs(x) - thresh, 0)
+}
+
+.prox_sparse_awpt <- function(Z, step, sparse_lambda = 0,
+                              sparse_mode = c("none", "group_l2", "lasso")) {
+  sparse_mode <- match.arg(sparse_mode)
+  if (sparse_lambda <= 0 || sparse_mode == "none") {
+    return(Z)
+  }
+  if (sparse_mode == "lasso") {
+    return(.soft_threshold(Z, step * sparse_lambda))
+  }
+
+  out <- Z
+  for (j in seq_len(ncol(Z))) {
+    norm_j <- sqrt(sum(Z[, j]^2))
+    if (norm_j == 0) {
+      out[, j] <- 0
+    } else {
+      shrink <- max(0, 1 - (step * sparse_lambda) / norm_j)
+      out[, j] <- Z[, j] * shrink
+    }
+  }
+  out
+}
+
+.awpt_objective <- function(Z, X, D_mat, A, Lt = NULL,
+                            temporal_lambda = 0,
+                            sparse_lambda = 0,
+                            sparse_mode = c("none", "group_l2", "lasso")) {
+  sparse_mode <- match.arg(sparse_mode)
+  resid <- X - Z %*% t(D_mat)
+  obj <- 0.5 * sum(resid^2)
+  obj <- obj + 0.5 * sum((Z %*% A) * Z)
+  if (temporal_lambda > 0 && !is.null(Lt)) {
+    obj <- obj + 0.5 * temporal_lambda * sum((Lt %*% Z) * Z)
+  }
+  if (sparse_lambda > 0 && sparse_mode != "none") {
+    if (sparse_mode == "lasso") {
+      obj <- obj + sparse_lambda * sum(abs(Z))
+    } else {
+      obj <- obj + sparse_lambda * sum(sqrt(colSums(Z^2)))
+    }
+  }
+  obj
+}
+
 .frobenius_inner <- function(x, y) {
   sum(x * y)
 }
