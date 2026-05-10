@@ -62,10 +62,6 @@ setMethod("latent_support", "BilatLatentNeuroSurfaceVector",
           })
 
 #' @export
-#' @rdname is_explicit_latent
-setMethod("is_explicit_latent", "BilatLatentNeuroSurfaceVector", function(x, ...) TRUE)
-
-#' @export
 #' @rdname basis-methods
 setMethod("basis", "BilatLatentNeuroSurfaceVector", function(x) basis(x@left))
 

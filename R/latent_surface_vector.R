@@ -113,10 +113,6 @@ setMethod("latent_domain", "LatentNeuroSurfaceVector", function(x, ...) x@geomet
 setMethod("latent_support", "LatentNeuroSurfaceVector", function(x, ...) x@support)
 
 #' @export
-#' @rdname is_explicit_latent
-setMethod("is_explicit_latent", "LatentNeuroSurfaceVector", function(x, ...) TRUE)
-
-#' @export
 #' @rdname reconstruct_matrix
 setMethod("reconstruct_matrix", "LatentNeuroSurfaceVector",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {

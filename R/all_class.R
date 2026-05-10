@@ -5,6 +5,23 @@
 #' @importFrom methods setClass setOldClass
 NULL
 
+#' Virtual ExplicitLatent S4 marker
+#'
+#' Common parent for all latent objects that store data as an explicit
+#' \code{basis x loadings + offset} factorisation. Concrete subclasses
+#' (\code{LatentNeuroVec}, \code{LatentNeuroSurfaceVector},
+#' \code{BlockLatentNeuroVector}, \code{BilatLatentNeuroSurfaceVector})
+#' carry their domain-specific slots and inherit the
+#' \code{is_explicit_latent()} predicate from this class.
+#'
+#' Decoder-backed latents (\code{ImplicitLatent} and its subclass
+#' \code{TransportLatent}) do NOT inherit from \code{ExplicitLatent} —
+#' they are S3 and the predicate returns \code{FALSE} for them.
+#'
+#' @name ExplicitLatent-class
+#' @keywords internal
+setClass("ExplicitLatent", representation("VIRTUAL"))
+
 # Register S3 spec classes for S4 method dispatch
 setOldClass("spec_slepian")
 setOldClass("spec_heat_wavelet")
@@ -115,7 +132,7 @@ setClass("LatentNeuroVec",
     label = "character",
     meta = "list"
   ),
-  contains = c("NeuroVec", "AbstractSparseNeuroVec")
+  contains = c("NeuroVec", "AbstractSparseNeuroVec", "ExplicitLatent")
 )
 
 #' LatentNeuroSurfaceVector Class
@@ -145,7 +162,8 @@ setClass("LatentNeuroSurfaceVector",
     support = "integer",
     label = "character",
     meta = "list"
-  )
+  ),
+  contains = "ExplicitLatent"
 )
 
 #' BilatLatentNeuroSurfaceVector Class
@@ -165,7 +183,8 @@ setClass("BilatLatentNeuroSurfaceVector",
     right = "LatentNeuroSurfaceVector",
     label = "character",
     meta = "list"
-  )
+  ),
+  contains = "ExplicitLatent"
 )
 
 #' BlockLatentNeuroVector Class
@@ -184,7 +203,8 @@ setClass("BlockLatentNeuroVector",
     blocks = "list",
     label = "character",
     meta = "list"
-  )
+  ),
+  contains = "ExplicitLatent"
 )
 
 #' HierarchicalBasisTemplate Class

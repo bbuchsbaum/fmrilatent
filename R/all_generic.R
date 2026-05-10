@@ -205,6 +205,10 @@ setGeneric("latent_meta", function(x, ...) standardGeneric("latent_meta"))
 #' @export
 setGeneric("is_explicit_latent", function(x, ...) standardGeneric("is_explicit_latent"))
 
+#' @rdname is_explicit_latent
+#' @export
+setMethod("is_explicit_latent", "ExplicitLatent", function(x, ...) TRUE)
+
 #' Extract coefficient time series from a latent object
 #'
 #' @param x A latent object.

@@ -146,10 +146,6 @@ setMethod("latent_support", "BlockLatentNeuroVector",
           function(x, ...) lapply(x@blocks, latent_support))
 
 #' @export
-#' @rdname is_explicit_latent
-setMethod("is_explicit_latent", "BlockLatentNeuroVector", function(x, ...) TRUE)
-
-#' @export
 #' @rdname basis-methods
 setMethod("basis", "BlockLatentNeuroVector", function(x) basis(x@blocks[[1L]]))
 

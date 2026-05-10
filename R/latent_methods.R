@@ -448,10 +448,6 @@ setMethod("latent_support", "LatentNeuroVec",
           function(x, ...) mask(x))
 
 #' @export
-#' @rdname is_explicit_latent
-setMethod("is_explicit_latent", "LatentNeuroVec", function(x, ...) TRUE)
-
-#' @export
 #' @rdname reconstruct_matrix
 setMethod(
   f = "reconstruct_matrix",
