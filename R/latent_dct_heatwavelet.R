@@ -1,10 +1,19 @@
-# DCT temporal basis + heat-wavelet spatial dictionary constructor
+# Heat-wavelet template constructor (basis is a zero placeholder).
 
-#' Create a LatentNeuroVec with heat-wavelet spatial dictionary
+#' Create a template LatentNeuroVec with heat-wavelet spatial loadings
 #'
-#' Creates a template LatentNeuroVec with heat-wavelet spatial loadings.
-#' The basis matrix is initialized to zeros and should be populated with
-#' actual coefficients (e.g., via encoding fMRI data).
+#' Builds a \code{LatentNeuroVec} whose loadings are a heat-wavelet
+#' \code{LoadingsHandle} and whose basis is a placeholder zero matrix of
+#' \code{n_time x k} (where \code{k} is determined by the heat-wavelet
+#' loadings, not by the caller). The caller is expected to overwrite
+#' \code{lvec@basis} with real coefficients (e.g. fitted from data) before
+#' the object represents a valid factorization.
+#'
+#' Despite the name, no DCT basis is constructed: the "dct" reference
+#' predates the spec/encoder pipeline and is retained for API
+#' compatibility. For an encoded DCT-temporal + heat-wavelet-spatial
+#' pipeline see \code{spec_st(time = spec_time_dct(...), space = spec_space_heat(...))}
+#' passed to \code{\link{encode}}.
 #'
 #' @param n_time        Number of time points.
 #' @param k_time        Ignored (kept for backwards compatibility). The number

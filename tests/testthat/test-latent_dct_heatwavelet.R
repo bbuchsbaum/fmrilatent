@@ -381,8 +381,9 @@ test_that("manual DCT + heat wavelet roundtrip preserves data structure", {
 })
 
 # ---------------------------------------------------------------------------
-# Tests for latent_dct_heatwavelet function behavior (skipped due to bug)
-# These tests are ready to run once the bug is fixed
+# Tests for latent_dct_heatwavelet function behavior
+# Each test uses skip_if_not_installed("rgsp") because the heat-wavelet
+# basis depends on rgsp; tests are not skipped for any other reason.
 # ---------------------------------------------------------------------------
 
 test_that("latent_dct_heatwavelet returns LatentNeuroVec with correct structure", {
