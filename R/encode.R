@@ -877,6 +877,13 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
       q <- qr(B_t)
       B_t <- qr.Q(q)
     }
+  } else if (inherits(spec$time, "spec_time_dct")) {
+    k_time <- spec$time$k
+    if (k_time > n_time) {
+      stop("spec_time_dct$k (", k_time, ") cannot exceed n_time (", n_time, ").",
+           call. = FALSE)
+    }
+    B_t <- as.matrix(build_dct_basis(n_time = n_time, k = k_time, norm = spec$time$norm))
   } else {
     stop("Unsupported spec_st$time class: ", class(spec$time)[1])
   }

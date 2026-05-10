@@ -161,20 +161,33 @@ test_that("spec_st with Slepian time + Slepian space returns a valid ImplicitLat
   expect_true(all(is.finite(rec)))
 })
 
-test_that("spec_st rejects spec_time_dct with a clear error (documented limitation)", {
+test_that("spec_st now supports spec_time_dct (composes DCT time with Slepian space)", {
   skip_if_no_neuroim2()
+  testthat::skip_if_not_installed("rgsp")
 
-  mask <- array(TRUE, dim = c(2L, 2L, 2L))
-  X    <- matrix(rnorm(8 * 8), nrow = 8L, ncol = 8L)
+  set.seed(33)
+  mask  <- array(TRUE, dim = c(3L, 3L, 3L))
+  n_vox <- sum(mask)
+  X     <- matrix(rnorm(8 * n_vox), nrow = 8L, ncol = n_vox)
 
   spec <- spec_st(
     time  = spec_time_dct(k = 4L),
     space = spec_space_slepian(k = 3L, k_neighbors = 4L)
   )
 
+  out <- encode(X, spec, mask = mask)
+  expect_s3_class(out, "ImplicitLatent")
+  expect_identical(out$meta$time, "spec_time_dct")
+  expect_equal(nrow(out$coeff$B_t), 8L)
+  expect_equal(ncol(out$coeff$B_t), 4L)
+
+  # And k > n_time still fails fast.
   expect_error(
-    encode(X, spec, mask = mask),
-    "Unsupported spec_st\\$time class"
+    encode(X, spec_st(
+      time  = spec_time_dct(k = 20L),
+      space = spec_space_slepian(k = 3L, k_neighbors = 4L)
+    ), mask = mask),
+    "cannot exceed n_time"
   )
 })
 
