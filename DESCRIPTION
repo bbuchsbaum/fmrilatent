@@ -95,5 +95,4 @@ Collate:
     'surface_template.R'
     'wavelet_active.R'
     'zzz.R'
-    'zzz_haar_aliases.R'
 Config/Needs/website: albersdown
