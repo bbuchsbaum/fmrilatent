@@ -64,6 +64,7 @@ Collate:
     'dct_basis.R'
     'diffusion_wavelet.R'
     'diffusion_wavelet_handle.R'
+    'encode_spec.R'
     'encoder_registry.R'
     'fmrilatent-package.R'
     'graph_bridge.R'
