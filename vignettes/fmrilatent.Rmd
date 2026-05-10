@@ -1,34 +1,61 @@
 ---
 title: Getting started with fmrilatent
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{Getting started with fmrilatent}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
-css: albers.css
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2.0
+    css: albers.css
+    includes:
+      in_header: albers-header.html
 resource_files:
 - albers.css
 - albers.js
-includes:
-  in_header: |-
-    <script src="albers.js"></script>
-    <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('palette-red');});</script>
+- albers-header.html
 params:
   family: red
+  preset: homage
 
+vignette: |
+  %\VignetteIndexEntry{Getting started with fmrilatent} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}
-if (exists("params") && requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(family = params$family, preset = params$preset))
 knitr::opts_chunk$set(
   collapse = TRUE,
   comment = "#>"
 )
 ```
 
+```{r albers-classes, echo=FALSE, results='asis'}
+cat(sprintf(
+  paste0(
+    '<script>document.addEventListener("DOMContentLoaded",function(){',
+    'document.body.classList.remove("palette-red","palette-lapis","palette-ochre","palette-teal","palette-green","palette-violet","preset-homage","preset-study","preset-structural","preset-adobe","preset-midnight");',
+    'document.body.classList.add("palette-%s","preset-%s");',
+    '});</script>'
+  ),
+  params$family,
+  params$preset
+))
+```
+
 ```{r library}
 library(fmrilatent)
 ```
+
+This is the on-ramp. It shows the minimal `mask` → `encode()` →
+reconstruct loop and points to deeper vignettes for everything else.
+
+| If you want to … | Read |
+|---|---|
+| Pick a basis family for your data | `vignette("choosing-basis-family")` |
+| Drive the spec/encoder pipeline programmatically | `vignette("encode-factory")` |
+| Work with `LatentNeuroVec` objects in detail | `vignette("working-with-latentneurovec")` |
+| Share a spatial dictionary across subjects | `vignette("shared-spatial-dictionaries")` |
+| Use the transport / decoder-backed path | `vignette("transport-aware-encoding")` |
+| Compress with the BOLD-Zip codec | `vignette("shared-structure-boldzip")` |
+| Benchmark compression vs. fidelity | `vignette("compression-diagnostics")` |
 
 ## Why fmrilatent?
 
@@ -44,7 +71,7 @@ partially or fully — without ever materializing the full dense array.
 
 ## A first encoding
 
-Let's compress a small simulated fMRI dataset using a temporal DCT basis:
+Compress a small simulated fMRI dataset using a temporal DCT basis:
 
 ```{r first-encode}
 # Build a small brain mask (4 x 4 x 4, all voxels in-mask)
@@ -60,8 +87,8 @@ lat <- encode(X, spec_time_dct(k = 8), mask = mask_vol, materialize = "matrix")
 lat
 ```
 
-The `LatentNeuroVec` stores a 20 x 8 temporal basis and 64 x 8 spatial
-loadings — much smaller than the original 20 x 64 matrix. The savings grow
+The `LatentNeuroVec` stores a 20 × 8 temporal basis and 64 × 8 spatial
+loadings — much smaller than the original 20 × 64 matrix. The savings grow
 dramatically with real data: a 300-timepoint run over 100,000 voxels shrinks
 from 30 million values to a basis and loadings totaling a fraction of that.
 
@@ -78,7 +105,7 @@ dim(recon)
 sqrt(mean((recon - X)^2))
 ```
 
-With 8 out of 20 possible DCT components, the approximation is lossy. More
+With 8 of 20 possible DCT components, the approximation is lossy. More
 components capture more variance; fewer give heavier compression.
 
 You can also access data selectively:
@@ -96,13 +123,7 @@ dim(loadings(lat))   # spatial loadings: 64 x 8
 ## Choosing a basis
 
 Every basis family follows the same two-step pattern: build a spec, then
-call `encode()`. The choice of family depends on what structure you want to
-preserve.
-
-### Temporal families
-
-Temporal bases compress the time dimension. Each voxel's time course is
-projected onto a shared set of basis functions.
+call `encode()`. Common choices:
 
 ```{r slepian-temporal}
 # Slepian/DPSS: bandlimited to 0.08 Hz, TR = 2s
@@ -118,17 +139,11 @@ lat_bs <- encode(X, spec_time_bspline(k = 6, degree = 3),
 dim(basis(lat_bs))
 ```
 
-### Spatial and spatiotemporal families
-
-Spatial bases compress the voxel dimension by projecting onto spatial atoms
-(graph Slepians, heat wavelets, radial basis functions, or lifting wavelets).
-Spatiotemporal bases compress both dimensions into a small core tensor.
+Spatial bases compress the voxel dimension; spatiotemporal bases (`spec_st`)
+compress both. See `vignette("choosing-basis-family")` for guidance on
+picking among them.
 
 ```{r spatial, eval = FALSE}
-# Spatial Slepian: 3 graph-spectral components per cluster
-lat_sp <- encode(X, spec_space_slepian(k = 3, k_neighbors = 6),
-                 mask = mask_vol)
-
 # Separable spatiotemporal: B-spline (time) + HRBF (space)
 lat_st <- encode(X,
   spec_st(
@@ -144,187 +159,9 @@ partial <- predict(lat_st, time_idx = 1:5)
 dim(partial)
 ```
 
-Separable encoding returns an `ImplicitLatent` object whose `predict()`
-method accepts `time_idx` and `roi_mask` arguments, so you reconstruct only
-what you need.
-
-### Parcel-based encoding
-
-When your data comes with a parcellation (Schaefer, Glasser, or any atlas),
-you can build a shared spatial dictionary once and project each subject onto
-it. The default basis is Laplacian eigenvectors — smooth spatial functions
-computed from voxel adjacency within each parcel, with no training data
-needed.
-
-```{r parcel-shared, eval = FALSE}
-# Define parcels (e.g., from an atlas; here 4 equal parcels)
-parcel_ids <- rep(1:4, each = 16)
-atlas <- neuroim2::ClusteredNeuroVol(mask_vol, parcel_ids)
-
-# Build a template once — Laplacian eigenvectors, no data needed
-tmpl <- parcel_basis_template(atlas, basis_slepian(k = 5))
-
-# Project each subject — same loadings, different scores and offset
-lvec_s1 <- encode(X, spec_space_parcel(tmpl), mask = mask_vol)
-lvec_s2 <- encode(X, spec_space_parcel(tmpl), mask = mask_vol)  # different data in practice
-
-# Or use data-driven PCA loadings from training data
-tmpl_pca <- parcel_basis_template(atlas, basis_pca(k = 5), data = X)
-lvec <- encode(X, spec_space_parcel(tmpl_pca), mask = mask_vol)
-```
-
-For subject-specific (local) parcel PCA, use `spec_space_pca()` with a
-`ClusterReduction`:
-
-```{r parcel-local, eval = FALSE}
-red <- as_cluster_reduction(atlas)
-lvec <- encode(X, spec_space_pca(k = 5), mask = mask_vol, reduction = red)
-```
-
-## Transport-backed latent workflows
-
-The operator-aware transport path is the bridge between `fmrilatent` and
-downstream modeling packages. The package boundary is deliberate:
-
-- `fmrilatent` owns the shared basis asset, coefficient recovery, and
-  coefficient-to-map projection.
-- Geometry lives outside the package: `neurotransform` / `neurofunctor`
-  compile the subject-specific field operator.
-- First-level GLMs, contrasts, and inference stay downstream. In v1, they
-  should consume `coef_time(x, "analysis")`.
-
-The transport model keeps subject anatomy and shared latent structure
-separate:
-
-\[
-D_s = A_s \circ B
-\]
-
-Here `B` is the shared basis decoder on template anatomy and `A_s` is the
-subject-specific field operator that maps template fields onto the
-subject's native BOLD grid.
-
-### 1. Build one shared basis asset
-
-The basis asset is reusable across subjects. A parcel template or AWPT
-template both satisfy the same decoder contract.
-
-```{r transport-template, eval = FALSE}
-# Template mask and atlas on the shared anatomical domain
-template_mask <- mask_vol
-parcel_ids <- rep(1:4, each = 16)
-atlas <- neuroim2::ClusteredNeuroVol(template_mask, parcel_ids)
-
-# Shared template-space dictionary
-tmpl <- parcel_basis_template(atlas, basis_slepian(k = 5))
-
-# AWPT templates use the same fmrilatent-side contract
-# awpt_tmpl <- awpt_basis_template(atlas, basis_awpt_wavelet(scales = c(1, 2, 4)))
-```
-
-### 2. Compile the subject field operator elsewhere
-
-`fmrilatent` does not own warp compilation. It only consumes an operator with
-forward and adjoint methods plus target-domain provenance. In a real pipeline,
-this operator is compiled from transforms and sampling rules outside the
-package.
-
-```{r transport-operator, eval = FALSE}
-# Native mask for one subject's BOLD grid
-native_mask <- template_mask
-
-# Demo operator: identity transport when native and template grids coincide.
-# Real operators are compiled by neurofunctor / neurotransform.
-obs <- list(
-  n_source = sum(as.array(template_mask)),
-  n_target = sum(as.array(native_mask)),
-  source_domain_id = "template:demo",
-  target_domain_id = "subject01:bold",
-  forward = function(z) as.matrix(z),
-  adjoint_apply = function(y) as.matrix(y),
-  provenance = list(
-    operator = "identity-demo",
-    target_mask = native_mask
-  )
-)
-```
-
-### 3. Encode native BOLD into shared coefficients
-
-The encode step is matrix-free on the main transport/AWPT paths. `fmrilatent`
-stores the coefficient representation plus the shared basis asset and
-field operator metadata needed for later projection.
-
-```{r transport-encode, eval = FALSE}
-set.seed(1)
-X_native <- matrix(rnorm(120 * sum(as.array(native_mask))), nrow = 120)
-run_id <- c(rep(1L, 60), rep(2L, 60))
-
-lat_tx <- encode_transport(
-  X_native,
-  basis_asset = tmpl,
-  field_operator = obs,
-  temporal_lambda = 0.5,
-  spatial_lambda = 0.1,
-  run_id = run_id
-)
-
-# AWPT uses the same handoff surface with an AWPT basis asset
-# lat_awpt <- encode_awpt(X_native, basis_asset = awpt_tmpl,
-#                         field_operator = obs, run_id = run_id)
-```
-
-### 4. Hand off analysis coordinates to the modeling layer
-
-Downstream code should ordinarily consume analysis coordinates, not raw
-transport coordinates. In v1, analysis coordinates are Euclidean by contract.
-
-```{r transport-handoff, eval = FALSE}
-# Response matrix for downstream modeling packages
-Y_analysis <- coef_time(lat_tx, coordinates = "analysis")
-
-# Optional metadata for downstream checks / bookkeeping
-analysis_metric <- coef_metric(lat_tx, coordinates = "analysis")
-shared_basis <- basis_asset(lat_tx)
-native_decoder <- decoder(lat_tx, space = "native", coordinates = "analysis")
-template_decoder <- decoder(lat_tx, space = "template", coordinates = "analysis")
-```
-
-At this point `fmrilatent` stops. A downstream package such as `fmrireg`
-fits the temporal model in coefficient space and returns effect vectors and
-coefficient covariance matrices.
-
-### 5. Project coefficient results back to image space
-
-Once a downstream model returns coefficient-space effects, `fmrilatent`
-renders them back into native or template space on demand.
-
-```{r transport-project, eval = FALSE}
-# Returned by a downstream coefficient-space model
-gamma_hat <- rnorm(ncol(Y_analysis))
-Sigma_hat <- diag(length(gamma_hat)) * 0.05
-
-# Native-space beta and variance
-beta_native <- decode_coefficients(
-  lat_tx, gamma_hat, space = "native", coordinates = "analysis"
-)
-var_native <- decode_covariance(
-  lat_tx, Sigma_hat, space = "native", coordinates = "analysis", diag_only = TRUE
-)
-
-# Template-space beta and variance
-beta_template <- decode_coefficients(
-  lat_tx, gamma_hat, space = "template", coordinates = "analysis"
-)
-var_template <- decode_covariance(
-  lat_tx, Sigma_hat, space = "template", coordinates = "analysis", diag_only = TRUE
-)
-```
-
-This is the fmrilatent-side vertical slice: one shared basis asset, one
-subject field operator, matrix-free coefficient recovery, analysis-space
-handoff, and coefficient-to-map projection. The statistical model itself
-belongs elsewhere.
+`spec_st` returns an `ImplicitLatent` (decoder-backed) rather than an
+explicit `LatentNeuroVec`; its `predict()` method accepts `time_idx` and
+`roi_mask` arguments so you reconstruct only what you need.
 
 ### Quick reference
 
@@ -341,10 +178,35 @@ belongs elsewhere.
 | Wavelet active | space | Mask-aware CDF 5/3 lifting, very fast |
 | Separable | time + space | Compact core tensor, partial decoding |
 
+## Two latent representations
+
+fmrilatent ships two related but distinct object types:
+
+- **`LatentNeuroVec`** — explicit `basis × loadings + offset` factorization;
+  the basis and loadings are matrices (or lazy `BasisHandle` /
+  `LoadingsHandle` references). Most encoders return this.
+- **`ImplicitLatent`** — decoder-backed; stores coefficients plus a
+  `decoder()` closure. Returned by `spec_st`, `encode_transport`,
+  `encode_awpt`, and the haar-wavelet path. Use `predict()` to materialize.
+
+Both share `predict()`, `as.matrix()`, and meta-access generics. The
+operator-aware transport workflows live entirely on the implicit-latent
+side; see `vignette("transport-aware-encoding")` for the shared-asset +
+field-operator pipeline that bridges fmrilatent and downstream modeling.
+
 ## Next steps
 
-- `vignette("encode-factory")` walks through each encoding strategy in
-  detail, including benchmarking and materialization options.
+- `vignette("choosing-basis-family")` — compares basis choices on a small
+  worked example.
+- `vignette("encode-factory")` — programmatic spec construction and
+  encoder discovery via `register_encoder()` / `list_encoders()`.
+- `vignette("working-with-latentneurovec")` — object access, slicing, and
+  memory tradeoffs (handles vs. materialized matrices).
+- `vignette("shared-spatial-dictionaries")` — building a parcel- or
+  atlas-based template once and projecting many subjects onto it.
+- `vignette("transport-aware-encoding")` — the shared-basis + subject
+  field-operator pipeline that integrates with downstream modeling
+  packages.
 - `?LatentNeuroVec` documents the class and its methods (`basis()`,
   `loadings()`, `series()`, `as.matrix()`, `as.array()`).
 - `?benchmark_roundtrip` compares encoding families on your own data and
