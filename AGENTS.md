@@ -1,4 +1,4 @@
-<!-- Generated: 2026-02-10 | Updated: 2026-02-10 -->
+<!-- Generated: 2026-02-10 | Updated: 2026-05-28 -->
 
 # fmrilatent
 
@@ -115,36 +115,52 @@ Rscript -e "devtools::document()"      # Regenerate docs
 Rscript -e "devtools::check()"         # Full R CMD check
 ```
 
-## Issue Tracking with Beads
+## Issue Tracking with Mote
 
-This project uses **beads** (`bd`) for git-backed issue tracking.
+This project uses **mote** for local issue tracking, path reservations, notes,
+handoffs, and agent coordination. **Do not use beads (`bd`) in this repo.**
+Mote issue IDs may still have `bd-...` prefixes; use those IDs only with
+`mote` commands.
 
 ### Essential Commands
 
 | Command | Purpose |
 |---------|---------|
-| `bd ready` | List tasks without blockers (your next work) |
-| `bd create --title="..." --type=task --priority=2` | Create task (0=critical, 4=backlog) |
-| `bd show <id>` | View issue details and history |
-| `bd update <id> --status=in_progress` | Mark task as in progress |
-| `bd close <id> --reason="text"` | Close completed task |
-| `bd dep add <child> <parent>` | Add dependency |
-| `bd sync` | Force sync to git |
+| `mote doctor` | Validate the local mote store |
+| `mote actor show` | Confirm the current actor identity |
+| `mote ready` | List tasks without blockers |
+| `mote new "Title" -p 1 --tag <area>` | Create a task |
+| `mote show <id>` | View issue details and history |
+| `mote preflight --issue <id> --paths <path> ...` | Check reservation conflicts before editing |
+| `mote begin <id> --paths <path> ... --note "starting"` | Claim work and reserve paths |
+| `mote note <id> --kind progress "..."` | Record progress, decisions, or blockers |
+| `mote done <id> --note "finished"` | Mark completed work done |
+| `mote handoff <id> --to <actor> --note "..." --release` | Hand off unfinished work |
+| `mote release <id>` | Release a claim when stopping without completion |
+| `mote board` | Inspect active work and reservations |
+| `mote who-has <path>` | Find the actor reserving a path |
+| `mote inbox` | Check direct coordination messages |
 
 ### Critical Rules for Agents
 
-1. **NEVER use `bd edit`** — it opens an interactive editor. Use flag-based updates.
-2. **Run `bd sync` after changes** to ensure immediate git sync.
+1. **Do not run `bd` commands**; `mote` is the tracker for this project.
+2. **Reserve before editing** with `mote preflight` and `mote begin`.
+3. If `mote preflight` or `mote begin` reports a conflict, inspect with
+   `mote who-has <path>` and coordinate before editing.
+4. Record meaningful state changes with `mote note`.
+5. Never hand-edit `.mote/ops/*.json`; publish tracker changes through `mote`.
 
-## Multi-Agent Coordination (MCP Agent Mail)
+## Multi-Agent Coordination
 
-This project uses **MCP Agent Mail** for coordination between multiple AI agents.
+Use **mote** as the primary coordination channel for local agents. Reservations
+are advisory but must be respected.
 
-**Project key:** `/Users/bbuchsbaum/code/fmrilatent`
-
-- **Reserve before editing**: `file_reservation_paths` with `exclusive: true`
-- **Release when done**: `release_file_reservations`
-- **Check inbox**: `fetch_inbox` for coordination messages
+- **Reserve before editing**: `mote preflight --issue <id> --paths <path> ...`
+  followed by `mote begin <id> --paths <path> ...`
+- **Release when done or stopping**: `mote done <id>`, `mote handoff <id> ... --release`,
+  or `mote release <id>`
+- **Check inbox**: `mote inbox`
+- **Send direct messages**: `mote msg send --to <actor> --issue <id> --kind request "..."`
 
 ## Commit & PR Guidelines
 
@@ -156,11 +172,11 @@ This project uses **MCP Agent Mail** for coordination between multiple AI agents
 
 When ending a work session, complete ALL steps:
 
-1. File issues for remaining work (`bd create`)
+1. File issues for remaining work (`mote new "Title" -p 1 --tag <area>`)
 2. Run quality gates (`devtools::test()`, `devtools::check()`)
-3. Update issue status (`bd close`, `bd update`)
-4. Release file reservations
-5. Sync and push: `bd sync && git push`
+3. Update issue status (`mote done`, `mote note`, or `mote handoff`)
+4. Release claims/reservations (`mote release` or handoff with `--release`)
+5. Push committed code with `git push`
 6. Provide handoff context for next session
 
 **Work is NOT complete until `git push` succeeds.**
