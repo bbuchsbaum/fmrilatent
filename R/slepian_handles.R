@@ -25,7 +25,7 @@ slepian_temporal_handle <- function(n_time,
     NW <- n_time * bandwidth * tr
     k <- floor(2 * NW) - 1L
   }
-  k <- as.integer(k)
+  k <- max(1L, min(as.integer(k), n_time))
   if (is.null(id)) {
     id <- paste0(
       "slepian-t-",

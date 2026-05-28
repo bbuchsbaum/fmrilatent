@@ -190,6 +190,15 @@ test_that("decode_coefficients wrap='none' returns raw numeric vector", {
   expect_length(vals, td$V)
 })
 
+test_that("decode_coefficients wrap='none' preserves one-column matrix shape", {
+  td <- .portable_linear_map_td()
+  gamma <- matrix(rnorm(td$k), ncol = 1L)
+  vals <- decode_coefficients(td$lat, gamma, space = "native", wrap = "none")
+
+  expect_true(is.matrix(vals))
+  expect_identical(dim(vals), c(as.integer(td$V), 1L))
+})
+
 test_that("decode_coefficients wrap='auto' returns a NeuroVol for volumetric targets", {
   td <- .portable_linear_map_td()
   gamma <- seq_len(td$k) / td$k
@@ -243,6 +252,16 @@ test_that("decode_coefficients wrap='auto' handles multi-column gamma", {
   raw <- decode_coefficients(td$lat, gamma, space = "native", wrap = "none")
   expect_true(is.matrix(raw))
   expect_identical(dim(raw), c(as.integer(td$V), 2L))
+})
+
+test_that("decode_coefficients wrap='auto' preserves one-column matrix orientation", {
+  td <- .portable_linear_map_td()
+  gamma <- matrix(seq_len(td$k) / td$k, ncol = 1L)
+  wrapped <- decode_coefficients(td$lat, gamma, space = "native", wrap = "auto")
+  raw <- decode_coefficients(td$lat, gamma, space = "native", wrap = "none")
+
+  expect_true(methods::is(wrapped, "NeuroVec"))
+  expect_identical(dim(raw), c(as.integer(td$V), 1L))
 })
 
 # -----------------------------------------------------------------------
@@ -407,4 +426,3 @@ test_that("transport_latent stores raw producer and canonical forms separately",
   # The legacy observation_operator alias points at the same raw producer.
   expect_identical(td$lat$observation_operator, td$lat$field_operator)
 })
-

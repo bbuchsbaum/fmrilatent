@@ -383,6 +383,8 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
       eig <- RSpectra::eigs(L, k = k_use, which = "SM")
       vecs <- Matrix::Matrix(eig$vectors, sparse = TRUE)
     }
+    k_eff <- ncol(vecs)
+    if (k_eff < 1L) next
 
     trip <- Matrix::summary(as(vecs, "TsparseMatrix"))
     if (nrow(trip) > 0) {
@@ -394,15 +396,15 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
     # atom metadata
     parent_id <- if (length(parent_map) > 0) parent_map[as.character(cid)] else NA_integer_
     atom_rows[[length(atom_rows) + 1L]] <- data.frame(
-      col_id = seq.int(current_col + 1L, current_col + k_use),
+      col_id = seq.int(current_col + 1L, current_col + k_eff),
       level = level,
       parcel_id = cid,
       parent_id = parent_id,
-      mode = seq_len(k_use),
+      mode = seq_len(k_eff),
       label = paste0("L", level, ":P", cid)
     )
 
-    current_col <- current_col + ncol(vecs)
+    current_col <- current_col + k_eff
   }
 
   if (current_col == col_offset) {

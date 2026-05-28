@@ -9,6 +9,29 @@ test_that("hrbf basis small mask is identity-like", {
   expect_true(all(Matrix::diag(B %*% Matrix::t(B)) > 0.9))
 })
 
+test_that("hrbf tiny-ROI fallback handles sparse non-contiguous masks", {
+  mask_arr <- array(FALSE, dim = c(5, 5, 5))
+  mask_arr[cbind(
+    c(1L, 3L, 5L, 2L, 4L),
+    c(1L, 4L, 2L, 5L, 3L),
+    c(1L, 2L, 5L, 4L, 3L)
+  )] <- TRUE
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(5, 5, 5)))
+  params <- list(
+    sigma0 = 1,
+    levels = 0L,
+    radius_factor = 2.5,
+    kernel_type = "gaussian",
+    seed = 19L
+  )
+
+  B <- hrbf_generate_basis(params, mask)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(dim(B), c(sum(mask_arr), sum(mask_arr)))
+  expect_true(all(Matrix::diag(B %*% Matrix::t(B)) > 0.9))
+})
+
 test_that("hrbf_latent roundtrip on tiny mask", {
   set.seed(42)
   mask_arr <- array(TRUE, dim = c(3, 3, 3))

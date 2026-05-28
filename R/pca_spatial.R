@@ -26,10 +26,12 @@ NULL
 
   if (backend == "svds") {
     out <- RSpectra::svds(X, k = k, nu = 0, nv = k)
-    list(v = out$v, d = out$d)
+    k_eff <- ncol(out$v)
+    list(v = out$v[, seq_len(k_eff), drop = FALSE], d = out$d[seq_len(k_eff)])
   } else {
     out <- svd(X, nu = 0, nv = k)
-    list(v = out$v, d = out$d)
+    k_eff <- ncol(out$v)
+    list(v = out$v[, seq_len(k_eff), drop = FALSE], d = out$d[seq_len(k_eff)])
   }
 }
 
@@ -129,13 +131,15 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
         v <- .pca_flip_sign(sv$v)
         d <- sv$d
       }
+      k_eff <- ncol(v)
+      if (k_eff < 1L) next
 
-      i_list[[length(i_list) + 1L]] <- rep.int(vox_idx, times = k_use)
-      j_list[[length(j_list) + 1L]] <- rep.int(col_offset + seq_len(k_use), times = rep.int(n_loc, k_use))
-      x_list[[length(x_list) + 1L]] <- as.vector(v[, seq_len(k_use), drop = FALSE])
-      d_list[[length(d_list) + 1L]] <- as.numeric(d[seq_len(k_use)])
+      i_list[[length(i_list) + 1L]] <- rep.int(vox_idx, times = k_eff)
+      j_list[[length(j_list) + 1L]] <- rep.int(col_offset + seq_len(k_eff), times = rep.int(n_loc, k_eff))
+      x_list[[length(x_list) + 1L]] <- as.vector(v[, seq_len(k_eff), drop = FALSE])
+      d_list[[length(d_list) + 1L]] <- as.numeric(d[seq_len(k_eff)])
 
-      col_offset <- col_offset + k_use
+      col_offset <- col_offset + k_eff
     }
 
     if (col_offset == 0L) {

@@ -112,6 +112,8 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
             if (!requireNamespace("neurosurf", quietly = TRUE)) {
               stop("wrap_decoded() requires the 'neurosurf' package.", call. = FALSE)
             }
+            methods::getClass("BilatNeuroSurfaceVector",
+                              where = asNamespace("neurosurf"))
             if (is.atomic(values) && is.null(dim(values))) {
               n_left <- length(latent_support(x@left))
               n_right <- length(latent_support(x@right))
@@ -122,13 +124,19 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
               left_obj <- wrap_decoded(x@left, values[seq_len(n_left)], space = "native")
               right_obj <- wrap_decoded(x@right, values[seq.int(n_left + 1L, n_left + n_right)],
                                         space = "native")
-              return(new("BilatNeuroSurfaceVector",
-                         left = neurosurf::NeuroSurfaceVector(
-                           neurosurf::geometry(left_obj), neuroim2::indices(left_obj), Matrix::Matrix(left_obj@data, ncol = 1)
-                         ),
-                         right = neurosurf::NeuroSurfaceVector(
-                           neurosurf::geometry(right_obj), neuroim2::indices(right_obj), Matrix::Matrix(right_obj@data, ncol = 1)
-                         )))
+              return(methods::new(
+                "BilatNeuroSurfaceVector",
+                left = neurosurf::NeuroSurfaceVector(
+                  neurosurf::geometry(left_obj),
+                  neuroim2::indices(left_obj),
+                  Matrix::Matrix(left_obj@data, ncol = 1)
+                ),
+                right = neurosurf::NeuroSurfaceVector(
+                  neurosurf::geometry(right_obj),
+                  neuroim2::indices(right_obj),
+                  Matrix::Matrix(right_obj@data, ncol = 1)
+                )
+              ))
             }
             values <- as.matrix(values)
             n_left <- length(latent_support(x@left))
@@ -139,9 +147,11 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
             }
             left_vals <- values[, seq_len(n_left), drop = FALSE]
             right_vals <- values[, seq.int(n_left + 1L, n_left + n_right), drop = FALSE]
-            new("BilatNeuroSurfaceVector",
-                left = wrap_decoded(x@left, left_vals, space = "native"),
-                right = wrap_decoded(x@right, right_vals, space = "native"))
+            methods::new(
+              "BilatNeuroSurfaceVector",
+              left = wrap_decoded(x@left, left_vals, space = "native"),
+              right = wrap_decoded(x@right, right_vals, space = "native")
+            )
           })
 
 #' @export

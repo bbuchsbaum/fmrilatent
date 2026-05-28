@@ -1,6 +1,7 @@
 #include <Rcpp.h>
 #include <vector>
 #include <algorithm>
+#include <limits>
 
 using namespace Rcpp;
 
@@ -102,11 +103,19 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
                                     IntegerVector dims,
                                     int levels,
                                     bool forward) {
+  if (dims.size() != 3) stop("dims must have length 3");
+  if (coords.ncol() != 3) stop("coords must have exactly 3 columns");
   int nx = dims[0], ny = dims[1], nz = dims[2];
-  int total_vol = nx * ny * nz;
+  if (nx <= 0 || ny <= 0 || nz <= 0) stop("dims must contain positive values");
+  size_t total_vol_size = static_cast<size_t>(nx) *
+                          static_cast<size_t>(ny) *
+                          static_cast<size_t>(nz);
+  if (total_vol_size > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    stop("dims product is too large for active_pencil_wavelet");
+  }
+  int total_vol = static_cast<int>(total_vol_size);
   int n_vox = coords.nrow();
   if (data_voxels.size() != n_vox) stop("Data size mismatch");
-  if (coords.ncol() != 3) stop("coords must have exactly 3 columns");
   for (int i = 0; i < n_vox; ++i) {
     int x = coords(i, 0) - 1;
     int y = coords(i, 1) - 1;
@@ -125,16 +134,13 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
   }
 
   std::vector<double> buffer = as<std::vector<double>>(data_voxels);
-  int max_dim = std::max({nx, ny, nz});
-  std::vector<double> pencil(max_dim);
-
   auto process_axis = [&](int axis) {
     int a = (axis == 0) ? nx : (axis == 1 ? ny : nz);
     int b = (axis == 0) ? ny : (axis == 1 ? nz : nx);
     int c = (axis == 0) ? nz : (axis == 1 ? nx : ny);
     for (int c1 = 0; c1 < c; ++c1) {
       for (int b1 = 0; b1 < b; ++b1) {
-        bool active = false;
+        std::vector<int> active_idx;
         for (int a1 = 0; a1 < a; ++a1) {
           int idx;
           if (axis == 0)
@@ -143,36 +149,17 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
             idx = grid[flat_idx(c1, a1, b1, nx, ny)];
           else
             idx = grid[flat_idx(b1, c1, a1, nx, ny)];
-          if (idx != -1) { active = true; break; }
+          if (idx != -1) active_idx.push_back(idx);
         }
-        if (!active) continue;
+        if (active_idx.empty()) continue;
 
-        for (int a1 = 0; a1 < a; ++a1) {
-          int idx;
-          if (axis == 0)
-            idx = grid[flat_idx(a1, b1, c1, nx, ny)];
-          else if (axis == 1)
-            idx = grid[flat_idx(c1, a1, b1, nx, ny)];
-          else
-            idx = grid[flat_idx(b1, c1, a1, nx, ny)];
-          pencil[a1] = (idx != -1) ? buffer[idx] : 0.0;
+        std::vector<double> sub(active_idx.size());
+        for (size_t k = 0; k < active_idx.size(); ++k) {
+          sub[k] = buffer[active_idx[k]];
         }
-
-        // operate only on first a entries
-        std::vector<double> sub(a);
-        for (int k = 0; k < a; ++k) sub[k] = pencil[k];
         lift_1d_cdf53(sub, levels, forward);
-        for (int k = 0; k < a; ++k) pencil[k] = sub[k];
-
-        for (int a1 = 0; a1 < a; ++a1) {
-          int idx;
-          if (axis == 0)
-            idx = grid[flat_idx(a1, b1, c1, nx, ny)];
-          else if (axis == 1)
-            idx = grid[flat_idx(c1, a1, b1, nx, ny)];
-          else
-            idx = grid[flat_idx(b1, c1, a1, nx, ny)];
-          if (idx != -1) buffer[idx] = pencil[a1];
+        for (size_t k = 0; k < active_idx.size(); ++k) {
+          buffer[active_idx[k]] = sub[k];
         }
       }
     }

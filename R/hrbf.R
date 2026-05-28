@@ -794,6 +794,7 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
   if (!is.null(seed) && n_total_vox <= 64L) {
     centres_all <- mask_coords_world
     small_sigma <- max(1e-3, sigma0 / 100)
+    atom_col_indices <- seq_len(n_total_vox)
     use_rcpp <- use_hrbf_rcpp() && exists("hrbf_atoms_rcpp")
     if (use_rcpp) {
       B_try <- tryCatch(
@@ -817,13 +818,13 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
     triplet_j_list <- vector("list", n_total_vox)
     triplet_x_list <- vector("list", n_total_vox)
     for (kk in seq_len(n_total_vox)) {
-      atom <- generate_hrbf_atom(mask_world_coords, mask_linear_indices,
+      atom <- generate_hrbf_atom(mask_world_coords, atom_col_indices,
                                  centres_all[kk, ], small_sigma,
                                  0L, 0L, params)
       nz <- which(abs(atom$values) > 1e-12)
       if (length(nz) > 0) {
         triplet_i_list[[kk]] <- rep.int(kk, length(nz))
-        triplet_j_list[[kk]] <- mask_linear_indices[nz]
+        triplet_j_list[[kk]] <- atom$indices[nz]
         triplet_x_list[[kk]] <- atom$values[nz]
       } else {
         triplet_i_list[[kk]] <- integer()

@@ -153,6 +153,14 @@ test_that("slepian_temporal_handle works with small bandwidth", {
   expect_true(handle@dim[2] >= 1)  # At least one component
 })
 
+test_that("slepian_temporal_handle clamps tiny bandwidth to one component", {
+  handle <- slepian_temporal_handle(n_time = 100L, tr = 2.0, bandwidth = 0.001)
+
+  expect_s4_class(handle, "BasisHandle")
+  expect_equal(handle@dim, c(100L, 1L))
+  expect_equal(handle@spec$k, 1L)
+})
+
 test_that("slepian_temporal_handle works with large bandwidth", {
   handle <- slepian_temporal_handle(n_time = 50L, tr = 2.0, bandwidth = 0.2)
 

@@ -8,6 +8,30 @@ test_that("wavelet_active_latent roundtrip with time + space levels", {
   expect_equal(reco, X, tolerance = 1e-8)
 })
 
+test_that("wavelet_active_latent roundtrips sparse non-contiguous masks", {
+  mask_arr <- array(FALSE, dim = c(3, 3, 3))
+  mask_arr[cbind(
+    c(1L, 2L, 3L, 1L, 3L),
+    c(1L, 2L, 3L, 3L, 1L),
+    c(1L, 2L, 1L, 2L, 3L)
+  )] <- TRUE
+  mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(3, 3, 3)))
+  n_time <- 4L
+  set.seed(731)
+  X <- matrix(rnorm(n_time * sum(mask_arr)), nrow = n_time)
+
+  lv <- wavelet_active_latent(
+    X,
+    mask_vol,
+    levels_space = 1L,
+    levels_time = 0L,
+    threshold = 0
+  )
+  reco <- predict(lv)
+
+  expect_equal(reco, X, tolerance = 1e-8)
+})
+
 test_that("wavelet_active_latent partial decode respects time_idx and ROI", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(2, 2, 1)))

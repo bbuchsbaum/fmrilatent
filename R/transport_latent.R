@@ -717,9 +717,10 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
                                               wrap = c("none", "auto"), ...) {
   wrap <- match.arg(wrap)
   map <- decoder(x, space = space, coordinates = coordinates)
+  input_was_vector <- is.atomic(gamma) && is.null(dim(gamma))
   gamma <- .as_coeff_matrix(gamma, map$n_source, context = "gamma")
   result <- map$forward(gamma)
-  values <- if (ncol(result) == 1L) as.vector(result) else result
+  values <- if (input_was_vector && ncol(result) == 1L) as.vector(result) else result
   if (wrap == "none") {
     return(values)
   }
