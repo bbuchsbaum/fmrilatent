@@ -123,8 +123,75 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
   }
 })
 
+# Access-order tracker for LRU eviction. Kept separate from the storage
+# environments so `.latent_get_registry_env()` keeps returning a plain
+# environment (relied on by the registry stats/list/clear helpers). Each per-type
+# vector lists ids least-recently-used first, most-recently-used last.
+.fmrilatent_cache_order <- local({
+  basis_order    <- character(0)
+  loadings_order <- character(0)
+
+  touch <- function(type, id) {
+    if (type == "basis") {
+      basis_order    <<- c(setdiff(basis_order, id), id)
+    } else {
+      loadings_order <<- c(setdiff(loadings_order, id), id)
+    }
+    invisible(NULL)
+  }
+  drop <- function(type, ids) {
+    if (type == "basis") {
+      basis_order    <<- setdiff(basis_order, ids)
+    } else {
+      loadings_order <<- setdiff(loadings_order, ids)
+    }
+    invisible(NULL)
+  }
+  reset <- function(type = c("all", "basis", "loadings")) {
+    type <- match.arg(type)
+    if (type %in% c("all", "basis"))    basis_order    <<- character(0)
+    if (type %in% c("all", "loadings")) loadings_order <<- character(0)
+    invisible(NULL)
+  }
+  peek <- function(type) if (type == "basis") basis_order else loadings_order
+
+  list(touch = touch, drop = drop, reset = reset, peek = peek)
+})
+
 .latent_registry_enabled <- function() {
   isTRUE(getOption("fmrilatent.registry.enabled", TRUE))
+}
+
+# Per-type maximum number of cached matrices before LRU eviction kicks in.
+# Controlled by option `fmrilatent.registry.max_entries` (default 256). Set the
+# option to `Inf` (or a non-positive value) for an unbounded cache.
+.fmrilatent_registry_default_max <- 256L
+
+.latent_registry_max_entries <- function() {
+  val <- getOption("fmrilatent.registry.max_entries", .fmrilatent_registry_default_max)
+  if (length(val) != 1L || is.na(val)) return(.fmrilatent_registry_default_max)
+  if (is.infinite(val) || val <= 0) return(Inf)
+  as.integer(val)
+}
+
+# Evict least-recently-used entries from a registry env until it fits the cap.
+# Reconciles the order tracker against the env's actual contents first so the
+# two never drift (any untracked id is treated as least-recently-used).
+.latent_enforce_cap <- function(type) {
+  cap <- .latent_registry_max_entries()
+  if (is.infinite(cap)) return(invisible(NULL))
+  env     <- .latent_get_registry_env(type)
+  present <- ls(env, all.names = TRUE)
+  order   <- .fmrilatent_cache_order$peek(type)
+  order   <- order[order %in% present]
+  order   <- c(setdiff(present, order), order)
+  n_over  <- length(order) - cap
+  if (n_over > 0) {
+    evict <- order[seq_len(n_over)]
+    rm(list = evict, envir = env)
+    .fmrilatent_cache_order$drop(type, evict)
+  }
+  invisible(NULL)
 }
 
 .latent_get_registry_env <- function(type = c("basis", "loadings")) {
@@ -133,7 +200,7 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
 }
 
 .latent_register_matrix <- function(id, value, type = c("basis", "loadings"),
-                                    overwrite = FALSE) {
+                                    overwrite = FALSE, fingerprint = NULL) {
   stopifnot(is.character(id), length(id) == 1L)
   type <- match.arg(type)
   if (!.latent_registry_enabled()) {
@@ -141,15 +208,40 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
   }
   env  <- .latent_get_registry_env(type)
   if (!overwrite && exists(id, env, inherits = FALSE)) {
+    existing <- get(id, envir = env, inherits = FALSE)
+    existing_fingerprint <- attr(existing, "fmrilatent.handle_fingerprint", exact = TRUE)
+    if (!is.null(fingerprint)) {
+      # A fingerprinted registration must be provably the same entry. Refuse to
+      # silently reuse an entry whose fingerprint differs OR is absent (an older
+      # entry registered before fingerprinting cannot be verified to match).
+      if (is.null(existing_fingerprint)) {
+        stop("Object with id '", id, "' is already registered in ", type,
+             " registry without a fingerprint; cannot confirm it matches the ",
+             "requested handle. Clear the registry or register with overwrite = TRUE.",
+             call. = FALSE)
+      }
+      if (!identical(fingerprint, existing_fingerprint)) {
+        stop("Object with id '", id, "' is already registered in ", type,
+             " registry with a different fingerprint.", call. = FALSE)
+      }
+      # Same id, same fingerprint: reuse the cached entry and mark it as fresh.
+      .fmrilatent_cache_order$touch(type, id)
+      return(invisible(FALSE))
+    }
     warning("Object with id '", id, "' already registered in ", type,
             " registry; set overwrite = TRUE to replace.", call. = FALSE)
     return(invisible(FALSE))
   }
+  if (!is.null(fingerprint)) {
+    attr(value, "fmrilatent.handle_fingerprint") <- fingerprint
+  }
   assign(id, value, envir = env)
+  .fmrilatent_cache_order$touch(type, id)
+  .latent_enforce_cap(type)
   invisible(TRUE)
 }
 
-.latent_get_matrix <- function(id, type = c("basis", "loadings")) {
+.latent_get_matrix <- function(id, type = c("basis", "loadings"), fingerprint = NULL) {
   stopifnot(is.character(id), length(id) == 1L)
   type <- match.arg(type)
   if (!.latent_registry_enabled()) {
@@ -157,7 +249,16 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
   }
   env  <- .latent_get_registry_env(type)
   if (exists(id, env, inherits = FALSE)) {
-    get(id, envir = env, inherits = FALSE)
+    value <- get(id, envir = env, inherits = FALSE)
+    existing_fingerprint <- attr(value, "fmrilatent.handle_fingerprint", exact = TRUE)
+    if (!is.null(fingerprint) && !is.null(existing_fingerprint) &&
+        !identical(fingerprint, existing_fingerprint)) {
+      stop("Registry entry '", id, "' in ", type,
+           " registry does not match the requested handle fingerprint.",
+           call. = FALSE)
+    }
+    .fmrilatent_cache_order$touch(type, id)
+    value
   } else {
     NULL
   }
@@ -165,6 +266,22 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
 
 .latent_has_matrix <- function(id, type = c("basis", "loadings")) {
   !is.null(.latent_get_matrix(id, type = type))
+}
+
+.latent_handle_fingerprint <- function(handle) {
+  digest::digest(
+    list(
+      class = class(handle),
+      kind = handle@kind,
+      dim = as.integer(handle@dim),
+      spec = handle@spec
+    ),
+    algo = "xxhash64"
+  )
+}
+
+.latent_handle_id <- function(prefix, payload) {
+  paste0(prefix, "-", digest::digest(payload, algo = "xxhash64"))
 }
 
 # --- Public registry lifecycle API ---
@@ -193,12 +310,14 @@ fmrilatent_registry_clear <- function(type = c("all", "basis", "loadings")) {
     env <- .latent_get_registry_env("basis")
     removed <- removed + length(ls(env))
     rm(list = ls(env), envir = env)
+    .fmrilatent_cache_order$reset("basis")
   }
 
   if (type %in% c("all", "loadings")) {
     env <- .latent_get_registry_env("loadings")
     removed <- removed + length(ls(env))
     rm(list = ls(env), envir = env)
+    .fmrilatent_cache_order$reset("loadings")
   }
 
   invisible(removed)
@@ -296,6 +415,14 @@ fmrilatent_registry_stats <- function(type = c("all", "basis", "loadings")) {
 #'
 #' Set \code{fmrilatent_registry_disable()} to turn off caching (useful for
 #' deterministic benchmarking or to avoid retaining large matrices).
+#'
+#' @section Capacity:
+#' The cache is bounded. Each registry (basis and loadings) holds at most
+#' \code{getOption("fmrilatent.registry.max_entries", 256)} materialized
+#' matrices; once full, the least-recently-used entry is evicted on the next
+#' registration. Both registration and retrieval count as a use. Set the option
+#' to \code{Inf} (or a non-positive value) to restore an unbounded cache, or call
+#' \code{\link{fmrilatent_registry_clear}()} to drop everything immediately.
 #'
 #' @return Invisibly, \code{TRUE}.
 #' @export

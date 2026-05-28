@@ -49,7 +49,7 @@ neuroim2::NeuroVec
 |-----------|-------|-------------|
 | **Core Class** | `all_class.R`, `latent_neurovector.R`, `latent_methods.R`, `latent_indexing.R` | `LatentNeuroVec` S4 class, constructor, `[`, `[[`, `series`, `show` |
 | **Generics** | `all_generic.R` | S4 generics: `basis`, `loadings`, `offset`, `map`, `mask`, `lift`, `encode` |
-| **Handle System** | `latent_handles.R`, `latent_neurovec_materialize.R` | `BasisHandle`/`LoadingsHandle` for lazy materialization with registry cache |
+| **Handle System** | `latent_handles.R`, `latent_neurovec_materialize.R` | `BasisHandle`/`LoadingsHandle` for lazy materialization with an LRU-bounded registry cache (`fmrilatent.registry.max_entries`, default 256) and fingerprint-checked reuse |
 | **Encode Pipeline** | `encode.R` | Spec constructors (`spec_time_*`, `spec_space_*`, `spec_st`) and `encode()` dispatch |
 | **Reduction** | `reduction.R` | `GraphReduction`, `ClusterReduction`, `CoarsenedReduction` + `lift()` |
 | **Haar Wavelets** | `haar_wavelet.R`, `zzz_haar_aliases.R` | Morton-ordered Haar lifting transform (R + Rcpp) |

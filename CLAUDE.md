@@ -32,7 +32,7 @@ Slots accept either dense matrices or **handles** (`BasisHandle`/`LoadingsHandle
 
 ### Handle System & Registry
 
-- `R/latent_handles.R` — `BasisHandle`/`LoadingsHandle` S4 classes and the internal materialization cache (`.fmrilatent_cache_env`)
+- `R/latent_handles.R` — `BasisHandle`/`LoadingsHandle` S4 classes and the internal materialization cache (`.fmrilatent_cache_env`). The cache is LRU-bounded per type (`options(fmrilatent.registry.max_entries = 256)`; set `Inf` for unbounded) and rejects same-id reuse under a different/absent fingerprint.
 - `R/latent_neurovec_materialize.R` — `basis_mat()`/`loadings_mat()` internal generics that dispatch on Matrix vs Handle types for operator-aware access
 - Handles use `kind` (e.g., "dct", "lifted", "explicit") and `spec` (parameter list) to reconstruct their matrix when needed
 
@@ -89,11 +89,16 @@ The `Collate` field in DESCRIPTION controls load order. Key dependencies: `laten
 
 ## Issue Tracking
 
-This project uses **beads** (`bd`) for git-backed issue tracking. See AGENTS.md for workflow.
+This project uses **mote** for local, daemonless issue tracking, path
+reservations, and agent coordination. **Do not use beads (`bd`) in this repo** —
+it was migrated to mote. Issue IDs may still carry `bd-...` prefixes; use those
+IDs only with `mote` commands. See AGENTS.md for the full workflow.
 
 ```bash
-bd ready                               # Find next task
-bd create "title" -p 1                 # Create issue (P0-P4)
-bd close <id> --reason "text"          # Close completed task
-bd sync                                # Sync to git
+mote ready                             # Find next task (open + no blockers)
+mote new "title" -p 1 --tag <area>     # Create issue (priority 0-4)
+mote begin <id> --paths <path> ...     # Claim + reserve paths before editing
+mote note <id> --kind progress "..."   # Record progress/decisions
+mote done <id> --note "text"           # Close completed task
+mote board                             # Overview of active work/reservations
 ```
