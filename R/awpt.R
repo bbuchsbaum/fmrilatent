@@ -22,8 +22,10 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
                                custom_weights = NULL) {
   penalty_rule <- match.arg(penalty_rule)
   if (penalty_rule == "custom" && (is.null(custom_weights) || length(custom_weights) != length(scales))) {
-    stop("custom_weights must be supplied with one value per scale when penalty_rule = 'custom'.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "custom_weights must be supplied with one value per scale when penalty_rule = 'custom'.",
+      class = "fmrilatent_error_invalid_awpt_spec"
+    )
   }
   structure(
     list(
@@ -44,7 +46,10 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
   } else if (inherits(parcellation, "ClusteredNeuroVol")) {
     as_cluster_reduction(parcellation)
   } else {
-    stop("parcellation must be a ClusterReduction or ClusteredNeuroVol.", call. = FALSE)
+    .encoder_cli_abort(
+      "parcellation must be a ClusterReduction or ClusteredNeuroVol.",
+      class = "fmrilatent_error_invalid_reduction"
+    )
   }
 }
 
@@ -88,7 +93,10 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
 .awpt_as_square_matrix <- function(x, n, context) {
   x <- as.matrix(x)
   if (!identical(dim(x), c(n, n))) {
-    stop(context, " must have dimensions ", n, "x", n, ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " must have dimensions ", n, "x", n, "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   x
 }
@@ -96,7 +104,10 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
 .awpt_graph_laplacian <- function(conductance, n_field) {
   W <- .awpt_as_square_matrix(conductance, n_field, context = "conductance")
   if (!isTRUE(all.equal(W, t(W), tolerance = 1e-8))) {
-    stop("conductance must be symmetric.", call. = FALSE)
+    .encoder_cli_abort(
+      "conductance must be symmetric.",
+      class = "fmrilatent_error_invalid_conductance"
+    )
   }
   diag(rowSums(W)) - W
 }
@@ -104,11 +115,17 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
 .awpt_enforce_symmetric <- function(mat, tol = 1e-8, context = "matrix") {
   mat <- as.matrix(mat)
   if (!identical(dim(mat)[1], dim(mat)[2])) {
-    stop(context, " must be square.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " must be square."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   sym <- 0.5 * (mat + t(mat))
   if (!isTRUE(all.equal(sym, t(sym), tolerance = tol))) {
-    stop(context, " could not be symmetrized stably.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " could not be symmetrized stably."),
+      class = "fmrilatent_error_not_symmetric"
+    )
   }
   sym
 }
@@ -138,7 +155,10 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
   )
   atoms <- .awpt_atom_metadata(reduction, basis_spec$scales, scale_weights)
   if (nrow(atoms) != n_coeff) {
-    stop("AWPT atom metadata does not align with the basis rank.", call. = FALSE)
+    .encoder_cli_abort(
+      "AWPT atom metadata does not align with the basis rank.",
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   list(
     roughness = Matrix::Diagonal(x = atoms$roughness_weight),
@@ -204,25 +224,36 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
 
 .awpt_require_neurosurf <- function(context = "surface AWPT") {
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
-    stop(context, " requires the 'neurosurf' package.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " requires the 'neurosurf' package."),
+      class = "fmrilatent_error_missing_dependency"
+    )
   }
 }
 
 .awpt_normalize_surface_support <- function(support, geometry, context = "surface support") {
   if (is.null(support)) {
-    stop(context, " is required.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " is required."),
+      class = "fmrilatent_error_missing_argument"
+    )
   }
   if (is.logical(support)) {
     support <- which(as.logical(support))
   }
   support <- as.integer(support)
   if (length(support) == 0L || anyNA(support) || any(support < 1L)) {
-    stop(context, " must contain positive vertex indices.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " must contain positive vertex indices."),
+      class = "fmrilatent_error_invalid_support"
+    )
   }
   n_nodes <- length(neurosurf::nodes(geometry))
   if (any(support > n_nodes)) {
-    stop(context, " contains indices beyond the geometry node count ", n_nodes, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " contains indices beyond the geometry node count ", n_nodes, "."),
+      class = "fmrilatent_error_invalid_support"
+    )
   }
   support
 }
@@ -282,7 +313,10 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
     }
     centers <- as.integer(centers)
     if (anyNA(centers) || any(centers < 1L) || any(centers > length(support))) {
-      stop("centers must index the support vertices.", call. = FALSE)
+      .encoder_cli_abort(
+        "centers must index the support vertices.",
+        class = "fmrilatent_error_invalid_centers"
+      )
     }
   }
 
@@ -316,7 +350,10 @@ awpt_mean_conductance <- function(conductances,
                                   tol = 1e-8) {
   method <- match.arg(method)
   if (!is.list(conductances) || length(conductances) == 0L) {
-    stop("conductances must be a non-empty list of matrices.", call. = FALSE)
+    .encoder_cli_abort(
+      "conductances must be a non-empty list of matrices.",
+      class = "fmrilatent_error_invalid_conductance"
+    )
   }
   mats <- lapply(seq_along(conductances), function(idx) {
     .awpt_enforce_symmetric(conductances[[idx]], tol = tol,
@@ -324,12 +361,18 @@ awpt_mean_conductance <- function(conductances,
   })
   dims <- lapply(mats, dim)
   if (!all(vapply(dims, identical, logical(1), dims[[1L]]))) {
-    stop("All conductance matrices must have identical dimensions.", call. = FALSE)
+    .encoder_cli_abort(
+      "All conductance matrices must have identical dimensions.",
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   n <- nrow(mats[[1L]])
   if (!is.numeric(shrinkage) || length(shrinkage) != 1L || !is.finite(shrinkage) ||
       shrinkage < 0 || shrinkage > 1) {
-    stop("shrinkage must be a single number in [0, 1].", call. = FALSE)
+    .encoder_cli_abort(
+      "shrinkage must be a single number in [0, 1].",
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
   mean_mat <- switch(
     method,
@@ -442,8 +485,10 @@ awpt_basis_template <- function(parcellation,
     logical(1)
   ))
   if (supplied_sources > 1L) {
-    stop("Supply at most one of anatomical_operator, conductance, or coefficient_roughness.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "Supply at most one of anatomical_operator, conductance, or coefficient_roughness.",
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
   reduction <- .coerce_awpt_reduction(parcellation)
   if (is.null(loadings)) {
@@ -462,8 +507,10 @@ awpt_basis_template <- function(parcellation,
     loadings <- Matrix::Matrix(as.matrix(loadings), sparse = FALSE)
     n_vox <- sum(as.array(reduction@mask))
     if (nrow(loadings) != n_vox) {
-      stop("Explicit loadings must have ", n_vox, " rows to match the reduction mask.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        paste0("Explicit loadings must have ", n_vox, " rows to match the reduction mask."),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
   }
 
@@ -556,8 +603,10 @@ awpt_surface_basis_template <- function(geometry,
                                         label = "surface_awpt_wavelet") {
   .awpt_require_neurosurf("awpt_surface_basis_template")
   if (!(methods::is(geometry, "SurfaceGeometry") || methods::is(geometry, "SurfaceSet"))) {
-    stop("geometry must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "geometry must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet.",
+      class = "fmrilatent_error_invalid_geometry"
+    )
   }
   supplied_sources <- sum(!vapply(
     list(anatomical_operator, conductance, coefficient_roughness),
@@ -565,8 +614,10 @@ awpt_surface_basis_template <- function(geometry,
     logical(1)
   ))
   if (supplied_sources > 1L) {
-    stop("Supply at most one of anatomical_operator, conductance, or coefficient_roughness.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "Supply at most one of anatomical_operator, conductance, or coefficient_roughness.",
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
 
   n_nodes <- length(neurosurf::nodes(geometry))
@@ -593,8 +644,11 @@ awpt_surface_basis_template <- function(geometry,
   } else {
     loadings <- Matrix::Matrix(as.matrix(loadings), sparse = FALSE)
     if (nrow(loadings) != length(support)) {
-      stop("Explicit loadings must have ", length(support),
-           " rows to match the surface support cardinality.", call. = FALSE)
+      .encoder_cli_abort(
+        paste0("Explicit loadings must have ", length(support),
+               " rows to match the surface support cardinality."),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     field_operator_default <- NULL
     atoms <- data.frame(
@@ -630,9 +684,12 @@ awpt_surface_basis_template <- function(geometry,
       )
       expected_len <- length(sw) * length(if (!is.null(centers)) centers else seq_along(support))
       if (ncol(loadings) != expected_len && ncol(loadings) %% length(sw) != 0L) {
-        stop("Scale-weight vector length (", length(sw),
-             ") does not evenly divide the number of loadings columns (",
-             ncol(loadings), ").", call. = FALSE)
+        .encoder_cli_abort(
+          paste0("Scale-weight vector length (", length(sw),
+                 ") does not evenly divide the number of loadings columns (",
+                 ncol(loadings), ")."),
+          class = "fmrilatent_error_dimension_mismatch"
+        )
       }
       Diagonal(x = rep_len(sw, ncol(loadings)))
     }
@@ -704,8 +761,10 @@ setMethod("template_loadings", "SurfaceAWPTBasisTemplate", function(x, ...) x$lo
 #' @rdname template_mask
 setMethod("template_mask", "SurfaceAWPTBasisTemplate",
           function(x, ...) {
-            stop("SurfaceAWPTBasisTemplate has no volumetric mask; use template_support().",
-                 call. = FALSE)
+            .encoder_cli_abort(
+              "SurfaceAWPTBasisTemplate has no volumetric mask; use template_support().",
+              class = "fmrilatent_error_unsupported_operation"
+            )
           })
 
 #' @export
@@ -789,8 +848,11 @@ setMethod("template_project", signature(x = "SurfaceAWPTBasisTemplate", data = "
           function(x, data, ...) {
             X <- as.matrix(data)
             if (ncol(X) != length(template_support(x))) {
-              stop("data must have ", length(template_support(x)),
-                   " columns to match the surface support cardinality.", call. = FALSE)
+              .encoder_cli_abort(
+                paste0("data must have ", length(template_support(x)),
+                       " columns to match the surface support cardinality."),
+                class = "fmrilatent_error_dimension_mismatch"
+              )
             }
             .template_projection_payload(
               data = X,
