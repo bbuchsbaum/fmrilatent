@@ -19,7 +19,9 @@ encode_spec.spec_space_slepian <- function(x, spec, mask, reduction, materialize
       label = "slepian-spatial"
     )
   }
-  basis <- as.matrix(x) %*% as.matrix(loadings_mat(loadings))
+  # Multiply in Matrix space so a sparse loadings dictionary is never densified;
+  # only the small time x k product is realized as a dense matrix.
+  basis <- as.matrix(x %*% loadings_mat(loadings))
   spc <- .space_with_time_from_mask(mask, nrow(x), "encode_spec.spec_space_slepian")
   meta <- list(
     family = "space_slepian",
@@ -47,7 +49,9 @@ encode_spec.spec_space_heat <- function(x, spec, mask, reduction, materialize, l
       label = "heat-wavelet"
     )
   }
-  basis <- as.matrix(x) %*% as.matrix(loadings_mat(loadings))
+  # Multiply in Matrix space so a sparse loadings dictionary is never densified;
+  # only the small time x k product is realized as a dense matrix.
+  basis <- as.matrix(x %*% loadings_mat(loadings))
   spc <- .space_with_time_from_mask(mask, nrow(x), "encode_spec.spec_space_heat")
   meta <- list(
     family = "space_heat",
