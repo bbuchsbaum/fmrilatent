@@ -171,7 +171,7 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   res <- tryCatch(.normalize_linear_map(x, context = context),
                   error = function(e) e)
   if (inherits(res, "error")) {
-    if (isTRUE(error)) stop(conditionMessage(res), call. = FALSE)
+    if (isTRUE(error)) stop(res)  # re-raise to preserve the classed inner condition
     return(invisible(FALSE))
   }
   invisible(res)
@@ -194,8 +194,10 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   }
   mat <- as.matrix(mat)
   if (!identical(dim(mat), c(k, k))) {
-    stop("analysis transform matrix must have dimensions ", k, "x", k, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("analysis transform matrix must have dimensions ", k, "x", k, "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   crossprod(mat)
 }
@@ -214,7 +216,10 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     data <- as.matrix(data)
   }
   if (nrow(data) != expected_n) {
-    stop(context, " expects ", expected_n, " rows but got ", nrow(data), ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " expects ", expected_n, " rows but got ", nrow(data), "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   list(data = data, input_was_vector = input_was_vector)
 }
@@ -262,14 +267,17 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
 .require_euclidean_adjoint <- function(map, context = "adjoint convention") {
   conv <- map$adjoint_convention %||% "euclidean_discrete"
   if (!identical(conv, "euclidean_discrete")) {
-    stop(context, " requires an operator with adjoint_convention = ",
-         "'euclidean_discrete' (the Euclidean discrete transpose). ",
-         "Got '", conv, "'. The covariance pushforward math depends on ",
-         "this convention; supply an operator that normalizes its ",
-         "adjoint to the Euclidean inner product, or override ",
-         "adjoint_convention explicitly if the current value is ",
-         "incorrectly set.",
-         call. = FALSE)
+    conv_lit <- gsub("}", "}}", gsub("{", "{{", as.character(conv), fixed = TRUE), fixed = TRUE)
+    .encoder_cli_abort(
+      paste0(context, " requires an operator with adjoint_convention = ",
+             "'euclidean_discrete' (the Euclidean discrete transpose). ",
+             "Got '", conv_lit, "'. The covariance pushforward math depends on ",
+             "this convention; supply an operator that normalizes its ",
+             "adjoint to the Euclidean inner product, or override ",
+             "adjoint_convention explicitly if the current value is ",
+             "incorrectly set."),
+      class = "fmrilatent_error_invalid_adjoint_convention"
+    )
   }
   invisible(map)
 }
@@ -278,15 +286,20 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   for (nm in c("n_source", "n_target")) {
     value <- map[[nm]]
     if (length(value) != 1L || !is.finite(value) || value <= 0) {
-      stop(context, " must define a positive scalar ", nm, ".", call. = FALSE)
+      .encoder_cli_abort(
+        paste0(context, " must define a positive scalar ", nm, "."),
+        class = "fmrilatent_error_invalid_argument"
+      )
     }
     map[[nm]] <- as.integer(value)
   }
   if (!is.function(map$forward)) {
-    stop(context, " must define forward().", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " must define forward()."),
+                       class = "fmrilatent_error_invalid_argument")
   }
   if (!is.function(map$adjoint_apply)) {
-    stop(context, " must define adjoint_apply().", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " must define adjoint_apply()."),
+                       class = "fmrilatent_error_invalid_argument")
   }
   map
 }
@@ -325,8 +338,11 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     present <- vapply(required, function(nm) !is.null(map[[nm]]), logical(1))
     missing <- required[!present]
     if (any(present) && length(missing) > 0L) {
-      stop(context, " is missing required fields: ", paste(missing, collapse = ", "), ".",
-           call. = FALSE)
+      # `missing` is a subset of the fixed `required` field names: no glue hazard.
+      .encoder_cli_abort(
+        paste0(context, " is missing required fields: ", paste(missing, collapse = ", "), "."),
+        class = "fmrilatent_error_invalid_argument"
+      )
     }
     if (length(missing) == 0L) {
       return(.validate_linear_map_contract(
@@ -338,7 +354,8 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     }
   }
 
-  stop("Unsupported ", context, " contract.", call. = FALSE)
+  .encoder_cli_abort(paste0("Unsupported ", context, " contract."),
+                     class = "fmrilatent_error_unsupported_operation")
 }
 
 .materialize_linear_map <- function(map) {
@@ -355,8 +372,9 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   first <- .normalize_linear_map(first, context = paste(context, "first map"))
   second <- .normalize_linear_map(second, context = paste(context, "second map"))
   if (first$n_target != second$n_source) {
-    stop(context, " dimensions do not align: ", first$n_target, " vs ", second$n_source, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " dimensions do not align: ", first$n_target, " vs ", second$n_source, "."),
+      class = "fmrilatent_error_dimension_mismatch")
   }
 
   # Domain-id compatibility: when both sides carry a non-empty id and the
@@ -371,11 +389,13 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     first_out <- first$target_domain_id %||% ""
     second_in <- second$source_domain_id %||% ""
     if (nzchar(first_out) && nzchar(second_in) && !identical(first_out, second_in)) {
-      warning(context, " domain ids do not match: first$target_domain_id = '",
-              first_out, "' but second$source_domain_id = '", second_in,
-              "'. Silencing this warning requires either matching ids ",
-              "or setting one side to \"\" (unspecified).",
-              call. = FALSE)
+      .encoder_cli_warn(
+        paste0(context, " domain ids do not match: first$target_domain_id = '",
+               first_out, "' but second$source_domain_id = '", second_in,
+               "'. Silencing this warning requires either matching ids ",
+               "or setting one side to \"\" (unspecified)."),
+        class = "fmrilatent_warning_domain_mismatch"
+      )
     }
   }
 
@@ -388,12 +408,14 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   if (!identical(first_conv, second_conv) &&
       !identical(first_conv, "euclidean_discrete") &&
       !identical(second_conv, "euclidean_discrete")) {
-    warning(context, " has incompatible adjoint_conventions: '", first_conv,
-            "' and '", second_conv,
-            "'. decode_covariance() will reject this map at use time. ",
-            "Re-normalize one side to euclidean_discrete before composing ",
-            "if you intend to push a covariance through it.",
-            call. = FALSE)
+    .encoder_cli_warn(
+      paste0(context, " has incompatible adjoint_conventions: '", first_conv,
+             "' and '", second_conv,
+             "'. decode_covariance() will reject this map at use time. ",
+             "Re-normalize one side to euclidean_discrete before composing ",
+             "if you intend to push a covariance through it."),
+      class = "fmrilatent_warning_adjoint_convention"
+    )
   }
   composed_conv <- if (identical(first_conv, "euclidean_discrete")) {
     second_conv
@@ -435,11 +457,13 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
 .resolve_field_operator <- function(field_operator = NULL, observation_operator = NULL,
                                     context = "subject field operator") {
   if (is.null(field_operator) && is.null(observation_operator)) {
-    stop(context, " is required.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " is required."),
+                       class = "fmrilatent_error_missing_argument")
   }
   if (!is.null(field_operator) && !is.null(observation_operator) &&
       !isTRUE(identical(field_operator, observation_operator))) {
-    stop("Provide only one of field_operator or observation_operator.", call. = FALSE)
+    .encoder_cli_abort("Provide only one of field_operator or observation_operator.",
+                       class = "fmrilatent_error_invalid_argument")
   }
   field_operator %||% observation_operator
 }
@@ -480,7 +504,8 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   if (is.atomic(support) && is.null(dim(support))) {
     return(length(support))
   }
-  stop(context, " cardinality is not defined for this support object.", call. = FALSE)
+  .encoder_cli_abort(paste0(context, " cardinality is not defined for this support object."),
+                     class = "fmrilatent_error_invalid_support")
 }
 
 .subset_reconstruction_by_support <- function(rec_mat, support, roi_mask = NULL,
@@ -503,7 +528,8 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     } else if (.is_surface_domain(domain) && length(roi_mask) == length(neurosurf::nodes(domain))) {
       roi_mask[support_idx]
     } else {
-      stop(context, " logical roi_mask has incompatible length.", call. = FALSE)
+      .encoder_cli_abort(paste0(context, " logical roi_mask has incompatible length."),
+                         class = "fmrilatent_error_dimension_mismatch")
     }
   } else {
     roi_idx <- as.integer(roi_mask)
@@ -549,10 +575,12 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
       domain_out <- neuroim2::space(out$mask)
       source <- "operator_provenance"
     } else {
-      stop(location,
-           " requires an explicit target mask or field_operator$provenance$target_mask. ",
-           "Alternatively, provide an explicit target support/domain.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        paste0(location,
+               " requires an explicit target mask or field_operator$provenance$target_mask. ",
+               "Alternatively, provide an explicit target support/domain."),
+        class = "fmrilatent_error_missing_argument"
+      )
     }
   }
 
@@ -564,15 +592,12 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     "target support cardinality "
   }
   if (target_card != op_map$n_target) {
-    stop(
-      location,
-      " ",
-      support_label,
-      target_card,
-      " does not match field operator target dimension ",
-      op_map$n_target,
-      ".",
-      call. = FALSE
+    .encoder_cli_abort(
+      paste0(
+        location, " ", support_label, target_card,
+        " does not match field operator target dimension ", op_map$n_target, "."
+      ),
+      class = "fmrilatent_error_dimension_mismatch"
     )
   }
 
@@ -597,7 +622,10 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   }
 
   if (!is.function(transform$to_analysis) || !is.function(transform$to_raw)) {
-    stop("analysis transform must provide to_analysis() and to_raw() callables.", call. = FALSE)
+    .encoder_cli_abort(
+      "analysis transform must provide to_analysis() and to_raw() callables.",
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
 
   .build_normalized_linear_map(
@@ -630,7 +658,10 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     x <- as.matrix(x)
   }
   if (nrow(x) != k) {
-    stop(context, " must have ", k, " rows but has ", nrow(x), ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " must have ", k, " rows but has ", nrow(x), "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   x
 }
@@ -638,7 +669,10 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
 .as_square_matrix <- function(x, k, context = "covariance matrix") {
   x <- as.matrix(x)
   if (!identical(dim(x), c(k, k))) {
-    stop(context, " must have dimensions ", k, "x", k, ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " must have dimensions ", k, "x", k, "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   x
 }
@@ -670,8 +704,11 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     prep <- .transport_vector_or_matrix_input(block, map$n_source, "covariance diagonal pushforward")
     decoded <- as.matrix(map$forward(prep$data))
     if (nrow(decoded) != map$n_target) {
-      stop("covariance diagonal pushforward returned ", nrow(decoded),
-           " rows; expected ", map$n_target, ".", call. = FALSE)
+      .encoder_cli_abort(
+        paste0("covariance diagonal pushforward returned ", nrow(decoded),
+               " rows; expected ", map$n_target, "."),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     out <- out + rowSums(decoded^2)
   }
@@ -789,7 +826,8 @@ transport_latent <- function(coeff_raw, basis_asset, field_operator = NULL, obse
   coeff_raw <- as.matrix(coeff_raw)
   coeff_analysis <- as.matrix(coeff_analysis %||% coeff_raw)
   if (!identical(dim(coeff_raw), dim(coeff_analysis))) {
-    stop("coeff_raw and coeff_analysis must have identical dimensions.", call. = FALSE)
+    .encoder_cli_abort("coeff_raw and coeff_analysis must have identical dimensions.",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
 
   field_operator <- .resolve_field_operator(
@@ -801,9 +839,11 @@ transport_latent <- function(coeff_raw, basis_asset, field_operator = NULL, obse
   basis_map <- .normalize_basis_decoder_map(basis_asset)
   obs_map <- .normalize_field_operator_map(field_operator)
   if (basis_map$n_target != obs_map$n_source) {
-    stop("basis decoder output dimension ", basis_map$n_target,
-         " does not match field operator source dimension ", obs_map$n_source, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("basis decoder output dimension ", basis_map$n_target,
+             " does not match field operator source dimension ", obs_map$n_source, "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
 
   analysis_transform <- analysis_transform %||% .transport_identity_transform(ncol(coeff_analysis))
@@ -819,12 +859,15 @@ transport_latent <- function(coeff_raw, basis_asset, field_operator = NULL, obse
   support_use <- support %||% mask
   target_card <- .support_cardinality(support_use, domain = domain, context = "transport_latent")
   if (native_decoder$n_target != target_card) {
-    stop("Target support cardinality ", target_card,
-         " does not match decoder target dimension ", native_decoder$n_target, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("Target support cardinality ", target_card,
+             " does not match decoder target dimension ", native_decoder$n_target, "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   if (length(offset) > 0L && length(offset) != native_decoder$n_target) {
-    stop("offset length must match decoder target dimension.", call. = FALSE)
+    .encoder_cli_abort("offset length must match decoder target dimension.",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
 
   decoder_fn <- function(time_idx = NULL, roi_mask = NULL, levels_keep = NULL, ...) {
@@ -897,8 +940,10 @@ is_transport_latent <- function(x) .is_transport_latent(x)
 setMethod("coef_time", "ImplicitLatent",
           function(x, coordinates = c("analysis", "raw"), ...) {
             if (!.is_transport_latent(x)) {
-              stop("coef_time() is only defined for transport-backed ImplicitLatent objects.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "coef_time() is only defined for transport-backed ImplicitLatent objects.",
+                class = "fmrilatent_error_unsupported_operation"
+              )
             }
             coordinates <- match.arg(coordinates)
             x$coeff[[coordinates]]
@@ -942,8 +987,10 @@ setMethod("decoder", "ImplicitLatent",
           function(x, space = c("native", "template"),
                    coordinates = c("analysis", "raw"), ...) {
             if (!.is_transport_latent(x)) {
-              stop("decoder() is only defined for transport-backed ImplicitLatent objects.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "decoder() is only defined for transport-backed ImplicitLatent objects.",
+                class = "fmrilatent_error_unsupported_operation"
+              )
             }
             space <- match.arg(space)
             coordinates <- match.arg(coordinates)
@@ -963,8 +1010,10 @@ setMethod("decode_coefficients", "ImplicitLatent",
                    coordinates = c("analysis", "raw"),
                    wrap = c("none", "auto"), ...) {
             if (!.is_transport_latent(x)) {
-              stop("decode_coefficients() is only defined for transport-backed ImplicitLatent objects.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "decode_coefficients() is only defined for transport-backed ImplicitLatent objects.",
+                class = "fmrilatent_error_unsupported_operation"
+              )
             }
             .decode_coefficients_via_decoder(x, gamma, space = space,
                                              coordinates = coordinates,
@@ -977,8 +1026,10 @@ setMethod("decode_covariance", "ImplicitLatent",
           function(x, Sigma, space = c("native", "template"),
                    coordinates = c("analysis", "raw"), diag_only = TRUE, ...) {
             if (!.is_transport_latent(x)) {
-              stop("decode_covariance() is only defined for transport-backed ImplicitLatent objects.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "decode_covariance() is only defined for transport-backed ImplicitLatent objects.",
+                class = "fmrilatent_error_unsupported_operation"
+              )
             }
             .decode_covariance_via_decoder(x, Sigma, space = space, coordinates = coordinates,
                                            diag_only = diag_only, ...)
@@ -1032,8 +1083,10 @@ setMethod("decoder", "LatentNeuroSurfaceVector",
             space <- match.arg(space)
             coordinates <- match.arg(coordinates)
             if (space == "template") {
-              warning("LatentNeuroSurfaceVector has no separate template domain; returning the stored surface decoder.",
-                      call. = FALSE)
+              .encoder_cli_warn(
+                "LatentNeuroSurfaceVector has no separate template domain; returning the stored surface decoder.",
+                class = "fmrilatent_warning_no_template_domain"
+              )
             }
             .transform_linear_map_coordinates(
               .latent_loadings_map(x),
@@ -1087,8 +1140,10 @@ setMethod("decoder", "LatentNeuroVec",
             space <- match.arg(space)
             coordinates <- match.arg(coordinates)
             if (space == "template") {
-              warning("LatentNeuroVec has no separate template domain; returning the stored spatial decoder.",
-                      call. = FALSE)
+              .encoder_cli_warn(
+                "LatentNeuroVec has no separate template domain; returning the stored spatial decoder.",
+                class = "fmrilatent_warning_no_template_domain"
+              )
             }
             .transform_linear_map_coordinates(
               .latent_loadings_map(x),
