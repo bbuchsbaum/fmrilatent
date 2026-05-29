@@ -2,21 +2,24 @@
 
 .shared_check_list <- function(x, name) {
   if (!is.list(x)) {
-    stop(name, " must be a list.", call. = FALSE)
+    .encoder_cli_abort(paste0(name, " must be a list."),
+                       class = "fmrilatent_error_invalid_type")
   }
   x
 }
 
 .shared_check_id <- function(id, name = "id") {
   if (length(id) != 1L || is.na(id) || !nzchar(id)) {
-    stop(name, " must be a non-empty character scalar.", call. = FALSE)
+    .encoder_cli_abort(paste0(name, " must be a non-empty character scalar."),
+                       class = "fmrilatent_error_invalid_id")
   }
   as.character(id)
 }
 
 .shared_check_positive_integer <- function(x, name) {
   if (length(x) != 1L || is.na(x) || !is.finite(x) || x != as.integer(x) || x < 1L) {
-    stop(name, " must be a positive integer scalar.", call. = FALSE)
+    .encoder_cli_abort(paste0(name, " must be a positive integer scalar."),
+                       class = "fmrilatent_error_invalid_argument")
   }
   as.integer(x)
 }
@@ -29,11 +32,13 @@
     x <- materialize_group_delta_loadings(x)
   }
   if (!is.matrix(x) && !inherits(x, "Matrix")) {
-    stop(name, " must be a matrix-like object.", call. = FALSE)
+    .encoder_cli_abort(paste0(name, " must be a matrix-like object."),
+                       class = "fmrilatent_error_invalid_type")
   }
   x <- Matrix::Matrix(x, sparse = inherits(x, "sparseMatrix"))
   if (any(!is.finite(as.matrix(x)))) {
-    stop(name, " must contain only finite values.", call. = FALSE)
+    .encoder_cli_abort(paste0(name, " must contain only finite values."),
+                       class = "fmrilatent_error_invalid_value")
   }
   x
 }
@@ -50,7 +55,7 @@
       } else if (is.logical(support)) {
         sum(support)
       } else {
-        stop(conditionMessage(e), call. = FALSE)
+        stop(e)  # re-raise to preserve the classed inner condition
       }
     }
   )
@@ -88,7 +93,8 @@ shared_reference <- function(value = NULL, id = NULL, kind = "object",
                              materialize = NULL, meta = list(),
                              register = TRUE) {
   if (!is.null(materialize) && !is.function(materialize)) {
-    stop("materialize must be NULL or a function.", call. = FALSE)
+    .encoder_cli_abort("materialize must be NULL or a function.",
+                       class = "fmrilatent_error_invalid_argument")
   }
   meta <- .shared_check_list(meta, "meta")
   kind <- .shared_check_id(kind, "kind")
@@ -140,8 +146,10 @@ resolve_shared_reference <- function(x, cache = TRUE) {
     return(get(x$id, envir = env, inherits = FALSE))
   }
   if (!is.function(x$materialize)) {
-    stop("Shared reference '", x$id, "' has no cached value or materialize() function.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("Shared reference '", x$id, "' has no cached value or materialize() function."),
+      class = "fmrilatent_error_unresolved_reference"
+    )
   }
   value <- x$materialize()
   if (isTRUE(cache)) {
@@ -157,7 +165,8 @@ resolve_shared_reference <- function(x, cache = TRUE) {
 #' @export
 shared_reference_info <- function(x) {
   if (!inherits(x, "SharedReference")) {
-    stop("x must be a SharedReference.", call. = FALSE)
+    .encoder_cli_abort("x must be a SharedReference.",
+                       class = "fmrilatent_error_invalid_type")
   }
   list(
     id = x$id,
@@ -203,13 +212,17 @@ shared_component_contract <- function(loadings, id = NULL, family = "shared_comp
   family <- .shared_check_id(family, "family")
   domain_id <- as.character(domain_id %||% "")
   if (length(domain_id) != 1L || is.na(domain_id)) {
-    stop("domain_id must be a character scalar.", call. = FALSE)
+    .encoder_cli_abort("domain_id must be a character scalar.",
+                       class = "fmrilatent_error_invalid_argument")
   }
   meta <- .shared_check_list(meta, "meta")
   support_n <- .shared_support_cardinality(support, context = "shared component support")
   if (!is.null(support_n) && support_n != nrow(L)) {
-    stop("support cardinality ", support_n, " does not match loadings rows ",
-         nrow(L), ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0("support cardinality ", support_n, " does not match loadings rows ",
+             nrow(L), "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
   measure_use <- .template_measure_resolve(
     measure,
@@ -256,23 +269,26 @@ shared_component_contract <- function(loadings, id = NULL, family = "shared_comp
 validate_shared_component_contract <- function(x, error = TRUE) {
   res <- tryCatch({
     if (!inherits(x, "SharedComponentContract")) {
-      stop("x must be a SharedComponentContract.", call. = FALSE)
+      .encoder_cli_abort("x must be a SharedComponentContract.",
+                         class = "fmrilatent_error_invalid_type")
     }
     .shared_check_id(x$id)
     if (!identical(as.integer(x$contract_version), 1L)) {
-      stop("unsupported shared component contract_version.", call. = FALSE)
+      .encoder_cli_abort("unsupported shared component contract_version.",
+                         class = "fmrilatent_error_unsupported_version")
     }
     .shared_check_positive_integer(x$n_features, "n_features")
     .shared_check_positive_integer(x$n_components, "n_components")
     .shared_check_id(x$family, "family")
     support_n <- .shared_support_cardinality(x$support, context = "shared component support")
     if (!is.null(support_n) && support_n != x$n_features) {
-      stop("support cardinality does not match n_features.", call. = FALSE)
+      .encoder_cli_abort("support cardinality does not match n_features.",
+                         class = "fmrilatent_error_dimension_mismatch")
     }
     x
   }, error = function(e) e)
   if (inherits(res, "error")) {
-    if (isTRUE(error)) stop(conditionMessage(res), call. = FALSE)
+    if (isTRUE(error)) stop(res)  # re-raise to preserve the classed inner condition
     return(invisible(FALSE))
   }
   invisible(res)
@@ -295,8 +311,10 @@ validate_template_protocol <- function(template, error = TRUE) {
     rank <- template_rank(template)
     rank <- .shared_check_positive_integer(rank, "template_rank(template)")
     if (rank != ncol(L)) {
-      stop("template_rank(template) does not match ncol(template_loadings(template)).",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "template_rank(template) does not match ncol(template_loadings(template)).",
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     domain <- template_domain(template)
     support <- template_support(template)
@@ -306,8 +324,10 @@ validate_template_protocol <- function(template, error = TRUE) {
       context = "template_support(template)"
     )
     if (!is.null(support_n) && support_n != nrow(L)) {
-      stop("template_support(template) cardinality does not match loadings rows.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "template_support(template) cardinality does not match loadings rows.",
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     measure <- template_measure(template)
     .template_measure_resolve(
@@ -320,14 +340,18 @@ validate_template_protocol <- function(template, error = TRUE) {
     if (!is.null(roughness)) {
       roughness <- as.matrix(roughness)
       if (!identical(dim(roughness), c(rank, rank))) {
-        stop("template_roughness(template) must have dimensions rank x rank.",
-             call. = FALSE)
+        .encoder_cli_abort(
+          "template_roughness(template) must have dimensions rank x rank.",
+          class = "fmrilatent_error_dimension_mismatch"
+        )
       }
     }
     decoder_map <- .normalize_linear_map(basis_decoder(template), context = "basis decoder")
     if (decoder_map$n_source != rank || decoder_map$n_target != nrow(L)) {
-      stop("basis_decoder(template) dimensions do not match template loadings.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "basis_decoder(template) dimensions do not match template loadings.",
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     list(
       class = class(template),
@@ -341,7 +365,7 @@ validate_template_protocol <- function(template, error = TRUE) {
     )
   }, error = function(e) e)
   if (inherits(res, "error")) {
-    if (isTRUE(error)) stop(conditionMessage(res), call. = FALSE)
+    if (isTRUE(error)) stop(res)  # re-raise to preserve the classed inner condition
     return(invisible(FALSE))
   }
   invisible(res)
@@ -367,10 +391,12 @@ group_delta_loadings <- function(group, delta = NULL, scale = 1, id = NULL,
     delta_mat <- .shared_matrix_like(delta, "delta")
   }
   if (!identical(dim(group_mat), dim(delta_mat))) {
-    stop("group and delta must have identical dimensions.", call. = FALSE)
+    .encoder_cli_abort("group and delta must have identical dimensions.",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
   if (length(scale) != 1L || !is.finite(scale)) {
-    stop("scale must be a finite numeric scalar.", call. = FALSE)
+    .encoder_cli_abort("scale must be a finite numeric scalar.",
+                       class = "fmrilatent_error_invalid_argument")
   }
   meta <- .shared_check_list(meta, "meta")
   if (is.null(id)) {
@@ -396,12 +422,14 @@ group_delta_loadings <- function(group, delta = NULL, scale = 1, id = NULL,
 #' @export
 materialize_group_delta_loadings <- function(x) {
   if (!inherits(x, "GroupDeltaLoadings")) {
-    stop("x must be a GroupDeltaLoadings object.", call. = FALSE)
+    .encoder_cli_abort("x must be a GroupDeltaLoadings object.",
+                       class = "fmrilatent_error_invalid_type")
   }
   group <- .shared_matrix_like(resolve_shared_reference(x$group), "group")
   delta <- .shared_matrix_like(resolve_shared_reference(x$delta), "delta")
   if (!identical(dim(group), dim(delta))) {
-    stop("stored group and delta dimensions no longer match.", call. = FALSE)
+    .encoder_cli_abort("stored group and delta dimensions no longer match.",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
   group + x$scale * delta
 }
@@ -441,7 +469,8 @@ shared_temporal_spec <- function(kind = c("dct", "bspline", "slepian", "custom")
     n_time <- n_time %||% nrow(B)
     rank <- rank %||% ncol(B)
     if (n_time != nrow(B) || rank != ncol(B)) {
-      stop("basis dimensions must match n_time and rank.", call. = FALSE)
+      .encoder_cli_abort("basis dimensions must match n_time and rank.",
+                         class = "fmrilatent_error_dimension_mismatch")
     }
     basis_ref <- if (inherits(basis, "SharedReference")) {
       basis
@@ -452,7 +481,8 @@ shared_temporal_spec <- function(kind = c("dct", "bspline", "slepian", "custom")
   n_time <- .shared_check_positive_integer(n_time, "n_time")
   rank <- .shared_check_positive_integer(rank, "rank")
   if (rank > n_time) {
-    stop("rank cannot exceed n_time.", call. = FALSE)
+    .encoder_cli_abort("rank cannot exceed n_time.",
+                       class = "fmrilatent_error_invalid_argument")
   }
   if (is.null(id)) {
     id <- paste0("temporal:", digest::digest(list(kind = kind, n_time = n_time, rank = rank, params = params, basis = basis_ref)))
@@ -479,7 +509,8 @@ shared_temporal_spec <- function(kind = c("dct", "bspline", "slepian", "custom")
 #' @export
 materialize_shared_temporal_spec <- function(spec) {
   if (!inherits(spec, "SharedTemporalSpec")) {
-    stop("spec must be a SharedTemporalSpec.", call. = FALSE)
+    .encoder_cli_abort("spec must be a SharedTemporalSpec.",
+                       class = "fmrilatent_error_invalid_type")
   }
   if (!is.null(spec$basis)) {
     return(as.matrix(resolve_shared_reference(spec$basis)))
@@ -502,9 +533,11 @@ materialize_shared_temporal_spec <- function(spec) {
       orthonormalize = spec$params$orthonormalize %||% TRUE
     )))
   }
-  stop("Shared temporal spec kind '", spec$kind,
-       "' is a descriptor only and cannot be materialized without a custom basis.",
-       call. = FALSE)
+  .encoder_cli_abort(
+    paste0("Shared temporal spec kind '", spec$kind,
+           "' is a descriptor only and cannot be materialized without a custom basis."),
+    class = "fmrilatent_error_unsupported_operation"
+  )
 }
 
 #' Construct a reusable event shape dictionary
@@ -518,13 +551,14 @@ shared_event_dictionary <- function(shapes = list(impulse = 1), n_time = NULL,
                                     meta = list()) {
   shapes <- .shared_check_list(shapes, "shapes")
   if (length(shapes) == 0L || is.null(names(shapes)) || any(!nzchar(names(shapes)))) {
-    stop("shapes must be a non-empty named list.", call. = FALSE)
+    .encoder_cli_abort("shapes must be a non-empty named list.",
+                       class = "fmrilatent_error_invalid_argument")
   }
   shapes <- lapply(shapes, function(shape) {
     shape <- as.numeric(shape)
     if (length(shape) < 1L || any(!is.finite(shape))) {
-      stop("each event shape must be a non-empty finite numeric vector.",
-           call. = FALSE)
+      .encoder_cli_abort("each event shape must be a non-empty finite numeric vector.",
+                         class = "fmrilatent_error_invalid_value")
     }
     shape
   })
@@ -554,7 +588,8 @@ shared_event_dictionary <- function(shapes = list(impulse = 1), n_time = NULL,
 #' @export
 render_shared_events <- function(dictionary, events, n_atoms, n_time = NULL) {
   if (!inherits(dictionary, "SharedEventDictionary")) {
-    stop("dictionary must be a SharedEventDictionary.", call. = FALSE)
+    .encoder_cli_abort("dictionary must be a SharedEventDictionary.",
+                       class = "fmrilatent_error_invalid_type")
   }
   n_atoms <- .shared_check_positive_integer(n_atoms, "n_atoms")
   n_time <- n_time %||% dictionary$n_time
@@ -565,8 +600,11 @@ render_shared_events <- function(dictionary, events, n_atoms, n_time = NULL) {
   required <- c("atom", "time", "amplitude")
   missing <- setdiff(required, names(events))
   if (length(missing) > 0L) {
-    stop("events is missing required columns: ", paste(missing, collapse = ", "),
-         ".", call. = FALSE)
+    # `missing` is a subset of the fixed `required` names, so no glue hazard.
+    .encoder_cli_abort(
+      paste0("events is missing required columns: ", paste(missing, collapse = ", "), "."),
+      class = "fmrilatent_error_invalid_events"
+    )
   }
   shape_id <- events$shape_id %||% rep.int(names(dictionary$shapes)[[1L]], nrow(events))
   rows <- integer()
@@ -575,14 +613,20 @@ render_shared_events <- function(dictionary, events, n_atoms, n_time = NULL) {
   for (idx in seq_len(nrow(events))) {
     shape <- dictionary$shapes[[as.character(shape_id[[idx]])]]
     if (is.null(shape)) {
-      stop("unknown event shape_id '", shape_id[[idx]], "'.", call. = FALSE)
+      # shape_id is user-supplied free-form text; escape glue braces so a stray
+      # "{" cannot break cli_abort's message interpolation.
+      sid <- gsub("}", "}}", gsub("{", "{{", as.character(shape_id[[idx]]), fixed = TRUE), fixed = TRUE)
+      .encoder_cli_abort(paste0("unknown event shape_id '", sid, "'."),
+                         class = "fmrilatent_error_invalid_events")
     }
     atom <- as.integer(events$atom[[idx]])
     start <- as.integer(events$time[[idx]])
     amp <- as.numeric(events$amplitude[[idx]])
     if (atom < 1L || atom > n_atoms || start < 1L || start > n_time || !is.finite(amp)) {
-      stop("events contains an out-of-range atom/time or non-finite amplitude.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "events contains an out-of-range atom/time or non-finite amplitude.",
+        class = "fmrilatent_error_invalid_events"
+      )
     }
     cols_i <- seq.int(start, length.out = length(shape))
     keep <- cols_i <= n_time
@@ -620,7 +664,8 @@ neuroarchive_handoff_contract <- function(representation = NULL,
   invisible(lapply(components, validate_shared_component_contract))
   invisible(lapply(templates, validate_template_protocol))
   if (!all(vapply(references, is_shared_reference, logical(1)))) {
-    stop("references must contain only SharedReference objects.", call. = FALSE)
+    .encoder_cli_abort("references must contain only SharedReference objects.",
+                       class = "fmrilatent_error_invalid_type")
   }
   structure(
     list(
@@ -663,19 +708,23 @@ neuroarchive_handoff_contract <- function(representation = NULL,
 validate_neuroarchive_handoff_contract <- function(x, error = TRUE) {
   res <- tryCatch({
     if (!inherits(x, "NeuroarchiveHandoffContract")) {
-      stop("x must be a NeuroarchiveHandoffContract.", call. = FALSE)
+      .encoder_cli_abort("x must be a NeuroarchiveHandoffContract.",
+                         class = "fmrilatent_error_invalid_type")
     }
     if (!identical(as.integer(x$contract_version), 1L)) {
-      stop("unsupported neuroarchive handoff contract_version.", call. = FALSE)
+      .encoder_cli_abort("unsupported neuroarchive handoff contract_version.",
+                         class = "fmrilatent_error_unsupported_version")
     }
     if (!identical(x$persistent, FALSE) || !is.null(x$archive_locator) || !is.null(x$checksum)) {
-      stop("fmrilatent handoff contracts must not contain persistent archive locators or checksums.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "fmrilatent handoff contracts must not contain persistent archive locators or checksums.",
+        class = "fmrilatent_error_invalid_handoff"
+      )
     }
     x
   }, error = function(e) e)
   if (inherits(res, "error")) {
-    if (isTRUE(error)) stop(conditionMessage(res), call. = FALSE)
+    if (isTRUE(error)) stop(res)  # re-raise to preserve the classed inner condition
     return(invisible(FALSE))
   }
   invisible(res)
