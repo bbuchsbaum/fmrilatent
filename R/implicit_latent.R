@@ -16,8 +16,11 @@ NULL
 
   if (is.atomic(values) && is.null(dim(values))) {
     if (length(values) != card) {
-      stop(context, " vector length ", length(values),
-           " does not match support cardinality ", card, ".", call. = FALSE)
+      .encoder_cli_abort(
+        paste0(context, " vector length ", length(values),
+               " does not match support cardinality ", card, "."),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     out <- numeric(prod(dim(mask_arr)))
     out[which(mask_arr)] <- values
@@ -30,8 +33,11 @@ NULL
 
   values <- as.matrix(values)
   if (ncol(values) != card) {
-    stop(context, " matrix column count ", ncol(values),
-         " does not match support cardinality ", card, ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " matrix column count ", ncol(values),
+             " does not match support cardinality ", card, "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
 
   n_time <- nrow(values)
@@ -62,20 +68,24 @@ NULL
 
 .normalize_surface_support <- function(support, domain = NULL, context = "surface support") {
   if (is.null(support)) {
-    stop(context, " is required for surface-like domains.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " is required for surface-like domains."),
+                       class = "fmrilatent_error_missing_argument")
   }
   if (is.logical(support)) {
     support <- which(as.logical(support))
   }
   support <- as.integer(support)
   if (length(support) == 0L || anyNA(support) || any(support < 1L)) {
-    stop(context, " must contain positive vertex indices.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " must contain positive vertex indices."),
+                       class = "fmrilatent_error_invalid_support")
   }
   if (.is_surface_domain(domain)) {
     n_nodes <- length(neurosurf::nodes(domain))
     if (any(support > n_nodes)) {
-      stop(context, " contains indices beyond the domain node count ", n_nodes, ".",
-           call. = FALSE)
+      .encoder_cli_abort(
+        paste0(context, " contains indices beyond the domain node count ", n_nodes, "."),
+        class = "fmrilatent_error_invalid_support"
+      )
     }
   }
   support
@@ -83,21 +93,28 @@ NULL
 
 .wrap_decoded_surface <- function(values, domain, support, context = "wrap_decoded") {
   if (!.is_surface_domain(domain)) {
-    stop(context, " requires a SurfaceGeometry or SurfaceSet domain.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " requires a SurfaceGeometry or SurfaceSet domain."),
+                       class = "fmrilatent_error_invalid_geometry")
   }
   support <- .normalize_surface_support(support, domain = domain, context = context)
   if (is.atomic(values) && is.null(dim(values))) {
     if (length(values) != length(support)) {
-      stop(context, " vector length ", length(values),
-           " does not match support cardinality ", length(support), ".", call. = FALSE)
+      .encoder_cli_abort(
+        paste0(context, " vector length ", length(values),
+               " does not match support cardinality ", length(support), "."),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     return(neurosurf::NeuroSurface(domain, support, as.numeric(values)))
   }
 
   values <- as.matrix(values)
   if (ncol(values) != length(support)) {
-    stop(context, " matrix column count ", ncol(values),
-         " does not match support cardinality ", length(support), ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " matrix column count ", ncol(values),
+             " does not match support cardinality ", length(support), "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
 
   neurosurf::NeuroSurfaceVector(domain, support, t(values))
@@ -118,22 +135,31 @@ NULL
 #' @return An object of class `ImplicitLatent`.
 #' @export
 implicit_latent <- function(coeff, decoder, meta, mask = NULL, domain = NULL, support = NULL) {
-  if (is.null(meta$family)) stop("meta$family required for implicit_latent", call. = FALSE)
+  if (is.null(meta$family)) {
+    .encoder_cli_abort("meta$family required for implicit_latent",
+                       class = "fmrilatent_error_invalid_argument")
+  }
   if (!is.function(decoder)) {
-    stop("decoder must be a function, got ", paste(class(decoder), collapse = "/"),
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("decoder must be a function, got ", paste(class(decoder), collapse = "/")),
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
   fmls <- names(formals(decoder))
   has_dots <- "..." %in% fmls
   missing <- setdiff(c("time_idx", "roi_mask"), fmls)
   if (length(missing) > 0L && !has_dots) {
-    stop("decoder must accept formals 'time_idx' and 'roi_mask' ",
-         "(or use '...'). Missing: ", paste(missing, collapse = ", "),
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("decoder must accept formals 'time_idx' and 'roi_mask' ",
+             "(or use '...'). Missing: ", paste(missing, collapse = ", ")),
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
   if (is.null(mask) && is.null(support)) {
-    stop("implicit_latent requires either a volumetric mask or an explicit support.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "implicit_latent requires either a volumetric mask or an explicit support.",
+      class = "fmrilatent_error_missing_argument"
+    )
   }
   if (!is.null(mask) && is.null(support)) {
     support <- mask
@@ -173,8 +199,10 @@ as_implicit_latent.ImplicitLatent <- function(x, ...) {
 
 #' @export
 as_implicit_latent.default <- function(x, ...) {
-  stop("No as_implicit_latent method for class: ",
-       paste(class(x), collapse = ","), call. = FALSE)
+  .encoder_cli_abort(
+    paste0("No as_implicit_latent method for class: ", paste(class(x), collapse = ",")),
+    class = "fmrilatent_error_unsupported_operation"
+  )
 }
 
 #' Predict method for ImplicitLatent
@@ -236,7 +264,8 @@ as.array.ImplicitLatent <- function(x, time_idx = NULL, roi_mask = NULL, ...) {
 #' @rdname mask-methods
 setMethod("mask", "ImplicitLatent", function(x) {
   if (is.null(x$mask)) {
-    stop("mask() is not defined for non-volumetric ImplicitLatent objects.", call. = FALSE)
+    .encoder_cli_abort("mask() is not defined for non-volumetric ImplicitLatent objects.",
+                       class = "fmrilatent_error_unsupported_operation")
   }
   if (inherits(x$mask, "LogicalNeuroVol")) {
     x$mask
@@ -283,9 +312,11 @@ setMethod("reconstruct_matrix", "ImplicitLatent",
 setMethod("reconstruct_array", "ImplicitLatent",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
             if (is.null(x$mask)) {
-              stop("reconstruct_array() is only defined for volumetric ImplicitLatent objects. ",
-                   "Use reconstruct_matrix() plus wrap_decoded() for other domains.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                paste0("reconstruct_array() is only defined for volumetric ImplicitLatent objects. ",
+                       "Use reconstruct_matrix() plus wrap_decoded() for other domains."),
+                class = "fmrilatent_error_unsupported_operation"
+              )
             }
             mask_arr <- as.array(mask(x))
             roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "reconstruct_array.ImplicitLatent")
@@ -302,7 +333,8 @@ setMethod("reconstruct_array", "ImplicitLatent",
   if (.is_surface_domain(domain)) {
     return(.wrap_decoded_surface(values, domain, support, context = context))
   }
-  stop(context, " has no wrapper for this domain/support combination.", call. = FALSE)
+  .encoder_cli_abort(paste0(context, " has no wrapper for this domain/support combination."),
+                     class = "fmrilatent_error_unsupported_operation")
 }
 
 #' @export
@@ -322,20 +354,29 @@ setMethod("wrap_decoded", "ImplicitLatent",
             # latent objects, which carry a basis_asset whose template_support()
             # / template_domain() describe the template-side sample layout.
             if (!.is_transport_latent(x)) {
-              stop("wrap_decoded() does not support space = \"template\" for ",
-                   "non-transport latent objects (no basis asset to describe ",
-                   "template-side support).", call. = FALSE)
+              .encoder_cli_abort(
+                paste0("wrap_decoded() does not support space = \"template\" for ",
+                       "non-transport latent objects (no basis asset to describe ",
+                       "template-side support)."),
+                class = "fmrilatent_error_unsupported_operation"
+              )
             }
             asset <- basis_asset(x)
             if (is.null(asset)) {
-              stop("wrap_decoded(space = \"template\") requires a basis_asset ",
-                   "on the transport latent object.", call. = FALSE)
+              .encoder_cli_abort(
+                paste0("wrap_decoded(space = \"template\") requires a basis_asset ",
+                       "on the transport latent object."),
+                class = "fmrilatent_error_missing_argument"
+              )
             }
             t_support <- tryCatch(template_support(asset), error = function(e) NULL)
             t_domain <- tryCatch(template_domain(asset), error = function(e) NULL)
             if (is.null(t_support)) {
-              stop("wrap_decoded(space = \"template\") requires the basis ",
-                   "asset to implement template_support().", call. = FALSE)
+              .encoder_cli_abort(
+                paste0("wrap_decoded(space = \"template\") requires the basis ",
+                       "asset to implement template_support()."),
+                class = "fmrilatent_error_missing_argument"
+              )
             }
             .wrap_decoded_by_support(
               values,
