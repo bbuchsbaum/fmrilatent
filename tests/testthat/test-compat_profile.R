@@ -141,7 +141,7 @@ test_that("low-level haar matrix wrappers roundtrip in Morton space", {
   mask_flat_morton <- as.logical(mask_arr)[full_order]
   scalings <- fmrilatent:::precompute_haar_scalings(mask_arr, 1L)
 
-  fw <- lna_forward_lift_matrix(
+  fw <- fmrilatent:::lna_forward_lift_matrix(
     data_morton = data_morton,
     mask_flat_morton = mask_flat_morton,
     mask_dims = dim(mask_arr),
@@ -149,7 +149,7 @@ test_that("low-level haar matrix wrappers roundtrip in Morton space", {
     scalings = scalings,
     compat_profile = "neuroarchive_0.1.1"
   )
-  reco <- lna_inverse_lift_matrix(
+  reco <- fmrilatent:::lna_inverse_lift_matrix(
     root_coeff = fw$root_coeff,
     detail_coeffs_by_level = fw$detail_coeffs_by_level,
     mask_flat_morton = mask_flat_morton,

@@ -2,6 +2,7 @@
 #include <vector>
 #include <algorithm>
 #include <cmath>
+#include <limits>
 
 using namespace Rcpp;
 
@@ -10,6 +11,46 @@ namespace {
 inline size_t lin3D(int i, int j, int k, int nx, int ny, int nz) {
   return static_cast<size_t>(i) + static_cast<size_t>(nx) *
          (static_cast<size_t>(j) + static_cast<size_t>(ny) * static_cast<size_t>(k));
+}
+
+inline IntegerVector checked3DDims(SEXP dimAttr, R_xlen_t vector_size,
+                                   const char* context) {
+  if (dimAttr == R_NilValue) {
+    stop("%s requires a 3D array", context);
+  }
+  IntegerVector dims(dimAttr);
+  if (dims.size() != 3) {
+    stop("%s requires a 3D array", context);
+  }
+  const int nx = dims[0], ny = dims[1], nz = dims[2];
+  if (nx <= 0 || ny <= 0 || nz <= 0) {
+    stop("%s dimensions must be positive", context);
+  }
+  size_t total = static_cast<size_t>(nx) *
+                 static_cast<size_t>(ny) *
+                 static_cast<size_t>(nz);
+  if (total != static_cast<size_t>(vector_size)) {
+    stop("%s dimensions do not match vector length", context);
+  }
+  if (total > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    stop("%s array is too large for integer indexing", context);
+  }
+  return dims;
+}
+
+inline void checkLevels(int levels, int max_levels, const char* context) {
+  if (levels < 0) {
+    stop("%s levels must be non-negative", context);
+  }
+  if (max_levels >= 0 && levels > max_levels) {
+    stop("%s levels cannot exceed length(scalings)", context);
+  }
+}
+
+inline void checkMortonBitsForIntegerCode(int bits, const char* context) {
+  if (bits > 10) {
+    stop("%s dimensions are too large for 32-bit Morton codes", context);
+  }
 }
 
 inline int bitCeilLog2(int v) {
@@ -48,14 +89,8 @@ struct MortonEntry {
 
 // [[Rcpp::export]]
 IntegerVector get_morton_ordered_indices_rcpp(LogicalVector mask) {
-  SEXP dimAttr = mask.attr("dim");
-  if (dimAttr == R_NilValue) {
-    stop("mask must be a 3D array");
-  }
-  IntegerVector dims(dimAttr);
-  if (dims.size() != 3) {
-    stop("mask must be a 3D array");
-  }
+  IntegerVector dims = checked3DDims(mask.attr("dim"), mask.size(),
+                                     "get_morton_ordered_indices_rcpp");
   const int nx = dims[0], ny = dims[1], nz = dims[2];
 
   const int bits = bitCeilLog2(std::max(nx, std::max(ny, nz)));
@@ -94,14 +129,9 @@ IntegerVector get_morton_ordered_indices_rcpp(LogicalVector mask) {
 
 // [[Rcpp::export]]
 List precompute_haar_scalings_rcpp(LogicalVector mask, int levels) {
-  SEXP dimAttr = mask.attr("dim");
-  if (dimAttr == R_NilValue) {
-    stop("mask must be a 3D array");
-  }
-  IntegerVector dims(dimAttr);
-  if (dims.size() != 3) {
-    stop("mask must be a 3D array");
-  }
+  checkLevels(levels, -1, "precompute_haar_scalings_rcpp");
+  IntegerVector dims = checked3DDims(mask.attr("dim"), mask.size(),
+                                     "precompute_haar_scalings_rcpp");
 
   int nx = dims[0], ny = dims[1], nz = dims[2];
   std::vector<unsigned char> occ(mask.size());
@@ -174,7 +204,11 @@ List forward_lift_rcpp(NumericVector data_morton,
                        int levels,
                        List scalings) {
   (void)mask_flat_morton;
-  (void)mask_dims;
+  if (mask_dims.size() != 3) stop("forward_lift_rcpp mask_dims must have length 3");
+  if (mask_dims[0] <= 0 || mask_dims[1] <= 0 || mask_dims[2] <= 0) {
+    stop("forward_lift_rcpp mask_dims must contain positive values");
+  }
+  checkLevels(levels, scalings.size(), "forward_lift_rcpp");
   std::vector<NumericVector> sqrtN(levels), sqrtN_div8(levels);
   std::vector<std::vector<int> > counts(levels);
   for (int lvl = 0; lvl < levels; ++lvl) {
@@ -240,7 +274,14 @@ NumericVector inverse_lift_rcpp(double root_coeff,
                                 int levels,
                                 List scalings) {
   (void)mask_flat_morton;
-  (void)mask_dims;
+  if (mask_dims.size() != 3) stop("inverse_lift_rcpp mask_dims must have length 3");
+  if (mask_dims[0] <= 0 || mask_dims[1] <= 0 || mask_dims[2] <= 0) {
+    stop("inverse_lift_rcpp mask_dims must contain positive values");
+  }
+  checkLevels(levels, scalings.size(), "inverse_lift_rcpp");
+  if (detail_vecs.size() < levels) {
+    stop("inverse_lift_rcpp detail_vecs length must be at least levels");
+  }
   std::vector<NumericVector> sqrtN(levels), sqrtN_div8(levels);
   std::vector<std::vector<int> > counts(levels);
   for (int lvl = 0; lvl < levels; ++lvl) {
@@ -294,20 +335,15 @@ NumericVector inverse_lift_rcpp(double root_coeff,
 
 // [[Rcpp::export]]
 IntegerVector get_valid_finest_blocks_rcpp(LogicalVector mask) {
-  SEXP dimAttr = mask.attr("dim");
-  if (dimAttr == R_NilValue) {
-    stop("mask must be a 3D array");
-  }
-  IntegerVector dims(dimAttr);
-  if (dims.size() != 3) {
-    stop("mask must be a 3D array");
-  }
+  IntegerVector dims = checked3DDims(mask.attr("dim"), mask.size(),
+                                     "get_valid_finest_blocks_rcpp");
 
   const int nx = dims[0], ny = dims[1], nz = dims[2];
   const int nbx = (nx + 1) / 2;
   const int nby = (ny + 1) / 2;
   const int nbz = (nz + 1) / 2;
   const int bits = bitCeilLog2(std::max(nbx, std::max(nby, nbz)));
+  checkMortonBitsForIntegerCode(bits, "get_valid_finest_blocks_rcpp");
 
   std::vector<unsigned long long> codes;
   codes.reserve(static_cast<size_t>(nbx) * nby * nbz);
@@ -349,4 +385,3 @@ IntegerVector get_valid_finest_blocks_rcpp(LogicalVector mask) {
   }
   return out;
 }
-

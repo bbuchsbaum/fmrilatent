@@ -10,17 +10,28 @@ NULL
 #' @param threshold Absolute value threshold to enforce sparsity in compressed ops.
 #' @param max_scales Maximum diffusion scales to compute.
 #' @param epsilon Optional precision (unused in capped-rank path; kept for API parity).
+#' @param seed Optional integer seed for deterministic randomized range finding.
 #' @export
 basis_diffusion_wavelet <- function(target_rank = 2000L, oversample = 20L,
                                     threshold = 1e-5, max_scales = 1L,
-                                    epsilon = NULL) {
+                                    epsilon = NULL, seed = 1L) {
+  if (!is.null(seed)) {
+    seed <- as.integer(seed)
+    if (length(seed) != 1L || is.na(seed)) {
+      .encoder_cli_abort(
+        "seed must be NULL or a single non-missing integer.",
+        class = "fmrilatent_error_invalid_diffusion_seed"
+      )
+    }
+  }
   structure(
     list(
       target_rank = as.integer(target_rank),
       oversample = as.integer(oversample),
       threshold = threshold,
       max_scales = as.integer(max_scales),
-      epsilon = epsilon
+      epsilon = epsilon,
+      seed = seed
     ),
     class = "spec_diffusion_wavelet"
   )
@@ -64,10 +75,31 @@ diffusion_wavelet_loadings <- function(T_mat, spec) {
   oversample <- spec$oversample %||% 20L
   threshold <- spec$threshold %||% 1e-5
   max_scales <- spec$max_scales %||% 1L
+  seed <- spec$seed %||% 1L
+  if (!is.null(seed)) {
+    old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+      get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
+    } else {
+      NULL
+    }
+    on.exit({
+      if (is.null(old_seed)) {
+        if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
+          rm(".Random.seed", envir = .GlobalEnv)
+        }
+      } else {
+        assign(".Random.seed", old_seed, envir = .GlobalEnv)
+      }
+    }, add = TRUE)
+    set.seed(as.integer(seed))
+  }
 
   T_op <- as_linear_operator(T_mat)
   if (is.null(dim(T_mat))) {
-    stop("T_mat must have dimensions or provide a linear operator with known size", call. = FALSE)
+    .encoder_cli_abort(
+      "T_mat must have dimensions or provide a linear operator with known size",
+      class = "fmrilatent_error_invalid_diffusion_operator"
+    )
   }
   current_dim <- nrow(T_mat)
 
@@ -98,23 +130,7 @@ diffusion_wavelet_loadings <- function(T_mat, spec) {
 }
 
 build_cluster_graph <- function(reduction, k_neighbors = 6L) {
-  if (!requireNamespace("rgsp", quietly = TRUE)) {
-    stop("rgsp not installed; install bbuchsbaum/rgsp to use diffusion wavelets", call. = FALSE)
-  }
-
-  mask_arr <- .mask_to_array(reduction@mask, "build_cluster_graph")
-
-  coords <- which(as.logical(mask_arr), arr.ind = TRUE)
-  ids <- reduction@cluster_ids
-  grp <- factor(reduction@map, levels = ids)
-
-  centers <- vapply(seq_len(ncol(coords)), function(d) {
-    tapply(coords[, d], grp, mean)
-  }, numeric(length(ids)))
-  centers <- Matrix::Matrix(centers, sparse = FALSE)
-
-  g <- rgsp::graph_knn(centers, k = k_neighbors, weight = "distance", sym = "union")
-  row_normalize_sparse(g$adjacency)
+  .build_cluster_centroid_graph(reduction, k_neighbors = k_neighbors)
 }
 
 #' Lift diffusion wavelets for clustered reduction
@@ -131,7 +147,6 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_d
     T_sparse <- build_cluster_graph(reduction, k_neighbors = k_neighbors)
     loadings_coarse <- diffusion_wavelet_loadings(T_sparse, basis_spec)
 
-    # expand cluster loadings back to voxels
     map <- reduction@map
     n_vox <- length(map)
     i <- seq_len(n_vox)
@@ -153,20 +168,14 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_d
 diffusion_wavelet_latent <- function(X, mask, reduction = NULL,
                                      spec = basis_diffusion_wavelet(),
                                      k_neighbors = 6L, label = "") {
-  mask_arr <- .mask_to_array(mask, "diffusion_wavelet_latent")
+  mask_arr <- .extract_mask_array(mask, "diffusion_wavelet_latent")
   if (is.null(reduction)) {
     map <- seq_len(sum(mask_arr))
     reduction <- make_cluster_reduction(mask, map)
   }
 
   loadings <- lift(reduction, spec, k_neighbors = k_neighbors)
-  basis <- as.matrix(X) %*% as.matrix(loadings)
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), nrow(X)))
-  mask_vol <- if (inherits(mask, "LogicalNeuroVol")) {
-    mask
-  } else {
-    LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dim(mask_arr)))
-  }
   meta <- list(family = "diffusion_wavelet", spec = spec, k_neighbors = k_neighbors)
-  LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask_vol, label = label, meta = meta)
+  .make_latent_neurovector(X, mask, loadings, label = label, meta = meta,
+                           location = "diffusion_wavelet_latent")
 }

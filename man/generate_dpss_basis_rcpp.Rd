@@ -26,3 +26,4 @@ and computes the top-k eigenvectors. It is O(n^3) and intended as a
 simple, dependency-light starting point; consider replacing with a
 tridiagonal solver for very long n.
 }
+\keyword{internal}

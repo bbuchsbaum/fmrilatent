@@ -22,3 +22,4 @@ Given a loadings matrix L (voxels x k) and a list of voxel index sets
 (neighborhoods), returns the per-neighborhood Gram matrices
 `M_i = t(L_Vi) %*% L_Vi` without reconstructing voxels.
 }
+\keyword{internal}

@@ -12,7 +12,8 @@
 #' @param k_neighbors Number of neighbors used for local graph construction
 #'   when materializing the lifted basis.
 #' @param id         Optional registry id; provide a stable string to reuse
-#'   across sessions. If NULL, a random id is generated.
+#'   across sessions. If NULL, a deterministic id is derived from the spec and
+#'   reduction.
 #' @param label      Optional human-readable label.
 #'
 #' @return A \code{LoadingsHandle}.
@@ -23,24 +24,27 @@ heat_wavelet_loadings_handle <- function(reduction,
                                          k_neighbors = 6L,
                                          id    = NULL,
                                          label = "heat-wavelet") {
+  spec_payload <- list(
+    family     = "heat_wavelet",
+    reduction  = reduction,
+    basis_spec = basis_spec,
+    data       = data,
+    k_neighbors = k_neighbors
+  )
   if (is.null(id)) {
-    id <- paste0("heat-wavelet-", sprintf("%08x", as.integer(stats::runif(1, 0, 2^31))))
+    id <- .latent_handle_id("heat-wavelet", spec_payload)
   }
 
-  # Materialize once to capture dimensions and seed the registry
   L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
-  .latent_register_matrix(id, L, type = "loadings", overwrite = FALSE)
-
-  new("LoadingsHandle",
+  handle <- new("LoadingsHandle",
       id    = id,
       dim   = as.integer(dim(L)),
       kind  = "lifted",
-      spec  = list(
-        family     = "heat_wavelet",
-        reduction  = reduction,
-        basis_spec = basis_spec,
-        data       = data,
-        k_neighbors = k_neighbors
-      ),
+      spec  = spec_payload,
       label = label)
+  .latent_register_matrix(
+    id, L, type = "loadings", overwrite = FALSE,
+    fingerprint = .latent_handle_fingerprint(handle)
+  )
+  handle
 }

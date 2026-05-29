@@ -10,10 +10,21 @@ pkgdown/
 
 # compiled artifacts
 src/*.o
+src/*.o.tmp
 src/*.so
 src/*.dll
 src/*.gcda
 src/*.gcno
+
+# local tool state / reports
+.covr_result.rds
+.mote/
+.omc/
+.planning/
+.beads/backup/
+.beads/dolt/
+.beads/embeddeddolt/
+.beads/dolt-server.*
 
 # local editor / misc
 .DS_Store

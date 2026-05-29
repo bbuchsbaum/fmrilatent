@@ -270,7 +270,7 @@ inverse_lift_R <- function(root_coeff,
 #' @param compat_profile Optional compatibility profile override.
 #'
 #' @return List with `root_coeff` and `detail_coeffs_by_level`.
-#' @export
+#' @keywords internal
 lna_forward_lift_matrix <- function(data_morton,
                                     mask_flat_morton,
                                     mask_dims,
@@ -339,7 +339,7 @@ lna_forward_lift_matrix <- function(data_morton,
 #' @param compat_profile Optional compatibility profile override.
 #'
 #' @return Numeric matrix (`time x masked_voxels`) in Morton order.
-#' @export
+#' @keywords internal
 lna_inverse_lift_matrix <- function(root_coeff,
                                     detail_coeffs_by_level,
                                     mask_flat_morton,

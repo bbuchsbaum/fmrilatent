@@ -447,16 +447,24 @@ setMethod("latent_domain", "LatentNeuroVec",
 setMethod("latent_support", "LatentNeuroVec",
           function(x, ...) mask(x))
 
+.latent_reconstruct_matrix <- function(x, time_idx = NULL, loadings_idx = NULL) {
+  B <- basis_mat(x, i = time_idx)
+  L <- loadings_mat(x, i = loadings_idx)
+  mat <- B %*% t(L)
+  if (length(x@offset) > 0) {
+    offset <- if (is.null(loadings_idx)) x@offset else x@offset[loadings_idx]
+    mat <- sweep(mat, 2, offset, "+")
+  }
+  as.matrix(mat)
+}
+
 #' @export
 #' @rdname reconstruct_matrix
 setMethod(
   f = "reconstruct_matrix",
   signature = signature(x = "LatentNeuroVec"),
   definition = function(x, time_idx = NULL, roi_mask = NULL, ...) {
-    mat <- as.matrix(x)
-    if (!is.null(time_idx)) {
-      mat <- mat[as.integer(time_idx), , drop = FALSE]
-    }
+    mat <- .latent_reconstruct_matrix(x, time_idx = time_idx)
     if (!is.null(roi_mask)) {
       mat <- roi_subset_columns(mat, as.array(mask(x)), roi_mask)
     }
@@ -504,13 +512,7 @@ setMethod(
   f = "as.matrix",
   signature = signature(x = "LatentNeuroVec"),
   definition = function(x, ...) {
-    B <- basis_mat(x)
-    L <- loadings_mat(x)
-    mat <- B %*% t(L)
-    if (length(x@offset) > 0) {
-      mat <- sweep(mat, 2, x@offset, "+")
-    }
-    as.matrix(mat)
+    .latent_reconstruct_matrix(x)
   }
 )
 

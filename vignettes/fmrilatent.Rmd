@@ -23,7 +23,9 @@ vignette: |
 if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(family = params$family, preset = params$preset))
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
 )
 ```
 
@@ -49,12 +51,15 @@ reconstruct loop and points to deeper vignettes for everything else.
 
 | If you want to … | Read |
 |---|---|
+| Understand the two latent object types | `vignette("explicit-vs-implicit-latents")` |
 | Pick a basis family for your data | `vignette("choosing-basis-family")` |
 | Drive the spec/encoder pipeline programmatically | `vignette("encode-factory")` |
 | Work with `LatentNeuroVec` objects in detail | `vignette("working-with-latentneurovec")` |
 | Share a spatial dictionary across subjects | `vignette("shared-spatial-dictionaries")` |
 | Use the transport / decoder-backed path | `vignette("transport-aware-encoding")` |
-| Compress with the BOLD-Zip codec | `vignette("shared-structure-boldzip")` |
+| Compress a voxel-by-time matrix with BOLDZip-SR | `vignette("boldzip")` |
+| Use a standalone matrix codec | `vignette("standalone-codecs")` |
+| Inspect shared structure for BOLDZip-SR | `vignette("shared-structure-boldzip")` |
 | Benchmark compression vs. fidelity | `vignette("compression-diagnostics")` |
 
 ## Why fmrilatent?
@@ -107,6 +112,20 @@ sqrt(mean((recon - X)^2))
 
 With 8 of 20 possible DCT components, the approximation is lossy. More
 components capture more variance; fewer give heavier compression.
+
+```{r reconstruct-plot, echo = FALSE, fig.width = 7, fig.height = 3.2, fig.alt = "One voxel time course: original versus 8-component DCT reconstruction."}
+op <- par(mar = c(4, 4, 1, 1))
+plot(X[, 1], type = "l", col = "grey60", lwd = 2,
+     xlab = "time point", ylab = "signal", main = "")
+lines(recon[, 1], col = "firebrick", lwd = 2)
+legend("topright", c("original", "reconstructed"),
+       col = c("grey60", "firebrick"), lwd = 2, bty = "n")
+par(op)
+```
+
+The reconstruction (red) tracks the broad shape of the original signal
+(grey) while smoothing away the high-frequency detail the discarded
+components carried — the visible gap *is* the compression loss.
 
 You can also access data selectively:
 
@@ -193,6 +212,8 @@ Both share `predict()`, `as.matrix()`, and meta-access generics. The
 operator-aware transport workflows live entirely on the implicit-latent
 side; see `vignette("transport-aware-encoding")` for the shared-asset +
 field-operator pipeline that bridges fmrilatent and downstream modeling.
+`vignette("explicit-vs-implicit-latents")` is the dedicated walk-through of
+this distinction — read it next.
 
 ## Next steps
 

@@ -23,7 +23,8 @@ diffusion_wavelet_loadings_handle(
 \item{k_neighbors}{k for graph building when lifting.}
 
 \item{id}{Optional registry id; provide a stable string to reuse
-across sessions. If NULL, a random id is generated.}
+across sessions. If NULL, a deterministic id is derived from the spec and
+reduction.}
 
 \item{label}{Optional human-readable label.}
 }

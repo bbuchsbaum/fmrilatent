@@ -1,0 +1,161 @@
+---
+title: Compression Diagnostics
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2.0
+    css: albers.css
+    includes:
+      in_header: albers-header.html
+resource_files:
+- albers.css
+- albers.js
+- albers-header.html
+params:
+  family: red
+  preset: homage
+
+vignette: |
+  %\VignetteIndexEntry{Compression Diagnostics} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(family = params$family, preset = params$preset))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r albers-classes, echo=FALSE, results='asis'}
+cat(sprintf(
+  paste0(
+    '<script>document.addEventListener("DOMContentLoaded",function(){',
+    'document.body.classList.remove("palette-red","palette-lapis","palette-ochre","palette-teal","palette-green","palette-violet","preset-homage","preset-study","preset-structural","preset-adobe","preset-midnight");',
+    'document.body.classList.add("palette-%s","preset-%s");',
+    '});</script>'
+  ),
+  params$family,
+  params$preset
+))
+```
+
+```{r library}
+library(fmrilatent)
+```
+
+Compression is not useful unless you can inspect the trade-off. This vignette
+uses simple diagnostics: reconstruction error, finite-value checks, and the
+number of stored scalar values in the latent factors.
+
+## What is the baseline size?
+
+The original matrix stores one value for every time-by-voxel pair.
+
+```{r make-data}
+mask <- array(TRUE, dim = c(4, 4, 4))
+mask_vol <- neuroim2::LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
+
+set.seed(23)
+n_time <- 30L
+n_vox <- sum(mask)
+t <- seq_len(n_time)
+low_rank <- cbind(sin(2 * pi * t / n_time), cos(2 * pi * t / n_time))
+X <- low_rank %*% matrix(rnorm(2 * n_vox), nrow = 2) +
+  matrix(rnorm(n_time * n_vox, sd = 0.05), nrow = n_time)
+
+original_scalars <- length(X)
+original_scalars
+```
+
+## How does component count change error?
+
+For a temporal basis, increasing `k` stores more basis functions and usually
+reduces reconstruction error.
+
+```{r compare-k}
+component_grid <- c(2L, 4L, 6L, 8L, 12L, 16L, 20L)
+fits <- lapply(component_grid, function(k) {
+  encode(X, spec_time_dct(k = k), mask = mask_vol, materialize = "matrix")
+})
+
+latent_scalars <- function(lat) {
+  length(basis(lat)) + length(loadings(lat)) + length(offset(lat))
+}
+rmse <- function(lat) sqrt(mean((as.matrix(lat) - X)^2))
+
+diagnostics <- data.frame(
+  k = component_grid,
+  latent_scalars = vapply(fits, latent_scalars, numeric(1)),
+  compression_ratio = round(original_scalars / vapply(fits, latent_scalars, numeric(1)), 2),
+  rmse = round(vapply(fits, rmse, numeric(1)), 5)
+)
+diagnostics
+```
+
+```{r validate-diagnostics, include = FALSE}
+errors <- vapply(fits, rmse, numeric(1))
+stopifnot(
+  all(is.finite(errors)),
+  all(errors >= 0),
+  all(vapply(fits, function(x) all(is.finite(as.matrix(x))), logical(1)))
+)
+```
+
+The exact values depend on the signal, but the table gives the questions to
+ask: how many scalars were stored, how much error remains, and whether the
+reconstruction is numerically well behaved.
+
+The trade-off is easier to read as a curve. Each point is one value of `k`;
+the goal is the lower-right corner — low error *and* high compression.
+
+```{r tradeoff-plot, echo = FALSE, fig.width = 7, fig.height = 4, fig.alt = "Reconstruction error versus compression ratio across DCT component counts."}
+op <- par(mar = c(4, 4, 1, 1))
+plot(diagnostics$compression_ratio, diagnostics$rmse, type = "b",
+     pch = 19, col = "firebrick", lwd = 2,
+     xlab = "compression ratio (higher = smaller)",
+     ylab = "reconstruction RMSE")
+text(diagnostics$compression_ratio, diagnostics$rmse,
+     labels = paste0("k=", diagnostics$k), pos = 3, cex = 0.8)
+par(op)
+```
+
+The curve has an elbow: error drops steeply as the first few components are
+added, then flattens. Past the elbow you keep paying compression to buy very
+little accuracy — at `k = 20` the factors store almost as many scalars as the
+original (`r round(min(diagnostics$compression_ratio), 2)`× ratio), while the
+error is barely lower than at the elbow. The sweet spot is the smallest `k`
+whose error is acceptable, where the ratio is still high.
+
+## What should be checked before trusting a result?
+
+A compact summary should include shape, finiteness, and non-degenerate
+variation. These checks are cheap enough to run while tuning an encoding.
+
+```{r final-checks}
+best <- fits[[length(fits)]]
+best_recon <- as.matrix(best)
+
+data.frame(
+  same_shape = identical(dim(best_recon), dim(X)),
+  finite = all(is.finite(best_recon)),
+  input_sd = round(sd(as.vector(X)), 5),
+  reconstruction_sd = round(sd(as.vector(best_recon)), 5),
+  rmse = round(rmse(best), 5)
+)
+```
+
+For larger timing studies, use `benchmark_roundtrip()` and `plot_benchmark_roundtrip()`,
+and keep the same habit: pair speed or storage summaries with reconstruction
+diagnostics.
+
+## Where to next?
+
+- `vignette("choosing-basis-family")` — pick the basis whose error curve drops
+  fastest for your signal.
+- `vignette("explicit-vs-implicit-latents")` — the object types these
+  diagnostics apply to.
+- `?benchmark_roundtrip` and `?plot_benchmark_roundtrip` — timing across
+  spatial families on your own data.

@@ -33,3 +33,9 @@ A \code{LoadingsHandle}.
 \description{
 Create a LoadingsHandle for spatial Slepians (graph Laplacian)
 }
+\details{
+This constructor lifts the spatial dictionary eagerly so the returned handle
+records the realized dimensions and registers a fingerprinted cache entry.
+Repeated constructor calls may therefore recompute the lift even when later
+`loadings_mat()` calls can reuse the registry cache.
+}

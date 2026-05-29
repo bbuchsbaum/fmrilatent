@@ -11,10 +11,11 @@ Authors@R:
 Maintainer: Bradley Buchsbaum <brad.buchsbaum@gmail.com>
 Description: Provides S4 classes and methods for representing neuroimaging data
     in latent spaces. The LatentNeuroVec class offers a memory-efficient
-    representation using matrix factorization (basis x loadings), enabling
-    compact storage and efficient computation for dimensionality-reduced
-    fMRI data such as PCA or ICA decompositions. Integrates with the neuroim2
-    package for standard neuroimaging data structures.
+    representation using matrix factorization (basis x loadings plus offsets),
+    enabling compact storage and efficient computation for PCA, temporal bases,
+    graph and wavelet dictionaries, Slepian bases, HRBF atoms, and related fMRI
+    decompositions. Integrates with the neuroim2 package for standard
+    neuroimaging data structures.
 License: GPL (>= 3)
 URL: https://github.com/bbuchsbaum/fmrilatent
 BugReports: https://github.com/bbuchsbaum/fmrilatent/issues
@@ -22,6 +23,7 @@ Encoding: UTF-8
 LazyData: false
 RoxygenNote: 7.3.3
 Imports:
+    cli,
     crayon,
     graphics,
     Matrix,
@@ -40,8 +42,7 @@ Suggests:
     neurosurf,
     rgsp,
     bench,
-    ggplot2,
-    albersdown
+    ggplot2
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 LinkingTo:
@@ -58,16 +59,22 @@ Collate:
     'heat_wavelet.R'
     'awpt.R'
     'benchmark_roundtrip.R'
-    'boldzip_sr.R'
     'bspline_basis.R'
+    'codec_boldzip.R'
     'compat_profile.R'
     'dct_basis.R'
     'diffusion_wavelet.R'
     'diffusion_wavelet_handle.R'
+    'encode_methods_hierarchical.R'
+    'encode_methods_space.R'
+    'encode_methods_st.R'
+    'encode_methods_time.R'
+    'encode_operator.R'
     'encode_spec.R'
     'encode_template.R'
     'encode_transport_solve.R'
     'encoder_registry.R'
+    'encoder_utilities.R'
     'encoder_validators.R'
     'fmrilatent-package.R'
     'graph_bridge.R'

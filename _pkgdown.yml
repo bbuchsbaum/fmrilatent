@@ -1,3 +1,31 @@
 template:
   package: albersdown
   bootstrap: 5.0
+
+articles:
+- title: Get started
+  navbar: Get started
+  contents:
+  - fmrilatent
+  - explicit-vs-implicit-latents
+- title: Core concepts
+  navbar: Core concepts
+  contents:
+  - choosing-basis-family
+  - encode-factory
+- title: Common tasks
+  navbar: Common tasks
+  contents:
+  - working-with-latentneurovec
+  - compression-diagnostics
+- title: Advanced
+  navbar: Advanced
+  contents:
+  - shared-spatial-dictionaries
+  - transport-aware-encoding
+- title: Research & integration
+  navbar: Research & integration
+  contents:
+  - boldzip
+  - shared-structure-boldzip
+  - standalone-codecs

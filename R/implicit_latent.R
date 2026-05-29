@@ -156,6 +156,27 @@ implicit_latent <- function(coeff, decoder, meta, mask = NULL, domain = NULL, su
             class = "ImplicitLatent")
 }
 
+#' Coerce an object to an ImplicitLatent decoder
+#'
+#' @param x Object to coerce.
+#' @param ... Additional arguments passed to methods.
+#' @return An object of class `ImplicitLatent`.
+#' @export
+as_implicit_latent <- function(x, ...) {
+  UseMethod("as_implicit_latent")
+}
+
+#' @export
+as_implicit_latent.ImplicitLatent <- function(x, ...) {
+  x
+}
+
+#' @export
+as_implicit_latent.default <- function(x, ...) {
+  stop("No as_implicit_latent method for class: ",
+       paste(class(x), collapse = ","), call. = FALSE)
+}
+
 #' Predict method for ImplicitLatent
 #' @param object ImplicitLatent object
 #' @param roi_mask Optional ROI mask

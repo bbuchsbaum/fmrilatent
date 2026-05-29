@@ -35,3 +35,4 @@ Numeric matrix (`time x masked_voxels`) in Morton order.
 \description{
 Mirrors neuroarchive matrix-batch inverse-lift API.
 }
+\keyword{internal}

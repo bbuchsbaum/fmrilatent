@@ -26,11 +26,13 @@ test_that("spec_time_slepian creates correct spec object", {
   expect_equal(spec$backend, "tridiag")  # default
 })
 
-test_that("spec_time_slepian accepts different backends", {
+test_that("spec_time_slepian rejects dense backend", {
   spec_tri <- spec_time_slepian(tr = 2, bandwidth = 0.1, backend = "tridiag")
-  spec_dense <- spec_time_slepian(tr = 2, bandwidth = 0.1, backend = "dense")
   expect_equal(spec_tri$backend, "tridiag")
-  expect_equal(spec_dense$backend, "dense")
+  expect_error(
+    spec_time_slepian(tr = 2, bandwidth = 0.1, backend = "dense"),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })
 
 test_that("spec_time_slepian k parameter is optional", {

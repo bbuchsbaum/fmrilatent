@@ -1,17 +1,18 @@
-test_that("dpss_time_basis dense vs tridiag agree on small N", {
-  skip_if_not_installed("Matrix")
+test_that("dpss_time_basis tridiag returns an orthonormal basis", {
   n <- 64
   tr <- 2
   bw <- 0.05
   k <- 5
-  B_dense <- dpss_time_basis(n, tr, bw, k = k, backend = "dense")
   B_tri   <- dpss_time_basis(n, tr, bw, k = k, backend = "tridiag")
-  # Compare subspace via principal angle (should be ~0)
-  proj <- svd(crossprod(B_dense, B_tri))$d
-  expect_true(all(abs(proj) > 1 - 1e-6))
-  # Orthonormality
   I_est <- crossprod(B_tri)
   expect_equal(I_est, diag(k), tolerance = 1e-6)
+})
+
+test_that("dpss_time_basis rejects dense backend", {
+  expect_error(
+    dpss_time_basis(64, tr = 2, bandwidth = 0.05, k = 5, backend = "dense"),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })
 
 test_that("slepian_temporal_latent projects correctly on toy data", {
@@ -22,12 +23,13 @@ test_that("slepian_temporal_latent projects correctly on toy data", {
   mask_arr <- array(TRUE, dim = c(2, 5, 1))
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 5, 1)))
   lat <- slepian_temporal_latent(X, mask, tr = 1, bandwidth = 0.1, k = 4, backend = "tridiag")
-  recon <- as.matrix(lat@basis %*% t(lat@loadings))
-  err_proj <- norm(X - recon, type = "F")
-  err_zero <- norm(X, type = "F")
+  recon_centered <- as.matrix(lat@basis %*% t(lat@loadings))
+  X_centered <- sweep(X, 2L, colMeans(X), "-")
+  err_proj <- norm(X_centered - recon_centered, type = "F")
+  err_zero <- norm(X_centered, type = "F")
   expect_lt(err_proj, err_zero)        # projection reduces energy
   # projection formula matches direct projection
   B <- lat@basis
-  proj_direct <- as.matrix(B %*% crossprod(B, X))
-  expect_equal(recon, proj_direct, tolerance = 1e-6)
+  proj_direct <- as.matrix(B %*% crossprod(B, X_centered))
+  expect_equal(recon_centered, proj_direct, tolerance = 1e-6)
 })

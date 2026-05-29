@@ -22,7 +22,7 @@ dpss_time_basis(
 \item{k}{Optional number of tapers; defaults to \code{floor(2 * NW) - 1}
 where \code{NW = n_time * bandwidth * tr}. Clamped to \code{[1, n_time]}.}
 
-\item{backend}{Either \code{"tridiag"} (default, O(n^2)) or \code{"dense"} (O(n^3), debugging).}
+\item{backend}{DPSS backend. Only \code{"tridiag"} is currently supported.}
 }
 \value{
 Numeric matrix (n_time x k) with orthonormal columns.

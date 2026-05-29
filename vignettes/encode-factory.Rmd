@@ -1,38 +1,54 @@
 ---
 title: Encoding workflows
-output: rmarkdown::html_vignette
-vignette: >
-  %\VignetteIndexEntry{Encoding workflows}
-  %\VignetteEngine{knitr::rmarkdown}
-  %\VignetteEncoding{UTF-8}
-css: albers.css
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2.0
+    css: albers.css
+    includes:
+      in_header: albers-header.html
 resource_files:
 - albers.css
 - albers.js
-includes:
-  in_header: |-
-    <script src="albers.js"></script>
-    <script>document.addEventListener('DOMContentLoaded',function(){document.body.classList.add('palette-red');});</script>
+- albers-header.html
 params:
   family: red
+  preset: homage
 
+vignette: |
+  %\VignetteIndexEntry{Encoding workflows} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}
-if (exists("params") && requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(params$family))
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(family = params$family, preset = params$preset))
 knitr::opts_chunk$set(
   collapse = TRUE,
-  comment = "#>"
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
 )
+```
+
+```{r albers-classes, echo=FALSE, results='asis'}
+cat(sprintf(
+  paste0(
+    '<script>document.addEventListener("DOMContentLoaded",function(){',
+    'document.body.classList.remove("palette-red","palette-lapis","palette-ochre","palette-teal","palette-green","palette-violet","preset-homage","preset-study","preset-structural","preset-adobe","preset-midnight");',
+    'document.body.classList.add("palette-%s","preset-%s");',
+    '});</script>'
+  ),
+  params$family,
+  params$preset
+))
 ```
 
 ```{r library}
 library(fmrilatent)
 ```
 
-This vignette walks through the three encoding strategies — temporal,
-spatial, and spatiotemporal — and shows how to pick the right one for your
-analysis. For a quick introduction, see `vignette("fmrilatent")`.
+This vignette walks through a small executable path for temporal, spatial,
+and spatiotemporal encoding, then gives optional recipes for the heavier
+graph-based families. For a quick introduction, see `vignette("fmrilatent")`.
 
 We use the same small simulated dataset throughout:
 
@@ -44,14 +60,19 @@ set.seed(42)
 n_time <- 20
 n_vox <- sum(mask)
 X <- matrix(rnorm(n_time * n_vox), nrow = n_time)
+
+parcel_map <- as.integer(rep_len(1:4, n_vox))
+red <- make_cluster_reduction(mask_vol, parcel_map)
 ```
 
 ## Compressing the time dimension
 
 Temporal specs project each voxel's time series onto a shared set of basis
 functions. The data matrix X (time x voxels) becomes a basis B (time x k)
-and loadings L (voxels x k), where L = t(X) %*% B. You choose `k` to
-control the compression ratio.
+and loadings L (voxels x k). When B is orthonormal, the loadings simplify to
+L = t(X) %*% B; otherwise `encode()` uses the least-squares projection implied
+by B, equivalent to solving with B'B. You choose `k` to control the compression
+ratio.
 
 ### Slepian/DPSS sequences
 
@@ -125,7 +146,8 @@ data.frame(
 Spatial specs reduce the number of spatial locations by projecting voxels
 onto a set of spatial atoms. The roles reverse: the loadings L (voxels x k)
 define the spatial dictionary, and the temporal coefficients become
-B = X %*% L.
+C. With an orthonormal spatial dictionary C = X %*% L; for non-orthonormal
+dictionaries the encoder uses the corresponding Gram solve.
 
 ### Graph Slepian
 
@@ -202,11 +224,7 @@ Parcel-local PCA computes per-cluster SVD to build a block-sparse spatial
 dictionary. Each parcel contributes `k` components. This is a data-driven
 approach — the loadings are subject-specific.
 
-```{r pca-space, eval = FALSE}
-# Define parcels (4 equal regions) and build a ClusterReduction
-parcel_map <- as.integer(rep_len(1:4, n_vox))
-red <- make_cluster_reduction(mask_vol, parcel_map)
-
+```{r pca-space}
 lat_pca <- encode(X, spec_space_pca(k = 3, center = TRUE), mask = mask_vol,
                   reduction = red)
 
@@ -224,12 +242,9 @@ dictionary across subjects, use `parcel_basis_template()`. The default
 basis is Laplacian eigenvectors — smooth functions from the voxel adjacency
 graph within each parcel. No training data is needed.
 
-```{r parcel-template, eval = FALSE}
-# Wrap the parcellation as a ClusteredNeuroVol (reusing parcel_map from above)
-atlas <- neuroim2::ClusteredNeuroVol(mask_vol, parcel_map)
-
-# Build template once (geometric basis — no data needed)
-tmpl <- parcel_basis_template(atlas, basis_slepian(k = 5))
+```{r parcel-template}
+# Build template once from the shared reduction.
+tmpl <- parcel_basis_template(red, basis_pca(k = 1), data = X, center = TRUE)
 tmpl
 
 # Project each subject onto the shared dictionary
@@ -240,11 +255,13 @@ dim(basis(lvec_s1))     # time x atoms
 dim(loadings(lvec_s1))  # voxels x atoms
 ```
 
-You can also build a shared PCA template from group data:
+The example uses one PCA component per parcel so it is fast and fully
+reproducible. Geometric templates use the same encoding surface:
 
 ```{r parcel-pca-shared, eval = FALSE}
-tmpl_pca <- parcel_basis_template(atlas, basis_pca(k = 5), data = X)
-lvec <- encode(X, spec_space_parcel(tmpl_pca), mask = mask_vol)
+atlas <- neuroim2::ClusteredNeuroVol(mask_vol, parcel_map)
+tmpl_slepian <- parcel_basis_template(atlas, basis_slepian(k = 5))
+lvec <- encode(X, spec_space_parcel(tmpl_slepian), mask = mask_vol)
 ```
 
 Any `lift()`-compatible basis spec works: `basis_slepian()` (default),
@@ -256,12 +273,12 @@ Any `lift()`-compatible basis spec works: `basis_slepian()` (default),
 representation. Instead of storing the full reconstructed matrix, it stores
 a small core tensor and decodes on demand.
 
-```{r separable, eval = FALSE}
+```{r separable}
 lat_st <- encode(X,
   spec_st(
     time  = spec_time_bspline(k = 4, degree = 3),
     space = spec_space_hrbf(params = list(
-      sigma0 = 2, levels = 0, radius_factor = 2.5
+      sigma0 = 2, levels = 0, radius_factor = 2.5, seed = 42L
     ))
   ),
   mask = mask_vol
@@ -293,25 +310,29 @@ k_space), so storage is minimal regardless of the original data size.
 handy for quick experiments:
 
 ```{r factory}
-lat_f <- latent_factory("dct_time", x = X, mask = mask_vol, k = 8,
+lat_f <- latent_factory("time_dct", x = X, mask = mask_vol, k = 8,
                         materialize = "matrix")
 dim(basis(lat_f))
 ```
 
-Available family strings and their underlying specs:
+Family strings follow an `<axis>_<method>` convention. Available strings and
+their underlying specs:
 
 | String | Spec |
 |--------|------|
-| `"slepian_time"` | `spec_time_slepian()` |
-| `"dct_time"` | `spec_time_dct()` |
-| `"slepian_space"` | `spec_space_slepian()` |
-| `"pca_space"` | `spec_space_pca()` |
-| `"parcel_space"` | `spec_space_parcel()` (pass `template =`) |
-| `"heat_space"` | `spec_space_heat()` |
-| `"slepian_st"` | `spec_st()` with Slepian time + space |
-| `"bspline_hrbf_st"` | `spec_st()` with B-spline time + HRBF space |
-| `"wavelet_active"` | `spec_space_wavelet_active()` |
+| `"time_slepian"` | `spec_time_slepian()` |
+| `"time_dct"` | `spec_time_dct()` |
+| `"space_slepian"` | `spec_space_slepian()` |
+| `"space_pca"` | `spec_space_pca()` |
+| `"space_parcel"` | `spec_space_parcel()` (pass `template =`) |
+| `"space_heat"` | `spec_space_heat()` |
+| `"space_wavelet_active"` | `spec_space_wavelet_active()` |
+| `"st_slepian"` | `spec_st()` with Slepian time + space |
+| `"st_bspline_hrbf"` | `spec_st()` with B-spline time + HRBF space |
 | `"hierarchical"` | `spec_hierarchical_template()` |
+
+The older `<method>_<axis>` names (`"dct_time"`, `"slepian_space"`, …) still
+work as aliases, so existing code does not break.
 
 Extra arguments in `...` are forwarded to the spec constructor. The two-step
 pattern (spec then `encode()`) gives you more control; the factory is a
@@ -329,7 +350,7 @@ internally:
 - **`"matrix"`**: an explicit dense matrix. Faster for repeated full
   reconstructions since the basis is precomputed.
 
-```{r materialize, eval = FALSE}
+```{r materialize}
 # Eager matrix
 lat_eager <- encode(X, spec_time_dct(k = 8), mask = mask_vol,
                     materialize = "matrix")
@@ -340,7 +361,6 @@ lat_lazy <- encode(X, spec_time_dct(k = 8), mask = mask_vol,
 
 # Same numerical result
 all.equal(as.matrix(lat_eager), as.matrix(lat_lazy))
-#> [1] TRUE
 ```
 
 Both produce identical numerical results. Choose `"handle"` when memory

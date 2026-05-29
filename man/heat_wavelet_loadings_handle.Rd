@@ -24,7 +24,8 @@ heat_wavelet_loadings_handle(
 when materializing the lifted basis.}
 
 \item{id}{Optional registry id; provide a stable string to reuse
-across sessions. If NULL, a random id is generated.}
+across sessions. If NULL, a deterministic id is derived from the spec and
+reduction.}
 
 \item{label}{Optional human-readable label.}
 }

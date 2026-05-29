@@ -4,7 +4,13 @@
 \alias{encode_hierarchical}
 \title{Encode data using a hierarchical template}
 \usage{
-encode_hierarchical(X, template, label = NULL, mask = NULL)
+encode_hierarchical(
+  X,
+  template,
+  label = NULL,
+  mask = NULL,
+  materialize = c("handle", "auto", "matrix")
+)
 }
 \arguments{
 \item{X}{matrix time x voxels (mask order) matching template mask}
@@ -15,6 +21,8 @@ encode_hierarchical(X, template, label = NULL, mask = NULL)
 
 \item{mask}{Optional mask to validate against the template mask before
 encoding. When supplied, it must match the template exactly.}
+
+\item{materialize}{"handle", "matrix", or "auto" for template loadings.}
 }
 \value{
 LatentNeuroVec with basis = time x atoms coefficients, loadings = template loadings

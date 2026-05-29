@@ -23,7 +23,8 @@ slepian_temporal_handle(
 
 \item{k}{Optional number of tapers/components.}
 
-\item{backend}{Backend passed to `dpss_time_basis` ("tridiag" or "dense").}
+\item{backend}{Backend passed to `dpss_time_basis`; only "tridiag" is
+currently supported.}
 
 \item{id}{Optional registry key (generated if NULL).}
 

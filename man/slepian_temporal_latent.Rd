@@ -28,7 +28,8 @@ slepian_temporal_latent(
 
 \item{denoise}{If TRUE, truncate to `floor(2 * NW) - 1` (Shannon number).}
 
-\item{backend}{DPSS computation backend passed to `dpss_time_basis`.}
+\item{backend}{DPSS computation backend passed to `dpss_time_basis`; only
+\code{"tridiag"} is currently supported.}
 
 \item{label}{Optional character label.}
 }

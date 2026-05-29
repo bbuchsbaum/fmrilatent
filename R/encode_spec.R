@@ -15,11 +15,17 @@ NULL
 #' @param tr Repetition time (seconds).
 #' @param bandwidth Half-bandwidth in Hz (default 0.1).
 #' @param k Optional number of components (default floor(2*NW)-1).
-#' @param backend Backend to use ("tridiag" or "dense").
+#' @param backend Backend to use. Only "tridiag" is currently supported.
 #' @return A `spec_time_slepian` object for `encode()` / `spec_st()`.
 #' @export
 spec_time_slepian <- function(tr, bandwidth = 0.1, k = NULL, backend = c("tridiag", "dense")) {
   backend <- match.arg(backend)
+  if (identical(backend, "dense")) {
+    .encoder_cli_abort(
+      "backend = \"dense\" is disabled because it can return a different DPSS subspace under eigenvalue degeneracy; use backend = \"tridiag\".",
+      class = "fmrilatent_error_unsupported_dpss_backend"
+    )
+  }
   tr <- .validate_positive_scalar(tr, "tr")
   bandwidth <- .validate_positive_scalar(bandwidth, "bandwidth")
   if (!is.null(k)) {

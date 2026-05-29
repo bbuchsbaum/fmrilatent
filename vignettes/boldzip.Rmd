@@ -1,0 +1,339 @@
+---
+title: Compressing fMRI Matrices with BOLDZip-SR
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2.0
+    css: albers.css
+    includes:
+      in_header: albers-header.html
+resource_files:
+- albers.css
+- albers.js
+- albers-header.html
+params:
+  family: red
+  preset: homage
+
+vignette: |
+  %\VignetteIndexEntry{Compressing fMRI Matrices with BOLDZip-SR} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(family = params$family, preset = params$preset))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+
+boldzip_metric_row <- function(label, X, fit) {
+  metrics <- evaluate_boldzip_sr(X, fit)
+  data.frame(
+    setting = label,
+    rmse = round(unname(metrics[["rmse"]]), 4),
+    correlation = round(unname(metrics[["correlation"]]), 4),
+    payload_scalars = as.integer(metrics[["payload_scalars"]]),
+    compression_ratio = round(length(X) / unname(metrics[["payload_scalars"]]), 2),
+    row.names = NULL
+  )
+}
+```
+
+```{r albers-classes, echo=FALSE, results='asis'}
+cat(sprintf(
+  paste0(
+    '<script>document.addEventListener("DOMContentLoaded",function(){',
+    'document.body.classList.remove("palette-red","palette-lapis","palette-ochre","palette-teal","palette-green","palette-violet","preset-homage","preset-study","preset-structural","preset-adobe","preset-midnight");',
+    'document.body.classList.add("palette-%s","preset-%s");',
+    '});</script>'
+  ),
+  params$family,
+  params$preset
+))
+```
+
+```{r library}
+library(fmrilatent)
+```
+
+You have a BOLD matrix and want a compact payload that can be decoded,
+audited, and compared with simple baselines. BOLDZip-SR is for that
+matrix-level problem: rows are voxels or grayordinates, columns are time
+points, and the result is a standalone codec payload rather than a
+`LatentNeuroVec`.
+
+The payload stores a voxel baseline, a small set of temporal carrier signals,
+sparse texture loadings onto those carriers, and optional sparse events for
+reliable deviations. At the end you should have a decoded matrix, fidelity
+diagnostics, and a scalar-count summary of what was stored.
+
+## What do you start with?
+
+For this vignette, use a small simulated voxel-by-time matrix with low-rank
+carrier structure. The same workflow applies to a masked BOLD run after you
+have arranged it as voxels by time.
+
+```{r make-boldzip-data}
+sim <- boldzip_sr_simulate(
+  n_voxels = 60L, n_time = 48L,
+  k_carriers = 2L, q_texture = 1L,
+  n_events = 0L, noise_sd = 0.02,
+  seed = 511
+)
+X <- sim$X
+dim(X)
+```
+
+## How do you make a first payload?
+
+Choose the number of carrier time courses, the temporal basis budget, and the
+number of texture links to keep for each detail atom. Here the temporal basis
+is a shared DCT descriptor, so the payload records the basis contract instead
+of asking you to manage a raw matrix by hand.
+
+```{r fit-boldzip}
+temporal <- shared_temporal_spec("dct", n_time = ncol(X), rank = 18L)
+
+fit <- boldzip_sr_encode(
+  X,
+  k_carriers = 2L,
+  temporal_spec = temporal,
+  q_texture = 1L,
+  reliability = boldzip_reliability(min_texture_reliability = 0),
+  events = boldzip_events(max_events = 0L)
+)
+```
+
+Use `evaluate_boldzip_sr()` to inspect the reconstruction error and the
+approximate payload size. It returns a named vector; the compression ratio is
+just the original matrix scalar count divided by the payload scalar count.
+
+```{r first-diagnostics}
+metrics <- evaluate_boldzip_sr(X, fit)
+metrics[c("rmse", "correlation", "payload_scalars")]
+
+# Compression ratio: original scalars / stored scalars
+length(X) / metrics[["payload_scalars"]]
+```
+
+The later sections compare several fits at once, so we fold those same numbers
+into one tidy row per setting with a small helper (`boldzip_metric_row()`,
+defined in the setup chunk) that wraps the call above.
+
+```{r first-diagnostics-row}
+boldzip_metric_row("guide", X, fit)
+```
+
+```{r validate-first-fit, include = FALSE}
+X_hat <- boldzip_sr_decode(fit)
+guide_metrics <- evaluate_boldzip_sr(X, fit)
+stopifnot(
+  identical(dim(X_hat), dim(X)),
+  all(is.finite(X_hat)),
+  is.finite(guide_metrics[["rmse"]]),
+  guide_metrics[["rmse"]] < 0.05,
+  guide_metrics[["correlation"]] > 0.99,
+  guide_metrics[["payload_scalars"]] < length(X)
+)
+```
+
+The first fit tracks the observed time course closely for a representative
+voxel because the simulated signal matches the carrier-plus-texture structure.
+
+```{r first-reconstruction-plot, echo = FALSE, fig.width = 7, fig.height = 3.2, fig.alt = "Original and BOLDZip-SR reconstructed time courses for one voxel."}
+voxel_id <- which.max(rowSums(abs(sim$texture)))
+op <- par(mar = c(4, 4, 1, 1))
+plot(X[voxel_id, ], type = "l", col = "grey55", lwd = 2,
+     xlab = "time point", ylab = "signal")
+lines(X_hat[voxel_id, ], col = "firebrick", lwd = 2)
+legend("topright", c("original", "decoded"), lwd = 2,
+       col = c("grey55", "firebrick"), bty = "n")
+par(op)
+```
+
+## Where did the payload budget go?
+
+`boldzip_sr_payload_summary()` reports how many scalar values are stored in
+each payload component. Treat it as an accounting diagnostic, not as a
+compressed file-size estimate.
+
+```{r payload-summary}
+payload <- boldzip_sr_payload_summary(fit)
+payload[, c("component", "scalar_count", "bytes")]
+```
+
+```{r validate-payload, include = FALSE}
+total <- payload$component == "total_object"
+stopifnot(
+  sum(total) == 1L,
+  payload$scalar_count[total] == sum(payload$scalar_count[!total]),
+  all(payload$scalar_count >= 0),
+  all(payload$bytes >= 0)
+)
+```
+
+## How do you decode only what you need?
+
+The direct BOLDZip decoder returns voxels by time. You can request a small
+time window and a subset of rows without inspecting the payload internals.
+
+```{r decode-subset}
+window <- boldzip_sr_decode(fit, time_idx = 1:6, roi = 1:4)
+round(window, 3)
+```
+
+```{r validate-subset, include = FALSE}
+stopifnot(
+  identical(dim(window), c(4L, 6L)),
+  all.equal(window, X_hat[1:4, 1:6], tolerance = 1e-12)
+)
+```
+
+BOLDZip-SR can also participate in the package's implicit decoder contract.
+The codec orientation remains voxels by time, while `ImplicitLatent`
+prediction uses the package-wide time-by-voxel convention.
+
+```{r implicit-bridge}
+latent <- as_implicit_latent(fit)
+direct <- predict(fit, time_idx = 1:6)
+implicit <- predict(latent, time_idx = 1:6)
+
+data.frame(
+  decoder = c("BOLDZipSR", "ImplicitLatent"),
+  orientation = c("voxels x time", "time x voxels"),
+  rows = c(nrow(direct), nrow(implicit)),
+  columns = c(ncol(direct), ncol(implicit))
+)
+```
+
+```{r validate-implicit-bridge, include = FALSE}
+stopifnot(
+  all.equal(implicit, t(direct), tolerance = 1e-12),
+  isTRUE(is_implicit_latent(latent))
+)
+```
+
+## How should you tune the budget?
+
+Start with carrier count, temporal rank, and texture sparsity. A smaller
+payload is cheaper to store, while a larger payload can reduce reconstruction
+error when the signal has structure to capture.
+
+The `temporal_k` argument used below is the shorthand for a DCT temporal spec
+of that rank — equivalent to passing `temporal_spec = shared_temporal_spec("dct", n_time = ncol(X), rank = temporal_k)`
+as in the first fit.
+
+```{r tune-budget}
+small <- boldzip_sr_encode(
+  X, k_carriers = 1L, temporal_k = 10L, q_texture = 1L,
+  reliability = boldzip_reliability(min_texture_reliability = 0),
+  events = boldzip_events(max_events = 0L)
+)
+
+larger <- boldzip_sr_encode(
+  X, k_carriers = 2L, temporal_k = 24L, q_texture = 2L,
+  reliability = boldzip_reliability(min_texture_reliability = 0),
+  events = boldzip_events(max_events = 0L)
+)
+```
+
+```{r budget-table}
+rbind(
+  boldzip_metric_row("small", X, small),
+  boldzip_metric_row("guide", X, fit),
+  boldzip_metric_row("larger", X, larger)
+)
+```
+
+```{r validate-budget, include = FALSE}
+budget_metrics <- rbind(
+  small = evaluate_boldzip_sr(X, small),
+  guide = evaluate_boldzip_sr(X, fit),
+  larger = evaluate_boldzip_sr(X, larger)
+)
+stopifnot(
+  all(is.finite(budget_metrics[, "rmse"])),
+  budget_metrics["guide", "rmse"] <= budget_metrics["small", "rmse"],
+  budget_metrics["larger", "payload_scalars"] >= budget_metrics["guide", "payload_scalars"]
+)
+```
+
+`compare_boldzip_sr()` gives a quick baseline table. Use it to check whether
+the BOLDZip payload is buying the trade-off you want for a given dataset.
+
+```{r compare-baselines}
+comparison <- compare_boldzip_sr(X, fit, svd_ranks = c(2L, 6L))
+comparison[, c("method", "parameter", "rmse", "correlation", "payload_scalars")]
+```
+
+```{r validate-comparison, include = FALSE}
+stopifnot(
+  all(is.finite(comparison$rmse)),
+  all(comparison$correlation <= 1),
+  all(comparison$payload_scalars > 0)
+)
+```
+
+## When do events help?
+
+If the data contain sparse paired deviations, allow an event budget. The table
+below uses a second simulated matrix with injected events and compares the
+same carrier/texture settings with and without event storage.
+
+```{r event-example}
+event_sim <- boldzip_sr_simulate(
+  n_voxels = 50L, n_time = 40L,
+  k_carriers = 2L, q_texture = 1L,
+  n_events = 5L, noise_sd = 0.01,
+  seed = 512
+)
+event_X <- event_sim$X
+```
+
+```{r event-fit}
+no_events <- boldzip_sr_encode(
+  event_X, k_carriers = 2L, temporal_k = 16L, q_texture = 1L,
+  reliability = boldzip_reliability(min_texture_reliability = 0),
+  events = boldzip_events(max_events = 0L)
+)
+
+with_events <- boldzip_sr_encode(
+  event_X, k_carriers = 2L, temporal_k = 16L, q_texture = 1L,
+  reliability = boldzip_reliability(min_texture_reliability = 0),
+  events = boldzip_events(max_events = 10L, threshold_sd = 2.5)
+)
+```
+
+```{r event-table}
+rbind(
+  boldzip_metric_row("no events", event_X, no_events),
+  boldzip_metric_row("with events", event_X, with_events)
+)
+```
+
+```{r validate-events, include = FALSE}
+event_metrics <- rbind(
+  no_events = evaluate_boldzip_sr(event_X, no_events),
+  with_events = evaluate_boldzip_sr(event_X, with_events)
+)
+stopifnot(
+  nrow(with_events$events) > 0L,
+  event_metrics["with_events", "rmse"] <= event_metrics["no_events", "rmse"],
+  event_metrics["with_events", "payload_scalars"] >=
+    event_metrics["no_events", "payload_scalars"]
+)
+```
+
+## Where does this fit in fmrilatent?
+
+BOLDZip-SR is a standalone matrix codec. Use `boldzip_sr_encode()` when you
+want the carrier/texture/event payload directly. Use `encode()` and the
+`spec_*()` families when you want a standard latent neuroimaging
+representation such as `LatentNeuroVec`.
+
+For lower-level shared structure contracts, see
+`vignette("shared-structure-boldzip")`. For the broader distinction between
+regular latent encoders and standalone codecs, see
+`vignette("standalone-codecs")`.

@@ -84,6 +84,31 @@
   x
 }
 
+.boldzip_validate_orthonormal_columns <- function(x, name, tol = 1e-8) {
+  if (is.null(x)) {
+    return(invisible(TRUE))
+  }
+  gram <- crossprod(x)
+  if (!isTRUE(all.equal(gram, diag(ncol(x)), tolerance = tol))) {
+    stop(name, " columns must be orthonormal for BOLDZip-SR spatial coding.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
+.boldzip_validate_cross_orthogonal <- function(phi_c, phi_d, tol = 1e-8) {
+  if (is.null(phi_c) || is.null(phi_d)) {
+    return(invisible(TRUE))
+  }
+  cross <- crossprod(phi_c, phi_d)
+  if (!isTRUE(all.equal(cross, matrix(0, nrow = ncol(phi_c), ncol = ncol(phi_d)),
+                        tolerance = tol))) {
+    stop("phi_c and phi_d must be mutually orthogonal for BOLDZip-SR spatial coding.",
+         call. = FALSE)
+  }
+  invisible(TRUE)
+}
+
 .boldzip_validate_spatial_basis_input <- function(x, name) {
   if (is.null(x)) {
     return(NULL)
@@ -114,6 +139,88 @@
     return(coef)
   }
   phi %*% coef
+}
+
+.boldzip_orthonormalize_columns <- function(x, tol = 1e-10) {
+  x <- as.matrix(x)
+  if (ncol(x) == 0L) {
+    return(x)
+  }
+  q <- qr(x, tol = tol)
+  rank <- q$rank
+  if (rank < 1L) {
+    stop("basis matrix must have at least one non-zero independent column.",
+         call. = FALSE)
+  }
+  qr.Q(q)[, seq_len(rank), drop = FALSE]
+}
+
+.boldzip_materialize_temporal_spec <- function(spec, n_time) {
+  validate_basis <- function(basis, label) {
+    basis <- .boldzip_validate_basis_matrix(basis, label, n_time)
+    gram <- crossprod(basis)
+    if (!isTRUE(all.equal(gram, diag(ncol(basis)), tolerance = 1e-8))) {
+      stop(label, " columns must be orthonormal for BOLDZip-SR temporal coding.",
+           call. = FALSE)
+    }
+    basis
+  }
+  if (inherits(spec, "SharedTemporalSpec")) {
+    if (spec$n_time != n_time) {
+      stop("temporal_spec n_time must match the number of columns in X.",
+           call. = FALSE)
+    }
+    basis <- validate_basis(materialize_shared_temporal_spec(spec), "temporal_spec")
+    return(list(
+      basis = basis,
+      temporal_k = ncol(basis),
+      spec = spec,
+      label = paste0("shared_", spec$kind)
+    ))
+  }
+  if (inherits(spec, "spec_time_dct")) {
+    basis <- validate_basis(
+      as.matrix(build_dct_basis(n_time, spec$k, norm = spec$norm)),
+      "temporal_spec"
+    )
+    return(list(
+      basis = basis,
+      temporal_k = ncol(basis),
+      spec = spec,
+      label = "spec_time_dct"
+    ))
+  }
+  if (inherits(spec, "spec_time_bspline")) {
+    if (!isTRUE(spec$orthonormalize)) {
+      stop("spec_time_bspline temporal_spec must use orthonormalize = TRUE for BOLDZip-SR.",
+           call. = FALSE)
+    }
+    basis <- as.matrix(build_bspline_basis(
+      n_time = n_time,
+      k = spec$k,
+      degree = spec$degree,
+      include_intercept = spec$include_intercept,
+      orthonormalize = spec$orthonormalize
+    ))
+    basis <- validate_basis(basis, "temporal_spec")
+    return(list(
+      basis = basis,
+      temporal_k = ncol(basis),
+      spec = spec,
+      label = "spec_time_bspline"
+    ))
+  }
+  if (is.matrix(spec) || inherits(spec, "Matrix")) {
+    basis <- validate_basis(spec, "temporal_spec")
+    return(list(
+      basis = basis,
+      temporal_k = ncol(basis),
+      spec = shared_temporal_spec("custom", basis = basis),
+      label = "matrix"
+    ))
+  }
+  stop("temporal_spec must be NULL, a SharedTemporalSpec, a spec_time_dct, ",
+       "a spec_time_bspline, or a numeric matrix.", call. = FALSE)
 }
 
 .boldzip_quantize_values <- function(values, reliability, quantization,
@@ -200,7 +307,11 @@
         atom = integer(), carrier = integer(), amplitude = numeric(),
         lag = integer(), reliability = numeric()
       ),
-      matrix = Matrix::Matrix(0, nrow = n_detail, ncol = n_carriers, sparse = TRUE)
+      matrix = Matrix::Matrix(0, nrow = n_detail, ncol = n_carriers, sparse = TRUE),
+      matrix_index = data.frame(
+        carrier = seq_len(n_carriers),
+        lag = rep.int(0L, n_carriers)
+      )
     ))
   }
 
@@ -281,13 +392,27 @@
     reliability_out <- c(reliability_out, rep.int(rel, sum(keep)))
   }
 
+  matrix_index <- data.frame(
+    carrier = lagged$carrier,
+    lag = lagged$lag
+  )
   if (length(atom_out) == 0L) {
-    loading_mat <- Matrix::Matrix(0, nrow = n_detail, ncol = n_carriers, sparse = TRUE)
+    loading_mat <- Matrix::Matrix(
+      0,
+      nrow = n_detail,
+      ncol = nrow(matrix_index),
+      sparse = TRUE
+    )
   } else {
-    lag0 <- lag_out == 0L
+    matrix_col <- match(
+      paste(carrier_out, lag_out, sep = ":"),
+      paste(matrix_index$carrier, matrix_index$lag, sep = ":")
+    )
     loading_mat <- Matrix::sparseMatrix(
-      i = atom_out[lag0], j = carrier_out[lag0], x = amplitude_out[lag0],
-      dims = c(n_detail, n_carriers)
+      i = atom_out,
+      j = matrix_col,
+      x = amplitude_out,
+      dims = c(n_detail, nrow(matrix_index))
     )
   }
 
@@ -299,7 +424,8 @@
       lag = lag_out,
       reliability = reliability_out
     ),
-    matrix = loading_mat
+    matrix = loading_mat,
+    matrix_index = matrix_index
   )
 }
 
@@ -485,9 +611,12 @@ boldzip_events <- function(max_events = 256L, threshold_sd = 3,
 #' @param phi_d Optional detail basis matrix with rows equal to voxels. If
 #'   `NULL`, the detail basis is the identity basis.
 #' @param label Optional label stored in metadata.
+#' @param basis_asset Optional source template or shared-basis object used to
+#'   build this descriptor.
 #' @return A `BoldZipSRSpatialBasis` object.
 #' @export
-boldzip_spatial_basis <- function(phi_c = NULL, phi_d = NULL, label = NULL) {
+boldzip_spatial_basis <- function(phi_c = NULL, phi_d = NULL, label = NULL,
+                                  basis_asset = NULL) {
   if (!is.null(phi_c)) {
     phi_c <- .boldzip_validate_spatial_basis_input(phi_c, "phi_c")
   }
@@ -498,9 +627,80 @@ boldzip_spatial_basis <- function(phi_c = NULL, phi_d = NULL, label = NULL) {
     stop("phi_c and phi_d must have the same number of rows.", call. = FALSE)
   }
   structure(
-    list(phi_c = phi_c, phi_d = phi_d, label = label %||% "matrix"),
+    list(
+      phi_c = phi_c,
+      phi_d = phi_d,
+      label = label %||% "matrix",
+      basis_asset = basis_asset
+    ),
     class = "BoldZipSRSpatialBasis"
   )
+}
+
+.boldzip_loadings_from_template <- function(x) {
+  tryCatch(template_loadings(x), error = function(e) NULL)
+}
+
+#' Coerce a spatial object to a BOLDZip-SR spatial basis
+#'
+#' @description
+#' This helper lets the standalone BOLDZip-SR codec consume matrix-like shared
+#' basis assets without registering BOLDZip as an `encode()` family. Matrix and
+#' template inputs are used as the detail basis by default and are
+#' orthonormalized because BOLDZip projection currently uses the transpose as
+#' the analysis operator.
+#'
+#' @param x A `BoldZipSRSpatialBasis`, matrix-like object, shared reference, or
+#'   template object supporting [template_loadings()].
+#' @param ... Additional arguments reserved for methods. The default method
+#'   accepts `label`, `role`, and `orthonormalize`.
+#' @return A `BoldZipSRSpatialBasis` object.
+#' @export
+as_boldzip_spatial_basis <- function(x, ...) {
+  UseMethod("as_boldzip_spatial_basis")
+}
+
+#' @export
+as_boldzip_spatial_basis.BoldZipSRSpatialBasis <- function(x, ...) {
+  x
+}
+
+#' @export
+as_boldzip_spatial_basis.SharedReference <- function(x, ...) {
+  out <- as_boldzip_spatial_basis(resolve_shared_reference(x), ...)
+  out$basis_asset <- x
+  out
+}
+
+#' @export
+as_boldzip_spatial_basis.default <- function(x, label = NULL,
+                                             role = c("detail", "coarse"),
+                                             orthonormalize = TRUE, ...) {
+  role <- match.arg(role)
+  if (is.list(x) && (any(c("phi_c", "phi_d") %in% names(x)))) {
+    args <- x[intersect(names(x), c("phi_c", "phi_d", "label", "basis_asset"))]
+    return(do.call(boldzip_spatial_basis, args))
+  }
+
+  loadings <- if (is.matrix(x) || inherits(x, "Matrix")) {
+    x
+  } else {
+    .boldzip_loadings_from_template(x)
+  }
+  if (is.null(loadings)) {
+    stop("x must be a BoldZipSRSpatialBasis, matrix-like object, SharedReference, ",
+         "or template object with template_loadings().", call. = FALSE)
+  }
+  phi <- .boldzip_validate_spatial_basis_input(loadings, "template_loadings(x)")
+  if (isTRUE(orthonormalize)) {
+    phi <- .boldzip_orthonormalize_columns(phi)
+  }
+  label <- label %||% tryCatch(template_meta(x)$family, error = function(e) NULL) %||%
+    class(x)[[1L]]
+  if (identical(role, "coarse")) {
+    return(boldzip_spatial_basis(phi_c = phi, label = label, basis_asset = x))
+  }
+  boldzip_spatial_basis(phi_d = phi, label = label, basis_asset = x)
 }
 
 .boldzip_canonicalize_eigenvectors <- function(vectors) {
@@ -609,7 +809,11 @@ boldzip_graph_spatial_basis <- function(adjacency,
 #'   carriers are learned from `X` directly.
 #' @param k_carriers Number of carrier time courses to learn.
 #' @param temporal_k Number of DCT coefficients per carrier. Defaults to
-#'   `ceiling(n_time / 4)`.
+#'   `ceiling(n_time / 4)` when `temporal_spec` is `NULL`.
+#' @param temporal_spec Optional temporal basis descriptor. May be a
+#'   `SharedTemporalSpec`, `spec_time_dct`, `spec_time_bspline`, or numeric
+#'   basis matrix with rows equal to time points. When supplied, it determines
+#'   the temporal basis and `temporal_k`.
 #' @param q_texture Maximum number of carrier loadings per detail atom.
 #' @param texture_lags Integer vector of allowed carrier lags for texture
 #'   loading fits. A positive lag uses `Z_k(t - lag)`.
@@ -624,6 +828,7 @@ boldzip_sr_encode <- function(X,
                               spatial_basis = NULL,
                               k_carriers = 96L,
                               temporal_k = NULL,
+                              temporal_spec = NULL,
                               q_texture = 2L,
                               texture_lags = 0L,
                               reliability = boldzip_reliability(),
@@ -648,15 +853,34 @@ boldzip_sr_encode <- function(X,
   if (is.null(temporal_k)) {
     temporal_k <- max(1L, ceiling(n_time / 4))
   }
-  temporal_k <- min(.boldzip_check_scalar_integer(temporal_k, "temporal_k"), n_time)
+  if (is.null(temporal_spec)) {
+    temporal_k <- min(.boldzip_check_scalar_integer(temporal_k, "temporal_k"), n_time)
+    temporal_info <- list(
+      basis = as.matrix(build_dct_basis(n_time, temporal_k, norm = "ortho")),
+      temporal_k = temporal_k,
+      spec = shared_temporal_spec(
+        "dct",
+        n_time = n_time,
+        rank = temporal_k,
+        params = list(norm = "ortho")
+      ),
+      label = "default_dct"
+    )
+  } else {
+    temporal_info <- .boldzip_materialize_temporal_spec(temporal_spec, n_time)
+    temporal_k <- temporal_info$temporal_k
+  }
 
   if (is.null(spatial_basis)) {
     spatial_basis <- boldzip_spatial_basis(label = "identity_detail")
   } else if (!inherits(spatial_basis, "BoldZipSRSpatialBasis")) {
-    spatial_basis <- do.call(boldzip_spatial_basis, spatial_basis)
+    spatial_basis <- as_boldzip_spatial_basis(spatial_basis)
   }
   phi_c <- .boldzip_validate_basis_matrix(spatial_basis$phi_c, "phi_c", n_voxels)
   phi_d <- .boldzip_validate_basis_matrix(spatial_basis$phi_d, "phi_d", n_voxels)
+  .boldzip_validate_orthonormal_columns(phi_c, "phi_c")
+  .boldzip_validate_orthonormal_columns(phi_d, "phi_d")
+  .boldzip_validate_cross_orthogonal(phi_c, phi_d)
 
   mu <- if (isTRUE(center)) rowMeans(X) else rep(0, n_voxels)
   X_centered <- sweep(X, 1L, mu, "-")
@@ -665,8 +889,12 @@ boldzip_sr_encode <- function(X,
   y_carrier <- if (is.null(phi_c)) X_centered else .boldzip_project(phi_c, X_centered)
   k_use <- min(k_carriers, nrow(y_carrier), ncol(y_carrier))
   sv <- svd(y_carrier, nu = k_use, nv = k_use)
+  singular_values <- sv$d[seq_len(k_use)]
+  singular_tol <- max(dim(y_carrier)) * .Machine$double.eps *
+    max(1, max(abs(y_carrier)))
+  singular_values[singular_values <= singular_tol] <- 0
   carrier_u <- sv$u[, seq_len(k_use), drop = FALSE]
-  z_raw <- diag(sv$d[seq_len(k_use)], nrow = k_use) %*%
+  z_raw <- diag(singular_values, nrow = k_use) %*%
     t(sv$v[, seq_len(k_use), drop = FALSE])
 
   carrier_reliability <- .boldzip_row_cor(
@@ -675,11 +903,16 @@ boldzip_sr_encode <- function(X,
   )
   z_raw[carrier_reliability < reliability$min_temporal_reliability, ] <- 0
 
-  temporal_basis <- as.matrix(build_dct_basis(n_time, temporal_k, norm = "ortho"))
+  temporal_basis <- temporal_info$basis
   theta <- z_raw %*% temporal_basis
+  theta_reliability <- matrix(
+    rep(carrier_reliability, times = ncol(theta)),
+    nrow = nrow(theta),
+    ncol = ncol(theta)
+  )
   theta[] <- .boldzip_quantize_values(
     as.numeric(theta),
-    reliability = rep(carrier_reliability, each = temporal_k),
+    reliability = as.numeric(theta_reliability),
     quantization = quantization,
     noise_scale = stats::sd(z_raw)
   )
@@ -725,10 +958,13 @@ boldzip_sr_encode <- function(X,
       phi_c = phi_c,
       phi_d = phi_d,
       label = spatial_basis$label,
+      basis_asset = spatial_basis$basis_asset %||% NULL,
       detail_identity = is.null(phi_d),
       coarse_identity = is.null(phi_c)
     ),
     temporal_basis = temporal_basis,
+    temporal_spec = temporal_info$spec,
+    temporal_label = temporal_info$label,
     carriers = list(
       u = carrier_u,
       theta = theta,
@@ -736,7 +972,8 @@ boldzip_sr_encode <- function(X,
     ),
     texture = list(
       loadings = texture$loadings,
-      matrix = texture$matrix
+      matrix = texture$matrix,
+      matrix_index = texture$matrix_index
     ),
     events = event_payload,
     settings = list(
@@ -832,12 +1069,17 @@ boldzip_sr_payload_summary <- function(object) {
   }
   n_load <- nrow(object$texture$loadings)
   n_events <- nrow(object$events)
+  n_texture_index <- if (is.null(object$texture$matrix_index)) {
+    0L
+  } else {
+    nrow(object$texture$matrix_index) * 2L
+  }
   rows <- data.frame(
     component = c("carriers_theta", "texture_loadings", "events", "baseline_mu",
                   "basis_metadata"),
     scalar_count = c(
       length(object$carriers$theta),
-      n_load * 4L,
+      n_load * 5L + n_texture_index,
       n_events * 5L,
       length(object$mu),
       length(object$temporal_basis) +
@@ -899,6 +1141,10 @@ evaluate_boldzip_sr <- function(X, object, reliability_weights = NULL) {
   if (!is.null(reliability_weights)) {
     w <- as.numeric(reliability_weights)
     w <- rep(w, length.out = length(err))
+    if (any(!is.finite(w)) || any(w < 0) || sum(w) <= 0) {
+      stop("reliability_weights must be finite non-negative weights with positive sum.",
+           call. = FALSE)
+    }
     weighted_mse <- sum(w * as.numeric(err)^2) / sum(w)
   }
   c(
@@ -919,6 +1165,94 @@ evaluate_boldzip_sr <- function(X, object, reliability_weights = NULL) {
 #' @export
 as.matrix.BoldZipSR <- function(x, ...) {
   boldzip_sr_decode(x, ...)
+}
+
+.boldzip_roi_from_mask <- function(roi_mask, n_voxels, support = NULL,
+                                   mask = NULL, context = "BoldZipSR") {
+  if (is.null(roi_mask)) {
+    return(NULL)
+  }
+  if (is.numeric(roi_mask)) {
+    return(roi_mask)
+  }
+  if (!is.logical(roi_mask) || anyNA(roi_mask)) {
+    stop(context, " roi_mask must be numeric indices or a non-missing logical mask.",
+         call. = FALSE)
+  }
+  if (length(roi_mask) == n_voxels && is.null(dim(roi_mask))) {
+    return(roi_mask)
+  }
+  if (!is.null(mask)) {
+    mask_arr <- as.logical(as.array(mask))
+    if (!identical(dim(roi_mask), dim(mask_arr))) {
+      stop(context, " roi_mask dimensions must match mask dimensions.",
+           call. = FALSE)
+    }
+    global_idx <- which(mask_arr)
+    roi_global <- which(as.logical(roi_mask))
+    return(which(global_idx %in% roi_global))
+  }
+  if (!is.null(support) && length(roi_mask) == length(support)) {
+    return(roi_mask)
+  }
+  stop(context, " roi_mask must have one logical value per decoded row.",
+       call. = FALSE)
+}
+
+#' Predict from a BOLDZip-SR codec payload
+#'
+#' @param object A `BoldZipSR` object.
+#' @param time_idx Optional integer time indices to return.
+#' @param roi Optional integer or logical row subset to return.
+#' @param ... Additional arguments passed to [boldzip_sr_decode()].
+#' @return Reconstructed matrix with rows as voxels/grayordinates and columns
+#'   as time points.
+#' @export
+predict.BoldZipSR <- function(object, time_idx = NULL, roi = NULL, ...) {
+  boldzip_sr_decode(object, time_idx = time_idx, roi = roi, ...)
+}
+
+#' Coerce a BOLDZip-SR payload to an ImplicitLatent
+#'
+#' @param x A `BoldZipSR` object.
+#' @param mask Optional logical 3D array or `LogicalNeuroVol` for volumetric
+#'   wrapping.
+#' @param domain Optional decoded output domain.
+#' @param support Optional decoded support. Defaults to row indices.
+#' @param ... Additional arguments ignored.
+#' @return An `ImplicitLatent` whose decoder returns matrices as
+#'   `time x voxels`, matching the rest of the implicit latent API.
+#' @export
+as_implicit_latent.BoldZipSR <- function(x, mask = NULL, domain = NULL,
+                                         support = NULL, ...) {
+  n_voxels <- x$dimensions[["voxels"]]
+  if (is.null(support)) {
+    support <- if (is.null(mask)) seq_len(n_voxels) else mask
+  }
+  decoder <- function(time_idx = NULL, roi_mask = NULL, levels_keep = NULL, ...) {
+    roi <- .boldzip_roi_from_mask(
+      roi_mask,
+      n_voxels = n_voxels,
+      support = support,
+      mask = mask,
+      context = "as_implicit_latent.BoldZipSR"
+    )
+    t(boldzip_sr_decode(x, time_idx = time_idx, roi = roi))
+  }
+  out <- implicit_latent(
+    coeff = x,
+    decoder = decoder,
+    meta = c(x$meta, list(
+      source_class = "BoldZipSR",
+      orientation = "time_x_voxels",
+      codec_orientation = "voxels_x_time"
+    )),
+    mask = mask,
+    domain = domain,
+    support = support
+  )
+  out$basis_asset <- x$spatial_basis$basis_asset %||% NULL
+  out
 }
 
 #' Simulate data with BOLDZip-SR carrier, texture, and event structure

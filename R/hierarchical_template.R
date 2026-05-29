@@ -147,9 +147,12 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
 #' @param mask Optional mask to validate against the template mask before
 #'   encoding. When supplied, it must match the template exactly.
 #' @param label Optional label for the resulting LatentNeuroVec (defaults to template label)
+#' @param materialize "handle", "matrix", or "auto" for template loadings.
 #' @return LatentNeuroVec with basis = time x atoms coefficients, loadings = template loadings
 #' @export
-encode_hierarchical <- function(X, template, label = NULL, mask = NULL) {
+encode_hierarchical <- function(X, template, label = NULL, mask = NULL,
+                                materialize = c("handle", "auto", "matrix")) {
+  materialize <- .resolve_materialize(materialize, context = "encode_hierarchical")
   if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
   X_mat <- Matrix::Matrix(X, sparse = FALSE)
   n_time <- nrow(X_mat)
@@ -182,7 +185,12 @@ encode_hierarchical <- function(X, template, label = NULL, mask = NULL) {
 
   LatentNeuroVec(
     basis = coeff_t,
-    loadings = proj$analysis_loadings,
+    loadings = .loadings_for_materialize(
+      proj$analysis_loadings,
+      materialize,
+      id_prefix = "hierarchical-loadings",
+      label = "hierarchical-loadings"
+    ),
     space = spc,
     mask = tmpl_mask,
     offset = proj$offset,

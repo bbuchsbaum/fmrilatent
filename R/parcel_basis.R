@@ -89,24 +89,36 @@ parcel_basis_template <- function(parcellation,
   } else if (inherits(parcellation, "ClusteredNeuroVol")) {
     as_cluster_reduction(parcellation)
   } else {
-    stop("parcellation must be a ClusterReduction or ClusteredNeuroVol.", call. = FALSE)
+    .encoder_cli_abort(
+      "parcellation must be a ClusterReduction or ClusteredNeuroVol.",
+      class = "fmrilatent_error_invalid_parcellation"
+    )
   }
 
   if (inherits(basis_spec, "spec_pca")) {
     if (isTRUE(basis_spec$whiten)) {
-      stop("PCA parcel templates do not support whiten = TRUE.", call. = FALSE)
+      .encoder_cli_abort(
+        "PCA parcel templates do not support whiten = TRUE.",
+        class = "fmrilatent_error_invalid_parcel_template"
+      )
     }
     if ("center" %in% names(extra_args)) {
-      stop("Use parcel_basis_template(center = ...) rather than passing center in ... for PCA templates.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "Use parcel_basis_template(center = ...) rather than passing center in ... for PCA templates.",
+        class = "fmrilatent_error_invalid_parcel_template"
+      )
     }
     if ("offset" %in% names(extra_args)) {
-      stop("PCA parcel templates do not support a custom offset; encode-time projection must remain replayable.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "PCA parcel templates do not support a custom offset; encode-time projection must remain replayable.",
+        class = "fmrilatent_error_invalid_parcel_template"
+      )
     }
     if ("scale" %in% names(extra_args) && isTRUE(extra_args$scale)) {
-      stop("PCA parcel templates do not support scale = TRUE; projection only replays centering.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "PCA parcel templates do not support scale = TRUE; projection only replays centering.",
+        class = "fmrilatent_error_invalid_parcel_template"
+      )
     }
     extra_args$center <- isTRUE(center)
   }
@@ -121,7 +133,10 @@ parcel_basis_template <- function(parcellation,
   )
 
   if (ncol(loadings) == 0L) {
-    stop("lift() returned zero columns; check basis_spec and parcellation.", call. = FALSE)
+    .encoder_cli_abort(
+      "lift() returned zero columns; check basis_spec and parcellation.",
+      class = "fmrilatent_error_empty_dictionary"
+    )
   }
 
   # Cache Gram factorization: G = L^T L
@@ -135,8 +150,11 @@ parcel_basis_template <- function(parcellation,
       tryCatch(
         Matrix::Cholesky(G_ridge, perm = TRUE),
         error = function(e2) {
-          stop("Gram matrix factorization failed even with ridge = ", ridge,
-               ". The loadings may be rank-deficient.", call. = FALSE)
+          .encoder_cli_abort(
+            paste0("Gram matrix factorization failed even with ridge = ", ridge,
+                   ". The loadings may be rank-deficient."),
+            class = "fmrilatent_error_ill_conditioned_dictionary"
+          )
         }
       )
     }
@@ -256,8 +274,11 @@ setMethod("template_project", signature(x = "ParcelBasisTemplate", data = "ANY")
             X <- as.matrix(data)
             L <- template_loadings(x)
             if (ncol(X) != nrow(L)) {
-              stop("Data has ", ncol(X), " columns but template loadings have ",
-                   nrow(L), " rows.", call. = FALSE)
+              .encoder_cli_abort(
+                paste0("Data has ", ncol(X), " columns but template loadings have ",
+                       nrow(L), " rows."),
+                class = "fmrilatent_error_dimension_mismatch"
+              )
             }
             .template_projection_payload(
               data = X,
@@ -302,34 +323,37 @@ setMethod("save_template", signature(template = "ParcelBasisTemplate"),
 #' @export
 spec_space_parcel <- function(template) {
   if (!inherits(template, "ParcelBasisTemplate")) {
-    stop("template must be a ParcelBasisTemplate (from parcel_basis_template()).",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "template must be a ParcelBasisTemplate (from parcel_basis_template()).",
+      class = "fmrilatent_error_invalid_parcel_template"
+    )
   }
   structure(list(template = template), class = "spec_space_parcel")
 }
 
 #' @exportS3Method
 encode_spec.spec_space_parcel <- function(x, spec, mask, reduction, materialize, label, ...) {
+  materialize <- .resolve_materialize(materialize, context = "encode_spec.spec_space_parcel")
   tmpl <- spec$template
   L <- template_loadings(tmpl)
-  n_time <- nrow(x)
   n_vox <- ncol(x)
   template_mask <- template_mask(tmpl)
-  template_mask_arr <- .assert_template_mask_match(
+  .assert_template_mask_match(
     mask,
     template_mask,
     "encode_spec.spec_space_parcel"
   )
 
   if (n_vox != nrow(L)) {
-    stop("Data has ", n_vox, " voxels but template loadings have ", nrow(L),
-         " rows.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0("Data has ", n_vox, " voxels but template loadings have ", nrow(L), " rows."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
 
   proj <- template_project(tmpl, x)
   basis <- proj$coefficients
 
-  spc <- .space_with_time_from_mask(template_mask, n_time, "encode_spec.spec_space_parcel")
   meta_tmpl <- template_meta(tmpl)
 
   meta <- list(
@@ -346,13 +370,19 @@ encode_spec.spec_space_parcel <- function(x, spec, mask, reduction, materialize,
     raw_metric = proj$raw_metric
   )
 
-  LatentNeuroVec(
+  .make_latent_neurovector(
+    x,
+    template_mask,
+    .loadings_for_materialize(
+      proj$analysis_loadings,
+      materialize,
+      id_prefix = "parcel-loadings",
+      label = "parcel-loadings"
+    ),
     basis = basis,
-    loadings = proj$analysis_loadings,
-    space = spc,
-    mask = template_mask,
     offset = proj$offset,
     label = label,
-    meta = meta
+    meta = meta,
+    location = "encode_spec.spec_space_parcel"
   )
 }

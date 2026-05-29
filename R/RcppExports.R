@@ -47,7 +47,7 @@ hrbf_atoms_rcpp <- function(mask_xyz_world, centres_xyz_world, sigma_vec_mm, ker
 #' simple, dependency-light starting point; consider replacing with a
 #' tridiagonal solver for very long n.
 #'
-#' @export
+#' @keywords internal
 generate_dpss_basis_rcpp <- function(n, NW, k) {
     .Call(`_fmrilatent_generate_dpss_basis_rcpp`, n, NW, k)
 }
@@ -62,7 +62,7 @@ generate_dpss_basis_rcpp <- function(n, NW, k) {
 #' @param k Number of tapers to return.
 #' @return Matrix (n x k) with columns ordered by decreasing eigenvalue.
 #'
-#' @export
+#' @keywords internal
 generate_dpss_tridiag_rcpp <- function(n, NW, k) {
     .Call(`_fmrilatent_generate_dpss_tridiag_rcpp`, n, NW, k)
 }

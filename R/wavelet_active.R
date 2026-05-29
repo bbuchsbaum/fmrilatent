@@ -8,14 +8,8 @@
 #' @return An `ImplicitLatent` with decoder supporting `time_idx` and `roi_mask`.
 #' @export
 wavelet_active_latent <- function(X, mask, levels_space = 2L, levels_time = 0L, threshold = 0) {
-  if (inherits(mask, "LogicalNeuroVol")) {
-    mask_arr <- as.array(mask)
-    coords <- which(mask_arr, arr.ind = TRUE)
-  } else {
-    mask_arr <- as.array(mask)
-    coords <- which(mask_arr, arr.ind = TRUE)
-    mask <- LogicalNeuroVol(mask_arr, NeuroSpace(dim(mask_arr)))
-  }
+  mask_arr <- .extract_mask_array(mask, "wavelet_active_latent")
+  coords <- which(mask_arr, arr.ind = TRUE)
 
   if (is.array(X) && length(dim(X)) == 4) {
     idx <- which(mask_arr)

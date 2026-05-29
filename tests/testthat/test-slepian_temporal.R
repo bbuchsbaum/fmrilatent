@@ -115,7 +115,7 @@ test_that("slepian_temporal_latent includes offset", {
   expect_equal(off, colMeans(X), tolerance = 1e-10)
 })
 
-test_that("slepian_temporal_latent with different backend options", {
+test_that("slepian_temporal_latent uses tridiag backend and rejects dense", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
   n_time <- 16L
@@ -129,20 +129,15 @@ test_that("slepian_temporal_latent with different backend options", {
                                      k = 3L, backend = "tridiag")
   expect_s4_class(lv_tri, "LatentNeuroVec")
 
-  # Test dense backend
-  lv_dense <- slepian_temporal_latent(X, mask_vol, tr = 2.0, bandwidth = 0.08,
-                                       k = 3L, backend = "dense")
-  expect_s4_class(lv_dense, "LatentNeuroVec")
-
-  # Results should be very similar (up to numerical precision and sign flips)
   B_tri <- as.matrix(basis(lv_tri))
-  B_dense <- as.matrix(basis(lv_dense))
 
-  # Check orthonormality of both
   G_tri <- crossprod(B_tri)
-  G_dense <- crossprod(B_dense)
   expect_equal(G_tri, diag(3), tolerance = 1e-6)
-  expect_equal(G_dense, diag(3), tolerance = 1e-6)
+  expect_error(
+    slepian_temporal_latent(X, mask_vol, tr = 2.0, bandwidth = 0.08,
+                            k = 3L, backend = "dense"),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })
 
 test_that("slepian_temporal_latent with custom label", {
@@ -318,13 +313,11 @@ test_that("dpss_time_basis auto-selects k from NW when k is NULL", {
   expect_equal(ncol(B), expected_k)
 })
 
-test_that("dpss_time_basis dense backend returns orthonormal matrix", {
-  B <- dpss_time_basis(n_time = 20, tr = 2, bandwidth = 0.08, k = 3, backend = "dense")
-  expect_true(is.matrix(B))
-  expect_equal(nrow(B), 20L)
-  expect_equal(ncol(B), 3L)
-  G <- crossprod(B)
-  expect_equal(G, diag(3), tolerance = 1e-6)
+test_that("dpss_time_basis dense backend is disabled", {
+  expect_error(
+    dpss_time_basis(n_time = 20, tr = 2, bandwidth = 0.08, k = 3, backend = "dense"),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })
 
 test_that("dpss_time_basis tridiag backend returns orthonormal matrix", {

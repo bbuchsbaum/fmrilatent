@@ -102,7 +102,75 @@ test_that("BOLDZip-SR can recover lagged texture loadings", {
   )
 
   expect_true(any(fit$texture$loadings$lag == 2L))
+  expect_true(any(fit$texture$matrix_index$lag == 2L))
+  lag2_col <- which(fit$texture$matrix_index$lag == 2L)
+  expect_gt(Matrix::nnzero(fit$texture$matrix[, lag2_col, drop = FALSE]), 0L)
   expect_lt(evaluate_boldzip_sr(X, fit)[["mse"]], 1e-10)
+})
+
+test_that("BOLDZip-SR accepts shared temporal specs and shared spatial references", {
+  n_time <- 20L
+  phi <- diag(4L)[, 1:2, drop = FALSE]
+  z <- rbind(
+    sin(2 * pi * seq_len(n_time) / n_time),
+    cos(2 * pi * seq_len(n_time) / n_time)
+  )
+  X <- phi %*% z
+  spatial_ref <- shared_reference(phi, kind = "boldzip_spatial_basis")
+  temporal <- shared_temporal_spec("dct", n_time = n_time, rank = n_time)
+
+  fit <- boldzip_sr_encode(
+    X,
+    spatial_basis = spatial_ref,
+    temporal_spec = temporal,
+    k_carriers = 2L,
+    q_texture = 2L,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+
+  expect_s3_class(fit$spatial_basis$basis_asset, "SharedReference")
+  expect_s3_class(fit$temporal_spec, "SharedTemporalSpec")
+  expect_equal(dim(fit$temporal_basis), c(n_time, n_time))
+  expect_equal(crossprod(fit$spatial_basis$phi_d), diag(2L), tolerance = 1e-10)
+  expect_lt(evaluate_boldzip_sr(X, fit)[["mse"]], 1e-10)
+})
+
+test_that("BOLDZip-SR reliability-shaped quantization is carrier aligned", {
+  n_time <- 18L
+  tt <- seq_len(n_time)
+  X <- rbind(
+    sin(2 * pi * tt / n_time),
+    rep(c(1, -1), length.out = n_time),
+    cos(4 * pi * tt / n_time)
+  )
+  quant <- boldzip_quantization(base_step = 0.75)
+  fit <- boldzip_sr_encode(
+    X,
+    k_carriers = 2L,
+    temporal_k = 6L,
+    q_texture = 1L,
+    quantization = quant,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+
+  z_raw <- t(fit$carriers$u) %*% X
+  theta_raw <- z_raw %*% fit$temporal_basis
+  reliability <- matrix(
+    rep(fit$carriers$reliability, times = ncol(theta_raw)),
+    nrow = nrow(theta_raw),
+    ncol = ncol(theta_raw)
+  )
+  expected <- theta_raw
+  expected[] <- fmrilatent:::.boldzip_quantize_values(
+    as.numeric(theta_raw),
+    reliability = as.numeric(reliability),
+    quantization = quant,
+    noise_scale = stats::sd(z_raw)
+  )
+
+  expect_equal(fit$carriers$theta, expected)
 })
 
 test_that("BOLDZip-SR supports supplied coarse and detail bases", {
@@ -253,6 +321,32 @@ test_that("BOLDZip-SR decoding subsets are consistent with full reconstruction",
   )
   expect_error(boldzip_sr_decode(fit, time_idx = 0L), "time_idx")
   expect_error(boldzip_sr_decode(fit, roi = 0L), "roi")
+})
+
+test_that("BOLDZip-SR bridges to the ImplicitLatent decoder contract", {
+  n_vox <- 5L
+  n_time <- 16L
+  X <- seq(0.5, 1.5, length.out = n_vox) %*%
+    matrix(sin(2 * pi * seq_len(n_time) / n_time), nrow = 1L)
+  fit <- boldzip_sr_encode(
+    X,
+    k_carriers = 1L,
+    temporal_k = n_time,
+    q_texture = 1L,
+    center = FALSE,
+    events = boldzip_events(max_events = 0L)
+  )
+  latent <- as_implicit_latent(fit)
+
+  expect_true(is_implicit_latent(latent))
+  expect_equal(predict(latent), t(boldzip_sr_decode(fit)), tolerance = 1e-10)
+  expect_equal(
+    predict(latent, time_idx = c(2L, 4L),
+            roi_mask = c(TRUE, FALSE, TRUE, FALSE, TRUE)),
+    t(boldzip_sr_decode(fit, time_idx = c(2L, 4L), roi = c(1L, 3L, 5L))),
+    tolerance = 1e-10
+  )
+  expect_equal(predict(fit, time_idx = 1:3), boldzip_sr_decode(fit, time_idx = 1:3))
 })
 
 test_that("BOLDZip-SR temporal budget has monotone reconstruction quality on smooth signals", {

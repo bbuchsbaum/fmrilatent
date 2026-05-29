@@ -8,6 +8,8 @@ make_matrix <- function(nrow, ncol, seed = NULL) {
   Matrix::Matrix(matrix(rnorm(nrow * ncol), nrow = nrow, ncol = ncol), sparse = FALSE)
 }
 
+compute_local_gram <- fmrilatent:::compute_local_gram
+
 # ------------------------------------------------------------------------------
 # Tests for compute_local_gram()
 # ------------------------------------------------------------------------------

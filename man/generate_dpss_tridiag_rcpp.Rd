@@ -20,3 +20,4 @@ Matrix (n x k) with columns ordered by decreasing eigenvalue.
 Uses the classic tridiagonal formulation (Percival & Walden 1993; Thomson 1982)
 and LAPACK dstev for efficiency on long series.
 }
+\keyword{internal}

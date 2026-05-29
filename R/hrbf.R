@@ -55,16 +55,16 @@ hrbf_reconstruct_matrix <- function(coeff, mask, params) {
 hrbf_reconstruct_partial <- function(coeff, mask, params,
                                      voxel_idx, time_idx = NULL) {
   if (missing(voxel_idx) || length(voxel_idx) == 0) {
-    stop("voxel_idx must be provided")
+    .encoder_cli_abort("voxel_idx must be provided", class = "fmrilatent_error_invalid_index")
   }
-  mask_arr <- extract_mask_array_logical(mask, "hrbf_reconstruct_partial")
+  mask_arr <- .extract_mask_array(mask, "hrbf_reconstruct_partial")
   n_vox_total <- length(mask_arr)
   if (any(voxel_idx < 1 | voxel_idx > n_vox_total)) {
-    stop("voxel_idx out of bounds")
+    .encoder_cli_abort("voxel_idx out of bounds", class = "fmrilatent_error_invalid_index")
   }
   time_idx <- time_idx %||% seq_len(nrow(coeff))
   if (any(time_idx < 1 | time_idx > nrow(coeff))) {
-    stop("time_idx out of bounds")
+    .encoder_cli_abort("time_idx out of bounds", class = "fmrilatent_error_invalid_index")
   }
   B <- hrbf_generate_basis(params, mask) # atoms x voxels
   B_sub <- B[, voxel_idx, drop = FALSE]
@@ -83,16 +83,22 @@ hrbf_reconstruct_partial <- function(coeff, mask, params,
 #'   `loadings = t(HRBF_basis)`.
 #' @export
 hrbf_latent <- function(X, mask, params = list(), label = "") {
-  mask_arr <- extract_mask_array_logical(mask, "hrbf_latent")
+  mask_arr <- .extract_mask_array(mask, "hrbf_latent")
   n_time <- nrow(X)
-  if (is.null(n_time) || n_time < 1) stop("X must have time in rows")
+  if (is.null(n_time) || n_time < 1) {
+    .encoder_cli_abort("X must have time in rows", class = "fmrilatent_error_dimension_mismatch")
+  }
   B_atoms_vox <- hrbf_generate_basis(params, mask)
   coeff <- hrbf_project_matrix(X, mask, params)
   loadings <- Matrix::t(B_atoms_vox) # voxels x atoms
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), n_time))
   meta <- list(family = "hrbf", params = params)
-  LatentNeuroVec(basis = coeff, loadings = loadings, space = spc,
-                 mask = mask, label = label, meta = meta)
+  .make_latent_neurovector(
+    X, mask, loadings,
+    basis = coeff,
+    label = label,
+    meta = meta,
+    location = "hrbf_latent"
+  )
 }
 
 #' Attach HRBF metadata to an existing LatentNeuroVec
@@ -103,7 +109,9 @@ hrbf_latent <- function(X, mask, params = list(), label = "") {
 #' @return The LatentNeuroVec with HRBF metadata attached
 #' @export
 as_hrbf_latent <- function(lvec, params, centres = NULL, sigmas = NULL) {
-  stopifnot(inherits(lvec, "LatentNeuroVec"))
+  if (!inherits(lvec, "LatentNeuroVec")) {
+    .encoder_cli_abort("lvec must be a LatentNeuroVec.", class = "fmrilatent_error_invalid_latent")
+  }
   meta <- list(family = "hrbf", params = params, centres = centres, sigmas = sigmas)
   lvec@meta <- meta
   lvec
@@ -142,18 +150,7 @@ use_hrbf_rcpp <- function(compat_profile = NULL) {
 }
 
 extract_mask_array_logical <- function(mask_neurovol, location = "mask") {
-  mask_arr <- tryCatch(as.array(mask_neurovol), error = function(e) NULL)
-  if (is.null(mask_arr) || is.list(mask_arr)) {
-    if (is.list(mask_neurovol) && !is.null(mask_neurovol$arr)) {
-      mask_arr <- mask_neurovol$arr
-    } else {
-      stop(sprintf("Cannot extract array from mask (%s)", location))
-    }
-  }
-  if (is.null(dim(mask_arr))) {
-    stop(sprintf("mask must have dimensions (%s)", location))
-  }
-  array(as.logical(mask_arr), dim = dim(mask_arr))
+  .extract_mask_array(mask_neurovol, location)
 }
 
 extract_spacing_origin <- function(mask_neurovol, ndims, location) {
@@ -208,7 +205,7 @@ label_components <- function(mask_arr_3d) {
 }
 
 poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, component_id_for_seed_offset = 0) {
-  mask_arr <- extract_mask_array_logical(mask_neurovol, "poisson_disk_sample_neuroim2")
+  mask_arr <- .extract_mask_array(mask_neurovol, "poisson_disk_sample_neuroim2")
   so <- extract_spacing_origin(mask_neurovol, length(dim(mask_arr)), "poisson_disk_sample_neuroim2")
   spacing_vec <- so$spacing
   comp_info <- label_components(mask_arr)
@@ -282,7 +279,7 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
 
 poisson_disk_sample_neuroim2_compat <- function(mask_neurovol, radius_mm, seed,
                                                 component_id_for_seed_offset = 0) {
-  mask_arr <- extract_mask_array_logical(mask_neurovol, "poisson_disk_sample_neuroim2_compat")
+  mask_arr <- .extract_mask_array(mask_neurovol, "poisson_disk_sample_neuroim2_compat")
   so <- extract_spacing_origin(mask_neurovol, length(dim(mask_arr)),
                                "poisson_disk_sample_neuroim2_compat")
   spacing_vec <- so$spacing
@@ -420,16 +417,25 @@ lna_hrbf_centres_from_params <- function(params,
 
   centres_given <- !is.null(centres) || !is.null(sigmas)
   if (centres_given && (is.null(centres) || is.null(sigmas))) {
-    stop("Both centres and sigmas must be supplied together", call. = FALSE)
+    .encoder_cli_abort(
+      "Both centres and sigmas must be supplied together",
+      class = "fmrilatent_error_invalid_hrbf_params"
+    )
   }
   if (centres_given) {
     C_total <- as.matrix(centres)
     sigma_vec <- as.numeric(sigmas)
     if (ncol(C_total) != 3L) {
-      stop("centres must be a matrix with 3 columns", call. = FALSE)
+      .encoder_cli_abort(
+        "centres must be a matrix with 3 columns",
+        class = "fmrilatent_error_invalid_hrbf_params"
+      )
     }
     if (nrow(C_total) != length(sigma_vec)) {
-      stop("length(sigmas) must equal nrow(centres)", call. = FALSE)
+      .encoder_cli_abort(
+        "length(sigmas) must equal nrow(centres)",
+        class = "fmrilatent_error_invalid_hrbf_params"
+      )
     }
     level_num <- round(log2(sigma0 / sigma_vec))
     level_num[!is.finite(level_num)] <- 0
@@ -443,8 +449,10 @@ lna_hrbf_centres_from_params <- function(params,
   }
 
   if (is.null(seed)) {
-    stop("lna_hrbf_centres_from_params requires centres/sigmas or seed",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "lna_hrbf_centres_from_params requires centres/sigmas or seed",
+      class = "fmrilatent_error_invalid_hrbf_params"
+    )
   }
 
   centres_list <- list()
@@ -568,7 +576,7 @@ lna_hrbf_basis_from_params <- function(params,
   }
 
   if (is.null(mask_arr)) {
-    mask_arr <- extract_mask_array_logical(mask, "lna_hrbf_basis_from_params")
+    mask_arr <- .extract_mask_array(mask, "lna_hrbf_basis_from_params")
   }
   if (is.null(mask_world_coords)) {
     mask_coords_vox <- which(mask_arr, arr.ind = TRUE)
@@ -592,7 +600,10 @@ lna_hrbf_basis_from_params <- function(params,
 
   centres_given <- !is.null(centres) || !is.null(sigmas)
   if (centres_given && (is.null(centres) || is.null(sigmas))) {
-    stop("Both centres and sigmas must be supplied together", call. = FALSE)
+    .encoder_cli_abort(
+      "Both centres and sigmas must be supplied together",
+      class = "fmrilatent_error_invalid_hrbf_params"
+    )
   }
 
   # Native fallback only: identity-like tiny-mask basis for exact reconstruction.
@@ -774,7 +785,7 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
       matrix(so$origin, nrow(vox_mat), ncol(vox_mat), byrow = TRUE)
   }
 
-  if (is.null(mask_arr)) mask_arr <- extract_mask_array_logical(mask_neurovol, "hrbf_basis_from_params")
+  if (is.null(mask_arr)) mask_arr <- .extract_mask_array(mask_neurovol, "hrbf_basis_from_params")
   if (is.null(mask_world_coords)) {
     mask_coords_vox_early <- which(mask_arr, arr.ind = TRUE)
     mask_world_coords <- voxel_to_world(mask_coords_vox_early)
@@ -839,7 +850,12 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
                                 dims = c(n_total_vox, n_total_vox)))
   }
 
-  if (is.null(seed)) stop("hrbf_basis_from_params requires a seed for centre generation")
+  if (is.null(seed)) {
+    .encoder_cli_abort(
+      "hrbf_basis_from_params requires a seed for centre generation",
+      class = "fmrilatent_error_invalid_hrbf_params"
+    )
+  }
 
   centres_list <- list()
   sigs <- numeric()
@@ -933,7 +949,12 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
 }
 
 compute_hrbf_coefficients <- function(X_time_vox, basis_atoms_vox) {
-  stopifnot(ncol(X_time_vox) == ncol(basis_atoms_vox))
+  if (ncol(X_time_vox) != ncol(basis_atoms_vox)) {
+    .encoder_cli_abort(
+      "X_time_vox and basis_atoms_vox must have the same voxel dimension.",
+      class = "fmrilatent_error_dimension_mismatch"
+    )
+  }
   coeff <- NULL
   # attempt square invert
   if (nrow(basis_atoms_vox) == ncol(basis_atoms_vox) && nrow(basis_atoms_vox) > 0) {

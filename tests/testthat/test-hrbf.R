@@ -873,7 +873,8 @@ test_that("as_hrbf_latent attaches metadata correctly", {
 test_that("as_hrbf_latent error: non-LatentNeuroVec input", {
   expect_error(
     as_hrbf_latent(list(), params = list()),
-    "inherits\\(lvec, \"LatentNeuroVec\"\\) is not TRUE"
+    "LatentNeuroVec",
+    class = "fmrilatent_error_invalid_latent"
   )
 })
 
@@ -1266,7 +1267,8 @@ test_that("compute_hrbf_coefficients dimension mismatch error", {
 
   expect_error(
     fmrilatent:::compute_hrbf_coefficients(X, basis),
-    "ncol\\(X_time_vox\\) == ncol\\(basis_atoms_vox\\) is not TRUE"
+    "same voxel dimension",
+    class = "fmrilatent_error_dimension_mismatch"
   )
 })
 

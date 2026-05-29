@@ -6,7 +6,8 @@
 #' @param tr Repetition time (seconds).
 #' @param bandwidth Half-bandwidth in Hz (default 0.1).
 #' @param k Optional number of tapers/components.
-#' @param backend Backend passed to `dpss_time_basis` ("tridiag" or "dense").
+#' @param backend Backend passed to `dpss_time_basis`; only "tridiag" is
+#'   currently supported.
 #' @param id Optional registry key (generated if NULL).
 #' @param label Optional human-readable label.
 #'
@@ -20,6 +21,12 @@ slepian_temporal_handle <- function(n_time,
                                     id = NULL,
                                     label = NULL) {
   backend <- match.arg(backend)
+  if (identical(backend, "dense")) {
+    .encoder_cli_abort(
+      "backend = \"dense\" is disabled because it can return a different DPSS subspace under eigenvalue degeneracy; use backend = \"tridiag\".",
+      class = "fmrilatent_error_unsupported_dpss_backend"
+    )
+  }
   n_time <- as.integer(n_time)
   if (is.null(k)) {
     NW <- n_time * bandwidth * tr
@@ -69,6 +76,12 @@ slepian_temporal_handle <- function(n_time,
 #' @param id Optional registry id; generated if NULL.
 #' @param label Optional label.
 #'
+#' @details
+#' This constructor lifts the spatial dictionary eagerly so the returned handle
+#' records the realized dimensions and registers a fingerprinted cache entry.
+#' Repeated constructor calls may therefore recompute the lift even when later
+#' `loadings_mat()` calls can reuse the registry cache.
+#'
 #' @return A \code{LoadingsHandle}.
 #' @export
 slepian_spatial_loadings_handle <- function(reduction,
@@ -77,37 +90,26 @@ slepian_spatial_loadings_handle <- function(reduction,
                                             k_neighbors = 6L,
                                             id = NULL,
                                             label = "slepian-spatial") {
+  spec_payload <- list(
+    family     = "slepian_spatial",
+    reduction  = reduction,
+    basis_spec = basis_spec,
+    data       = data,
+    k_neighbors = k_neighbors
+  )
   if (is.null(id)) {
-    id <- paste0(
-      "slepian-spatial-",
-      digest::digest(
-        list(
-          kind = "slepian_spatial",
-          reduction = reduction,
-          basis_spec = basis_spec,
-          data = data,
-          k_neighbors = as.integer(k_neighbors)
-        ),
-        algo = "xxhash64"
-      )
-    )
+    id <- .latent_handle_id("slepian-spatial", spec_payload)
   }
-  L <- .latent_get_matrix(id, type = "loadings")
-  if (is.null(L)) {
-    L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
-    .latent_register_matrix(id, L, type = "loadings", overwrite = FALSE)
-  }
-
-  new("LoadingsHandle",
+  L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
+  handle <- new("LoadingsHandle",
       id    = id,
       dim   = as.integer(dim(L)),
       kind  = "slepian_spatial",
-      spec  = list(
-        family     = "slepian_spatial",
-        reduction  = reduction,
-        basis_spec = basis_spec,
-        data       = data,
-        k_neighbors = k_neighbors
-      ),
+      spec  = spec_payload,
       label = label)
+  .latent_register_matrix(
+    id, L, type = "loadings", overwrite = FALSE,
+    fingerprint = .latent_handle_fingerprint(handle)
+  )
+  handle
 }

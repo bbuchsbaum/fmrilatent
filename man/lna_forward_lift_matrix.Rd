@@ -32,3 +32,4 @@ List with `root_coeff` and `detail_coeffs_by_level`.
 \description{
 Mirrors neuroarchive matrix-batch forward-lift API.
 }
+\keyword{internal}

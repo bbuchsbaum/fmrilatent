@@ -20,7 +20,7 @@ slepian_spatiotemporal_latent <- function(X, mask, tr,
                                           k_space = 3L,
                                           k_neighbors = 6L,
                                           label = "") {
-  mask_arr <- .mask_to_array(mask, "slepian_spatiotemporal_latent")
+  mask_arr <- .extract_mask_array(mask, "slepian_spatiotemporal_latent")
   n_time <- nrow(X)
   if (is.null(n_time) || n_time < 1) stop("X must have time in rows")
   n_vox <- sum(mask_arr)

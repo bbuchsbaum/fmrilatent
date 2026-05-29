@@ -18,7 +18,7 @@ spec_time_slepian(
 
 \item{k}{Optional number of components (default floor(2*NW)-1).}
 
-\item{backend}{Backend to use ("tridiag" or "dense").}
+\item{backend}{Backend to use. Only "tridiag" is currently supported.}
 }
 \value{
 A `spec_time_slepian` object for `encode()` / `spec_st()`.

@@ -75,6 +75,7 @@ build_bspline_basis <- function(n_time,
 #' @param knots  Optional interior knots (scaled 0-1).
 #' @param boundary_knots Optional boundary knots (scaled 0-1).
 #' @param include_intercept Logical; include intercept column (default FALSE).
+#' @param orthonormalize Logical; orthonormalize columns when materialized.
 #' @param id     Optional registry key (generated if NULL).
 #' @param label  Optional human-readable label.
 #'
@@ -86,6 +87,7 @@ bspline_basis_handle <- function(n_time,
                                  knots = NULL,
                                  boundary_knots = NULL,
                                  include_intercept = FALSE,
+                                 orthonormalize = TRUE,
                                  id = NULL,
                                  label = NULL) {
   n_time <- as.integer(n_time)
@@ -93,7 +95,21 @@ bspline_basis_handle <- function(n_time,
   degree <- as.integer(degree)
 
   if (is.null(id)) {
-    id <- sprintf("bspline-%d-%d-deg%d-int%s", n_time, k, degree, include_intercept)
+    id <- paste0(
+      "bspline-",
+      digest::digest(
+        list(
+          n_time = n_time,
+          k = k,
+          degree = degree,
+          knots = knots,
+          boundary_knots = boundary_knots,
+          include_intercept = include_intercept,
+          orthonormalize = orthonormalize
+        ),
+        algo = "xxhash64"
+      )
+    )
   }
   if (is.null(label)) {
     label <- sprintf("B-spline(%d,%d,deg=%d)", n_time, k, degree)
@@ -109,7 +125,8 @@ bspline_basis_handle <- function(n_time,
         degree = degree,
         knots = knots,
         boundary_knots = boundary_knots,
-        include_intercept = include_intercept
+        include_intercept = include_intercept,
+        orthonormalize = orthonormalize
       ),
       label = label)
 }

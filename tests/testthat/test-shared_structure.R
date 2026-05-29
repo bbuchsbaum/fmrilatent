@@ -32,6 +32,54 @@ make_shared_structure_template <- function() {
   )
 }
 
+make_shared_structure_awpt_template <- function() {
+  mask_vol <- LogicalNeuroVol(array(TRUE, dim = c(3, 1, 1)), NeuroSpace(c(3, 1, 1)))
+  reduction <- make_cluster_reduction(mask_vol, c(1L, 1L, 2L))
+  loadings <- Matrix(matrix(c(1, 0, 0, 1, 1, 1), nrow = 3, byrow = TRUE), sparse = FALSE)
+  structure(
+    list(
+      loadings = loadings,
+      gram_factor = Matrix::Cholesky(Matrix::crossprod(loadings), perm = TRUE),
+      roughness = Matrix::Diagonal(2),
+      reduction = reduction,
+      basis_spec = basis_awpt_wavelet(scales = c(1, 2)),
+      atoms = data.frame(
+        col_id = 1:2,
+        cluster_id = c(1L, 2L),
+        scale = c(1, 2),
+        scale_index = 1:2,
+        roughness_weight = c(1, 1)
+      ),
+      center = FALSE,
+      meta = list(family = "awpt_wavelet", k = 2L)
+    ),
+    class = "AWPTBasisTemplate"
+  )
+}
+
+make_shared_structure_hierarchical_template <- function() {
+  mask_vol <- LogicalNeuroVol(array(TRUE, dim = c(3, 1, 1)), NeuroSpace(c(3, 1, 1)))
+  loadings <- Matrix(matrix(c(1, 0, 0, 1, 1, 1), nrow = 3, byrow = TRUE), sparse = FALSE)
+  new(
+    "HierarchicalBasisTemplate",
+    mask = mask_vol,
+    space = NeuroSpace(c(3, 1, 1, 1)),
+    levels = list(c(1L, 1L, 2L)),
+    parents = list(),
+    loadings = loadings,
+    gram_factor = Matrix::Cholesky(Matrix::crossprod(loadings), perm = TRUE),
+    atoms = data.frame(
+      col_id = 1:2,
+      level = 1L,
+      parcel_id = c(1L, 2L),
+      parent_id = NA_integer_,
+      mode = "test",
+      label = c("h1", "h2")
+    ),
+    meta = list(family = "hierarchical", k_per_level = 2L)
+  )
+}
+
 test_that("shared component contracts validate dimensions, support, and measures", {
   loadings <- Matrix(matrix(c(1, 0, 0, 1, 1, 1), nrow = 3, byrow = TRUE), sparse = FALSE)
   contract <- shared_component_contract(
@@ -224,6 +272,31 @@ test_that("template protocol and neuroarchive handoff enforce the ownership boun
   bad_handoff <- handoff
   bad_handoff$archive_locator <- "archive.h5"
   expect_error(validate_neuroarchive_handoff_contract(bad_handoff), "persistent archive locators")
+})
+
+test_that("shared template protocol covers parcel, AWPT, and hierarchical families", {
+  templates <- list(
+    parcel = make_shared_structure_template(),
+    awpt = make_shared_structure_awpt_template(),
+    hierarchical = make_shared_structure_hierarchical_template()
+  )
+  manifests <- lapply(templates, validate_template_protocol)
+
+  expect_equal(vapply(manifests, `[[`, integer(1), "rank"), c(parcel = 2L, awpt = 2L, hierarchical = 2L))
+  expect_equal(vapply(manifests, `[[`, integer(1), "n_features"), c(parcel = 4L, awpt = 3L, hierarchical = 3L))
+
+  contracts <- Map(
+    function(template, family) {
+      shared_component_contract(
+        template_loadings(template),
+        family = family,
+        support = template_support(template)
+      )
+    },
+    templates,
+    names(templates)
+  )
+  expect_true(all(vapply(contracts, inherits, logical(1), "SharedComponentContract")))
 })
 
 test_that("template and handoff validators reject wrong-contract objects", {

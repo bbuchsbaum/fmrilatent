@@ -11,6 +11,7 @@ bspline_basis_handle(
   knots = NULL,
   boundary_knots = NULL,
   include_intercept = FALSE,
+  orthonormalize = TRUE,
   id = NULL,
   label = NULL
 )
@@ -27,6 +28,8 @@ bspline_basis_handle(
 \item{boundary_knots}{Optional boundary knots (scaled 0-1).}
 
 \item{include_intercept}{Logical; include intercept column (default FALSE).}
+
+\item{orthonormalize}{Logical; orthonormalize columns when materialized.}
 
 \item{id}{Optional registry key (generated if NULL).}
 

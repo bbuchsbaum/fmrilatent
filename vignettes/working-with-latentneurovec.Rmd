@@ -1,0 +1,173 @@
+---
+title: Working With LatentNeuroVec Objects
+output:
+  rmarkdown::html_vignette:
+    toc: yes
+    toc_depth: 2.0
+    css: albers.css
+    includes:
+      in_header: albers-header.html
+resource_files:
+- albers.css
+- albers.js
+- albers-header.html
+params:
+  family: red
+  preset: homage
+
+vignette: |
+  %\VignetteIndexEntry{Working With LatentNeuroVec Objects} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+---
+
+```{r setup, include = FALSE}
+if (requireNamespace("ggplot2", quietly = TRUE) && requireNamespace("albersdown", quietly = TRUE)) ggplot2::theme_set(albersdown::theme_albers(family = params$family, preset = params$preset))
+knitr::opts_chunk$set(
+  collapse = TRUE,
+  comment = "#>",
+  message = FALSE,
+  warning = FALSE
+)
+```
+
+```{r albers-classes, echo=FALSE, results='asis'}
+cat(sprintf(
+  paste0(
+    '<script>document.addEventListener("DOMContentLoaded",function(){',
+    'document.body.classList.remove("palette-red","palette-lapis","palette-ochre","palette-teal","palette-green","palette-violet","preset-homage","preset-study","preset-structural","preset-adobe","preset-midnight");',
+    'document.body.classList.add("palette-%s","preset-%s");',
+    '});</script>'
+  ),
+  params$family,
+  params$preset
+))
+```
+
+```{r library}
+library(fmrilatent)
+```
+
+A `LatentNeuroVec` behaves like a neuroimaging time series, but it stores a
+factorization instead of a dense time-by-voxel matrix. This vignette shows the
+basic access pattern: encode data, inspect the factors, pull out a voxel time
+series, and reconstruct only when you need the dense matrix.
+
+## What do we start with?
+
+The examples use a small 4 x 4 x 4 mask and a 24-time-point matrix. Rows are
+time points and columns are in-mask voxels.
+
+```{r make-data}
+mask <- array(TRUE, dim = c(4, 4, 4))
+mask_vol <- neuroim2::LogicalNeuroVol(mask, neuroim2::NeuroSpace(dim(mask)))
+
+set.seed(7)
+X <- matrix(rnorm(24 * sum(mask)), nrow = 24)
+dim(X)
+```
+
+## How is the object encoded?
+
+A temporal DCT basis stores shared time functions in `basis()` and voxel
+weights in `loadings()`.
+
+```{r encode}
+lat <- encode(X, spec_time_dct(k = 8), mask = mask_vol, materialize = "matrix")
+
+data.frame(
+  time_points = nrow(basis(lat)),
+  components = ncol(basis(lat)),
+  voxels = nrow(loadings(lat))
+)
+```
+
+```{r validate-encoding, include = FALSE}
+stopifnot(
+  nrow(basis(lat)) == nrow(X),
+  nrow(loadings(lat)) == ncol(X),
+  all(is.finite(as.matrix(lat)))
+)
+```
+
+The dense reconstruction has the same shape as the input, but it is lossy
+because eight DCT components cannot represent every 24-point time course.
+
+```{r reconstruction-summary}
+recon <- as.matrix(lat)
+
+data.frame(
+  rows = nrow(recon),
+  cols = ncol(recon),
+  rmse = sqrt(mean((recon - X)^2))
+)
+```
+
+## How do you read one voxel?
+
+Use `series()` when you want a time course for one voxel or a small group of
+voxels without thinking about the full matrix.
+
+```{r series-access}
+voxel_one <- series(lat, 1L)
+head(voxel_one)
+```
+
+Coordinate access is available when you know the voxel location in the image
+space.
+
+```{r coordinate-access}
+same_voxel <- series(lat, 1L, 1L, 1L)
+all.equal(as.numeric(voxel_one), as.numeric(same_voxel))
+```
+
+## How do you slice it like an array?
+
+A `LatentNeuroVec` behaves like the 4D `(x, y, z, time)` array it stands in
+for, so the usual `neuroim2` indexing verbs work — each one reconstructs only
+the slice you ask for.
+
+Use `[[` to pull one time point as a 3D volume:
+
+```{r single-volume}
+vol1 <- lat[[1]]
+class(vol1)
+dim(vol1)
+```
+
+Use `[` with four indices to extract a spatial-by-time sub-array:
+
+```{r array-slice}
+block <- lat[1:2, 1:2, 1:2, 1:5]
+dim(block)
+```
+
+You never materialize the full dense array to get a corner of it; the slice
+is reconstructed on demand from the factors.
+
+## When should handles be used?
+
+The default handle mode stores the basis as a lightweight `BasisHandle`
+reference instead of a dense matrix, and only materializes it the first time
+you ask for it. Matrix mode materializes up front, which is useful when you
+plan to reconstruct or access many series repeatedly.
+
+To see the difference you have to look at the stored slot directly: `basis()`
+*materializes* a handle on access, so it always hands back a dense matrix in
+either mode. The slot is where the two representations diverge.
+
+```{r handle-comparison}
+lat_handle <- encode(X, spec_time_dct(k = 8), mask = mask_vol,
+                     materialize = "handle")
+
+data.frame(
+  eager_slot = class(lat@basis)[1],
+  handle_slot = class(lat_handle@basis)[1],
+  same_reconstruction = isTRUE(all.equal(as.matrix(lat), as.matrix(lat_handle)))
+)
+```
+
+The eager object stores a materialized matrix; the handle object stores a
+`BasisHandle`. Both reconstruct to the same values — the handle just defers
+the cost until you call `basis()`, `series()`, or `as.matrix()`.
+
+Use `vignette("compression-diagnostics")` when you want to compare error and
+storage budgets across component counts.

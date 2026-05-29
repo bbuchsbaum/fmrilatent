@@ -9,7 +9,8 @@ basis_diffusion_wavelet(
   oversample = 20L,
   threshold = 1e-05,
   max_scales = 1L,
-  epsilon = NULL
+  epsilon = NULL,
+  seed = 1L
 )
 }
 \arguments{
@@ -22,6 +23,8 @@ basis_diffusion_wavelet(
 \item{max_scales}{Maximum diffusion scales to compute.}
 
 \item{epsilon}{Optional precision (unused in capped-rank path; kept for API parity).}
+
+\item{seed}{Optional integer seed for deterministic randomized range finding.}
 }
 \description{
 Diffusion wavelet basis specification

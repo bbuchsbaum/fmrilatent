@@ -52,7 +52,7 @@ test_that("slepian_temporal_handle stores all spec parameters correctly", {
   tr <- 1.0
   bandwidth <- 0.08
   k <- 4L
-  backend <- "dense"
+  backend <- "tridiag"
 
   handle <- slepian_temporal_handle(
     n_time = n_time,
@@ -111,10 +111,11 @@ test_that("slepian_temporal_handle defaults to tridiag backend", {
   expect_equal(handle@spec$backend, "tridiag")
 })
 
-test_that("slepian_temporal_handle accepts dense backend", {
-  handle <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "dense")
-
-  expect_equal(handle@spec$backend, "dense")
+test_that("slepian_temporal_handle rejects dense backend", {
+  expect_error(
+    slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "dense"),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })
 
 test_that("slepian_temporal_handle converts n_time to integer", {
@@ -249,31 +250,17 @@ test_that("slepian_temporal_handle with tridiag backend matches dpss_time_basis"
   expect_equal(mat_handle, mat_direct, tolerance = 1e-10)
 })
 
-test_that("slepian_temporal_handle with dense backend matches dpss_time_basis", {
-  n_time <- 12L
-  tr <- 1.5
-  bandwidth <- 0.1
-  k <- 3L
-
-  # Use unique id to avoid cache collision with tridiag backend test
-  # Note: The auto-generated id does not include backend, which can cause
-
-  # cache collisions if the same parameters are used with different backends.
-  unique_id <- paste0("test-dense-", format(Sys.time(), "%H%M%S"), "-", sample(10000, 1))
-
-  handle <- slepian_temporal_handle(
-    n_time = n_time,
-    tr = tr,
-    bandwidth = bandwidth,
-    k = k,
-    backend = "dense",
-    id = unique_id
+test_that("slepian_temporal_handle dense backend cannot be materialized", {
+  expect_error(
+    slepian_temporal_handle(
+      n_time = 12L,
+      tr = 1.5,
+      bandwidth = 0.1,
+      k = 3L,
+      backend = "dense"
+    ),
+    class = "fmrilatent_error_unsupported_dpss_backend"
   )
-
-  mat_handle <- as.matrix(basis_mat(handle))
-  mat_direct <- dpss_time_basis(n_time, tr = tr, bandwidth = bandwidth, k = k, backend = "dense")
-
-  expect_equal(mat_handle, mat_direct, tolerance = 1e-10)
 })
 
 # =============================================================================
@@ -549,39 +536,31 @@ test_that(".latent_loadings_dim works with LoadingsHandle", {
 # Edge case: auto-generated ids reflect backend-specific cache keys
 # =============================================================================
 
-test_that("handles with same params but different backends get different auto-generated ids", {
+test_that("dense backend is rejected before auto id generation", {
   h1 <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "tridiag")
-  h2 <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "dense")
 
-  expect_false(h1@id == h2@id)
-
-  # Different spec backends
   expect_equal(h1@spec$backend, "tridiag")
-  expect_equal(h2@spec$backend, "dense")
+  expect_error(
+    slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, backend = "dense"),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })
 
-test_that("explicit unique ids prevent cache collisions between backends", {
-  # When using unique explicit ids, each handle gets its own cache entry
+test_that("explicit ids cannot bypass dense backend rejection", {
   unique_id1 <- paste0("backend-test-tridiag-", sample(100000, 1))
   unique_id2 <- paste0("backend-test-dense-", sample(100000, 1))
 
   h1 <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, k = 2L,
                                  backend = "tridiag", id = unique_id1)
-  h2 <- slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, k = 2L,
-                                 backend = "dense", id = unique_id2)
-
   mat1 <- as.matrix(basis_mat(h1))
-  mat2 <- as.matrix(basis_mat(h2))
-
-  # Different backends may produce numerically different results
-  # (though both are valid orthonormal bases)
-  expect_equal(dim(mat1), dim(mat2))
   expect_equal(dim(mat1), c(10L, 2L))
 
-  # Each should match its respective direct call
   mat1_direct <- dpss_time_basis(10L, tr = 2.0, bandwidth = 0.1, k = 2L, backend = "tridiag")
-  mat2_direct <- dpss_time_basis(10L, tr = 2.0, bandwidth = 0.1, k = 2L, backend = "dense")
-
   expect_equal(mat1, mat1_direct, tolerance = 1e-10)
-  expect_equal(mat2, mat2_direct, tolerance = 1e-10)
+
+  expect_error(
+    slepian_temporal_handle(n_time = 10L, tr = 2.0, bandwidth = 0.1, k = 2L,
+                            backend = "dense", id = unique_id2),
+    class = "fmrilatent_error_unsupported_dpss_backend"
+  )
 })

@@ -161,8 +161,14 @@ b <- basis(lvec)  # Materializes and caches the basis
 
 ## Documentation
 
-- `vignette("intro", package = "fmrilatent")` - Introduction and concepts
-- `vignette("encode-factory", package = "fmrilatent")` - Encoding API reference
+- `vignette("fmrilatent", package = "fmrilatent")` - Introduction and concepts
+- `vignette("encode-factory", package = "fmrilatent")` - Encoding workflows
+- `vignette("working-with-latentneurovec", package = "fmrilatent")` - Object access and reconstruction
+- `vignette("choosing-basis-family", package = "fmrilatent")` - Basis-family trade-offs
+- `vignette("shared-spatial-dictionaries", package = "fmrilatent")` - Reusable spatial templates
+- `vignette("transport-aware-encoding", package = "fmrilatent")` - Transport-aware handoff
+- `vignette("boldzip", package = "fmrilatent")` - BOLDZip-SR matrix codec workflow
+- `vignette("compression-diagnostics", package = "fmrilatent")` - Reconstruction and storage diagnostics
 
 ## License
 
@@ -170,5 +176,5 @@ GPL (>= 3)
 
 <!-- albersdown:theme-note:start -->
 ## Albers theme
-This package uses the albersdown theme. Existing vignette theme hooks are replaced so `albers.css` and local `albers.js` render consistently on CRAN and GitHub Pages. The palette family is provided via `params$family` (default 'red'). The pkgdown site uses `template: { package: albersdown }`.
+This package uses the albersdown theme. Existing vignette theme hooks are replaced so `albers.css` and local `albers.js` render consistently on CRAN and GitHub Pages. The defaults are configured via `params$family` and `params$preset` (family = 'red', preset = 'homage'). The pkgdown site uses `template: { package: albersdown }` together with generated `pkgdown/extra.css` and `pkgdown/extra.js` so the theme is linked and activated on site pages.
 <!-- albersdown:theme-note:end -->

@@ -135,10 +135,14 @@ materialize_loadings_from_spec <- function(handle) {
 setMethod(
   "basis_mat", "BasisHandle",
   function(x, i = NULL, j = NULL, ...) {
-    obj <- .latent_get_matrix(x@id, type = "basis")
+    fingerprint <- .latent_handle_fingerprint(x)
+    obj <- .latent_get_matrix(x@id, type = "basis", fingerprint = fingerprint)
     if (is.null(obj)) {
       obj <- materialize_basis_from_spec(x)
-      .latent_register_matrix(x@id, obj, type = "basis", overwrite = FALSE)
+      .latent_register_matrix(
+        x@id, obj, type = "basis", overwrite = FALSE,
+        fingerprint = fingerprint
+      )
     }
     basis_mat(obj, i = i, j = j, ...)
   }
@@ -147,10 +151,14 @@ setMethod(
 setMethod(
   "loadings_mat", "LoadingsHandle",
   function(x, i = NULL, j = NULL, ...) {
-    obj <- .latent_get_matrix(x@id, type = "loadings")
+    fingerprint <- .latent_handle_fingerprint(x)
+    obj <- .latent_get_matrix(x@id, type = "loadings", fingerprint = fingerprint)
     if (is.null(obj)) {
       obj <- materialize_loadings_from_spec(x)
-      .latent_register_matrix(x@id, obj, type = "loadings", overwrite = FALSE)
+      .latent_register_matrix(
+        x@id, obj, type = "loadings", overwrite = FALSE,
+        fingerprint = fingerprint
+      )
     }
     loadings_mat(obj, i = i, j = j, ...)
   }

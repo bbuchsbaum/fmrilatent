@@ -559,18 +559,12 @@ test_that("plot_basis_gram Gram matrix diagonal values are positive for non-zero
   expect_true(all(diag_entries > 0))
 })
 
-test_that("plot_slepian_temporal with actual DPSS from both backends", {
+test_that("plot_slepian_temporal with actual tridiag DPSS", {
   skip_if_not_installed("ggplot2")
 
-  # Test with tridiag
   B_tri <- dpss_time_basis(32, tr = 2, bandwidth = 0.06, k = 4, backend = "tridiag")
   result_tri <- plot_slepian_temporal(B_tri, max_components = 4)
   expect_s3_class(result_tri, "ggplot")
-
-  # Test with dense
-  B_dense <- dpss_time_basis(32, tr = 2, bandwidth = 0.06, k = 4, backend = "dense")
-  result_dense <- plot_slepian_temporal(B_dense, max_components = 4)
-  expect_s3_class(result_dense, "ggplot")
 })
 
 test_that("plot_basis_gram coord_equal produces square aspect ratio", {

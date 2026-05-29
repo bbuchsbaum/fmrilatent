@@ -12,7 +12,7 @@
 #' @param simplify Logical; if TRUE and all neighborhoods same size, returns an
 #'   array k x k x n_neighborhood; otherwise a list of matrices.
 #' @return List (or array) of Gram matrices.
-#' @export
+#' @keywords internal
 compute_local_gram <- function(loadings, neighborhoods, simplify = FALSE) {
   L <- loadings_mat(loadings)
   k <- ncol(L)

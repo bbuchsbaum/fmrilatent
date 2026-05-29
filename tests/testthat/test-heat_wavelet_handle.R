@@ -83,14 +83,16 @@ test_that("heat_wavelet_loadings_handle stores spec with correct family", {
 
 # --- ID Handling Tests ---
 
-test_that("heat_wavelet_loadings_handle generates random ID when not provided", {
+test_that("heat_wavelet_loadings_handle derives deterministic ID when not provided", {
   reduction <- create_test_reduction()
   spec <- basis_heat_wavelet(scales = 1, order = 8, threshold = 0)
 
   handle <- heat_wavelet_loadings_handle(reduction, spec)
+  handle_again <- heat_wavelet_loadings_handle(reduction, spec)
 
   expect_true(nchar(handle@id) > 0)
   expect_true(grepl("^heat-wavelet-", handle@id))
+  expect_equal(handle@id, handle_again@id)
 })
 
 test_that("heat_wavelet_loadings_handle uses provided ID", {
@@ -103,12 +105,13 @@ test_that("heat_wavelet_loadings_handle uses provided ID", {
   expect_equal(handle@id, custom_id)
 })
 
-test_that("heat_wavelet_loadings_handle generates unique IDs for different calls", {
+test_that("heat_wavelet_loadings_handle generates different IDs for different specs", {
   reduction <- create_test_reduction()
   spec <- basis_heat_wavelet(scales = 1, order = 8, threshold = 0)
+  spec_other <- basis_heat_wavelet(scales = 2, order = 8, threshold = 0)
 
   handle1 <- heat_wavelet_loadings_handle(reduction, spec)
-  handle2 <- heat_wavelet_loadings_handle(reduction, spec)
+  handle2 <- heat_wavelet_loadings_handle(reduction, spec_other)
 
   expect_false(handle1@id == handle2@id)
 })

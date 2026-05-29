@@ -20,7 +20,7 @@
 //' simple, dependency-light starting point; consider replacing with a
 //' tridiagonal solver for very long n.
 //'
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 Eigen::MatrixXd generate_dpss_basis_rcpp(const int n, const double NW, int k) {
   if (n <= 0) Rcpp::stop("n must be positive");
@@ -74,7 +74,7 @@ Eigen::MatrixXd generate_dpss_basis_rcpp(const int n, const double NW, int k) {
 //' @param k Number of tapers to return.
 //' @return Matrix (n x k) with columns ordered by decreasing eigenvalue.
 //'
-//' @export
+//' @keywords internal
 // [[Rcpp::export]]
 Eigen::MatrixXd generate_dpss_tridiag_rcpp(const int n, const double NW, int k) {
   if (n <= 0) Rcpp::stop("n must be positive");

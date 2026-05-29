@@ -12,7 +12,12 @@ build_dct_basis <- function(n_time, k = n_time, norm = c("ortho", "none")) {
   n_time <- as.integer(n_time)
   k      <- as.integer(k)
 
-  if (k > n_time) stop("k (", k, ") cannot exceed n_time (", n_time, ").")
+  if (k > n_time) {
+    .encoder_cli_abort(
+      paste0("k (", k, ") cannot exceed n_time (", n_time, ")."),
+      class = "fmrilatent_error_invalid_count"
+    )
+  }
 
   tt <- seq.int(0L, n_time - 1L)
   kk <- seq.int(0L, k - 1L)

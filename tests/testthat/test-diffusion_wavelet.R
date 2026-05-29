@@ -67,3 +67,43 @@ test_that("diffusion wavelet loadings handle materializes and reconstructs", {
   expected <- as.matrix(basis_mat %*% t(load_mat))
   expect_equal(as.matrix(lvec), expected)
 })
+
+test_that("diffusion wavelet specs are deterministic across RNG state", {
+  skip_if_not_installed("rgsp")
+  mask <- array(TRUE, dim = c(3, 3, 1))
+  map <- seq_len(sum(mask))
+  red <- make_cluster_reduction(mask, map)
+  spec <- basis_diffusion_wavelet(
+    target_rank = 2L,
+    oversample = 1L,
+    threshold = 0,
+    max_scales = 1L,
+    seed = 99L
+  )
+
+  set.seed(1)
+  loadings_1 <- lift(red, spec, k_neighbors = 2L)
+  set.seed(999)
+  loadings_2 <- lift(red, spec, k_neighbors = 2L)
+
+  expect_equal(as.matrix(loadings_1), as.matrix(loadings_2), tolerance = 1e-12)
+})
+
+test_that("diffusion wavelet handles derive deterministic ids", {
+  skip_if_not_installed("rgsp")
+  mask <- array(TRUE, dim = c(3, 3, 1))
+  map <- seq_len(sum(mask))
+  red <- make_cluster_reduction(mask, map)
+  spec <- basis_diffusion_wavelet(
+    target_rank = 2L,
+    oversample = 1L,
+    threshold = 0,
+    max_scales = 1L,
+    seed = 99L
+  )
+
+  handle_1 <- diffusion_wavelet_loadings_handle(red, spec, k_neighbors = 2L)
+  handle_2 <- diffusion_wavelet_loadings_handle(red, spec, k_neighbors = 2L)
+
+  expect_equal(handle_1@id, handle_2@id)
+})
