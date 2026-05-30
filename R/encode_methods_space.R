@@ -115,9 +115,14 @@ encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, la
   )
 
   basis <- x %*% loadings
-  if (length(offset) > 0) {
-    mu_scores <- as.matrix(crossprod(offset, loadings))
-    basis <- basis - matrix(1, nrow = n_time, ncol = 1) %*% mu_scores
+  # Centering is owned by lift.basis_pca: it returns the per-voxel mean projected
+  # onto the PCA loadings as the `fmrilatent.mean_scores` attribute. We subtract
+  # that mean contribution here rather than re-deriving it from `offset`, so the
+  # mean-removal lives in a single place.
+  mean_scores <- attr(loadings, "fmrilatent.mean_scores")
+  if (length(mean_scores) > 0) {
+    basis <- basis - matrix(1, nrow = n_time, ncol = 1) %*%
+      matrix(mean_scores, nrow = 1)
   }
 
   if (isTRUE(spec$whiten)) {

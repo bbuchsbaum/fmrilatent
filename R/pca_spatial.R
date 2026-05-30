@@ -154,6 +154,7 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
     if (col_offset == 0L) {
       out <- Matrix::Matrix(0, nrow = n_vox, ncol = 0, sparse = TRUE)
       attr(out, "fmrilatent.singular_values") <- numeric(0)
+      attr(out, "fmrilatent.mean_scores") <- numeric(0)
       return(out)
     }
 
@@ -164,6 +165,15 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
       dims = c(n_vox, col_offset)
     )
     attr(out, "fmrilatent.singular_values") <- unlist(d_list, use.names = FALSE)
+    # Centering is owned here: project the per-voxel mean onto the PCA loadings
+    # so callers can subtract the mean contribution from raw score projections
+    # `x %*% loadings` without re-deriving the offset themselves. When centering
+    # is disabled (`mu` is NULL) there is no mean to remove.
+    attr(out, "fmrilatent.mean_scores") <- if (is.null(mu)) {
+      numeric(0)
+    } else {
+      as.numeric(Matrix::crossprod(mu, out))
+    }
     out
   }
 )
