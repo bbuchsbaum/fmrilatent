@@ -408,11 +408,15 @@ remain open.
   `\describe` block (incl. `seed`). (F2.2)
 
 ### Bucket B — Medium (aliases/shims/helper extraction + tests)
-- B1. Extract `.encode_center()` and use it in the PCA caller and
-  `.template_projection_payload`; preserve numerics (PCA round-trip test
-  stays green). (F3 fix-1)
-- B2. Document the single offset contract in `?encode`/`?LatentNeuroVec`
-  and add an `@section Offset` to family docs. (F3)
+- B1. **DONE.** Extracted `.encode_center(x, center, offset)` (R/encode.R)
+  and routed the PCA caller (R/encode_methods_space.R) and
+  `.template_projection_payload` (R/encode_template.R) through it.
+  Behavior-preserving; PCA reconstruction bit-identical (diff == 0). (F3 fix-1)
+- B2. **DONE.** Added an `@section Offset and centering contract` to
+  `?encode` stating reconstruction is `basis %*% t(loadings) + offset`,
+  that only `spec_space_pca` populates `offset` (others use `numeric(0)`
+  = no offset), and that centering is owned by the lift step via the
+  shared `.encode_center()` helper. (F3)
 - B3. **DONE.** Factored `.fista()` (shared FISTA scaffold via
   grad/obj/prox closures) and `.awpt_penalty_term()` (shared sparsity
   penalty tail) out of the two sparse transport solvers in
@@ -420,15 +424,24 @@ remain open.
   update, divergence guard, and convergence checks are bit-identical to
   the prior inline loops; behavior-preserving. (F4.2/4.3)
 
-### Bucket C — DECISION NEEDED (human sign-off before implementing)
-- C1. **`spec_st` return class.** Keep always-`ImplicitLatent` (document
-  as the contract) vs activate `core_mode = "explicit"`
-  (R/encode_spec.R:159) to emit `LatentNeuroVec` for fully-explicit
-  separable specs. Behavior change; affects neuroarchive compat.
-- C2. **PCA centering ownership.** Move the caller-side `mu_scores`
-  correction (R/encode_methods_space.R:120-123) into `lift.basis_pca`
-  so centering lives in one place. Changes the public `lift` generic
-  contract; possible external implementers.
+### Bucket C — DECISION NEEDED (approved + implemented)
+- C1. **DONE (decision: opt-in).** `spec_st` keeps `core_mode = "auto"`
+  (the default) returning `ImplicitLatent` with NO default change. The
+  inert `core_mode` slot is now wired up: `core_mode = "explicit"`
+  returns an explicit `LatentNeuroVec` (basis = `B_t %*% core`,
+  loadings = `L_s`) when both factors are materializable, falling back
+  to `ImplicitLatent` with a classed
+  `fmrilatent_warning_explicit_core_unavailable` warning otherwise.
+  Reconstruction of the explicit path matches the `ImplicitLatent`
+  decoder to < 1e-10. Tests in test-encode_st_core_mode.R.
+- C2. **DONE (decision: consolidate into lift).** `lift.basis_pca` is
+  now the single owner of PCA centering: it returns the per-voxel mean
+  projected onto the loadings as the `fmrilatent.mean_scores` attribute
+  and the caller (R/encode_methods_space.R) consumes it instead of
+  recomputing `crossprod(offset, loadings)`. The `lift` generic's public
+  signature is unchanged (additive attribute). Offset slot and
+  reconstruction are bit-identical to before (verified diff == 0 across
+  centered, whitened, multi-rank, and uncentered cases).
 
 ---
 
