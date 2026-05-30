@@ -337,8 +337,10 @@ latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize =
       args <- list(...)
       time_spec <- args$time %||% spec_time_slepian(
         tr = args$tr, bandwidth = args$bandwidth %||% 0.1,
-        k = args$k_time %||% NULL)
-      space_spec <- args$space %||% spec_space_slepian(k = args$k_space %||% 3L, k_neighbors = args$k_neighbors %||% 6L)
+        k = args$k_time %||% args$k)
+      space_spec <- args$space %||% spec_space_slepian(
+        k = args$k_space %||% args$k %||% 3L,
+        k_neighbors = args$k_neighbors %||% 6L)
       spec_st(time = time_spec, space = space_spec)
     }
   )
