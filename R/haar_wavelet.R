@@ -30,7 +30,8 @@ as_logical_mask <- function(arr, location = "haar_wavelet:mask") {
   }
   dims <- dim(arr)
   if (is.null(dims) || length(dims) != 3L) {
-    stop(sprintf("mask must be a 3D array (%s)", location), call. = FALSE)
+    .encoder_cli_abort(sprintf("mask must be a 3D array (%s)", location),
+                       class = "fmrilatent_error_invalid_mask")
   }
   array(as.logical(arr), dim = dims)
 }
@@ -60,7 +61,10 @@ get_morton_ordered_indices <- function(mask_3d_array, z_order_seed = 42L) {
   max_dim <- max(dims)
   bits <- ceiling(log2(max_dim))
   if (3L * (bits - 1L) + 2L > 30L) {
-    stop("Mask dimensions too large for 32-bit Morton codes (max ~1024 per axis)", call. = FALSE)
+    .encoder_cli_abort(
+      "Mask dimensions too large for 32-bit Morton codes (max ~1024 per axis)",
+      class = "fmrilatent_error_morton_overflow"
+    )
   }
   codes <- integer(nrow(vox_coords))
   for (b in seq_len(bits)) {
@@ -90,7 +94,8 @@ precompute_haar_scalings <- function(mask_3d_array, levels) {
   mask_logical <- as_logical_mask(mask_3d_array, "precompute_haar_scalings")
   levels <- as.integer(levels)
   if (length(levels) != 1L || is.na(levels) || levels < 1L) {
-    stop("levels must be a positive integer", call. = FALSE)
+    .encoder_cli_abort("levels must be a positive integer",
+                       class = "fmrilatent_error_invalid_argument")
   }
 
   if (use_haar_rcpp() && exists("precompute_haar_scalings_rcpp", mode = "function")) {
@@ -235,14 +240,17 @@ inverse_lift_R <- function(root_coeff,
     idx_lp  <- 1L
     detail_vec <- detail_coeffs_by_level[[lvl]]
     if (length(detail_vec) != total) {
-      stop(sprintf("Detail vector for level %d has incorrect length", lvl - 1L),
-           call. = FALSE)
+      .encoder_cli_abort(
+        sprintf("Detail vector for level %d has incorrect length", lvl - 1L),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
     for (b in seq_along(counts)) {
       nv <- counts[b]
       if (nv > 0) {
         if (idx_lp > length(current)) {
-          stop(sprintf("Lowpass underflow at level %d", lvl - 1L), call. = FALSE)
+          .encoder_cli_abort(sprintf("Lowpass underflow at level %d", lvl - 1L),
+                             class = "fmrilatent_error_haar_internal")
         }
         avg <- current[idx_lp] / sc$sqrt_nvalid[b]
         vals <- detail_vec[idx_det:(idx_det + nv - 1L)] /
@@ -278,7 +286,8 @@ lna_forward_lift_matrix <- function(data_morton,
                                     scalings,
                                     compat_profile = NULL) {
   if (!is.matrix(data_morton)) {
-    stop("data_morton must be a matrix", call. = FALSE)
+    .encoder_cli_abort("data_morton must be a matrix",
+                       class = "fmrilatent_error_invalid_type")
   }
   n_time <- nrow(data_morton)
   if (n_time == 0L) {
@@ -351,10 +360,12 @@ lna_inverse_lift_matrix <- function(root_coeff,
     root_coeff <- matrix(root_coeff, nrow = 1L)
   }
   if (!is.matrix(root_coeff)) {
-    stop("root_coeff must be a matrix", call. = FALSE)
+    .encoder_cli_abort("root_coeff must be a matrix",
+                       class = "fmrilatent_error_invalid_type")
   }
   if (!is.list(detail_coeffs_by_level) || length(detail_coeffs_by_level) < levels) {
-    stop("detail_coeffs_by_level must be a list of length >= levels", call. = FALSE)
+    .encoder_cli_abort("detail_coeffs_by_level must be a list of length >= levels",
+                       class = "fmrilatent_error_invalid_argument")
   }
 
   n_time <- nrow(root_coeff)
@@ -390,7 +401,8 @@ lna_inverse_lift_matrix <- function(root_coeff,
 perform_haar_lift_analysis <- function(data_matrix_T_x_Nmask, mask_3d_array,
                                        levels, z_order_seed = 42L) {
   if (!is.matrix(data_matrix_T_x_Nmask)) {
-    stop("data_matrix_T_x_Nmask must be a matrix", call. = FALSE)
+    .encoder_cli_abort("data_matrix_T_x_Nmask must be a matrix",
+                       class = "fmrilatent_error_invalid_type")
   }
 
   mask_logical <- as_logical_mask(mask_3d_array, "perform_haar_lift_analysis")
@@ -400,14 +412,18 @@ perform_haar_lift_analysis <- function(data_matrix_T_x_Nmask, mask_3d_array,
     if (nrow(data_matrix_T_x_Nmask) == expected_cols) {
       data_matrix_T_x_Nmask <- t(data_matrix_T_x_Nmask)
     } else {
-      stop(sprintf("data matrix must have %d columns (one per masked voxel); got %d",
-                   expected_cols, ncol(data_matrix_T_x_Nmask)), call. = FALSE)
+      .encoder_cli_abort(
+        sprintf("data matrix must have %d columns (one per masked voxel); got %d",
+                expected_cols, ncol(data_matrix_T_x_Nmask)),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
   }
 
   morton_idx <- get_morton_ordered_indices(mask_logical, z_order_seed)
   if (length(morton_idx) == 0L) {
-    stop("mask must contain at least one voxel", call. = FALSE)
+    .encoder_cli_abort("mask must contain at least one voxel",
+                       class = "fmrilatent_error_invalid_mask")
   }
   mask_linear <- which(mask_logical)
   perm <- match(morton_idx, mask_linear)
@@ -423,7 +439,8 @@ perform_haar_lift_analysis <- function(data_matrix_T_x_Nmask, mask_3d_array,
   counts_by_level <- lapply(scalings, function(sc) as.integer(round(sc$sqrt_nvalid^2)))
   top_blocks <- length(counts_by_level[[levels]])
   if (top_blocks != 1L) {
-    stop("Top-level lowpass must be a single block; increase 'levels'", call. = FALSE)
+    .encoder_cli_abort("Top-level lowpass must be a single block; increase 'levels'",
+                       class = "fmrilatent_error_invalid_argument")
   }
 
   detail_lengths <- vapply(counts_by_level, sum, integer(1))
@@ -458,8 +475,10 @@ perform_haar_lift_analysis <- function(data_matrix_T_x_Nmask, mask_3d_array,
     for (lvl in seq_len(levels)) {
       detail_vec <- res$detail_coeffs_by_level[[lvl]]
       if (length(detail_vec) != detail_lengths[lvl]) {
-        stop(sprintf("Forward lift detail length mismatch at level %d", lvl - 1L),
-             call. = FALSE)
+        .encoder_cli_abort(
+          sprintf("Forward lift detail length mismatch at level %d", lvl - 1L),
+          class = "fmrilatent_error_dimension_mismatch"
+        )
       }
       detail_coeffs[[lvl]][tt, ] <- detail_vec
     }
@@ -474,17 +493,20 @@ perform_haar_lift_analysis <- function(data_matrix_T_x_Nmask, mask_3d_array,
 perform_haar_lift_synthesis <- function(coeff_list, mask_3d_array, levels,
                                         z_order_seed = 42L) {
   if (is.null(coeff_list$root) || !is.matrix(coeff_list$root)) {
-    stop("coeff_list$root must be a matrix", call. = FALSE)
+    .encoder_cli_abort("coeff_list$root must be a matrix",
+                       class = "fmrilatent_error_invalid_type")
   }
   if (!is.list(coeff_list$detail) || length(coeff_list$detail) < levels) {
-    stop("coeff_list$detail must be a list of length 'levels'", call. = FALSE)
+    .encoder_cli_abort("coeff_list$detail must be a list of length 'levels'",
+                       class = "fmrilatent_error_invalid_argument")
   }
 
   mask_logical <- as_logical_mask(mask_3d_array, "perform_haar_lift_synthesis")
   mask_dims <- dim(mask_logical)
   morton_idx <- get_morton_ordered_indices(mask_logical, z_order_seed)
   if (length(morton_idx) == 0L) {
-    stop("mask must contain at least one voxel", call. = FALSE)
+    .encoder_cli_abort("mask must contain at least one voxel",
+                       class = "fmrilatent_error_invalid_mask")
   }
   mask_linear <- which(mask_logical)
   perm <- match(morton_idx, mask_linear)
@@ -499,13 +521,17 @@ perform_haar_lift_synthesis <- function(coeff_list, mask_3d_array, levels,
   counts_by_level <- lapply(scalings, function(sc) as.integer(round(sc$sqrt_nvalid^2)))
   top_blocks <- length(counts_by_level[[levels]])
   if (ncol(coeff_list$root) != top_blocks) {
-    stop("Root coefficient matrix has wrong number of columns", call. = FALSE)
+    .encoder_cli_abort("Root coefficient matrix has wrong number of columns",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
   detail_expected <- vapply(counts_by_level, sum, integer(1))
   for (lv in seq_len(levels)) {
     if (ncol(coeff_list$detail[[lv]]) != detail_expected[lv]) {
-      stop(sprintf("Detail matrix for level %d must have %d columns", lv - 1L,
-                   detail_expected[lv]), call. = FALSE)
+      .encoder_cli_abort(
+        sprintf("Detail matrix for level %d must have %d columns", lv - 1L,
+                detail_expected[lv]),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
   }
 
@@ -592,7 +618,8 @@ compute_block_map <- function(mask_3d_array, levels) {
 
 get_roi_detail_indices <- function(roi_mask, mask_3d_array, levels) {
   if (!is.array(roi_mask) || !identical(dim(roi_mask), dim(mask_3d_array))) {
-    stop("roi_mask must match mask dimensions", call. = FALSE)
+    .encoder_cli_abort("roi_mask must match mask dimensions",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
 
   mapping <- compute_block_map(mask_3d_array, levels)
@@ -715,7 +742,8 @@ haar_wavelet_inverse <- function(coeff, mask, levels = NULL, z_seed = NULL,
                                  levels_keep = NULL) {
   mask_arr <- as_logical_mask(mask, "haar_wavelet_inverse")
   meta <- coeff$meta %||% list()
-  levels <- as.integer(levels %||% meta$levels %||% stop("levels must be provided", call. = FALSE))
+  levels <- as.integer(levels %||% meta$levels %||%
+    .encoder_cli_abort("levels must be provided", class = "fmrilatent_error_invalid_argument"))
   z_seed <- as.integer(z_seed %||% meta$z_seed %||% 42L)
 
   root <- coeff$coeff$root %||% coeff$root
@@ -852,5 +880,6 @@ as_haar_latent <- function(obj) {
     class(obj) <- unique(c("HaarLatent", class(obj)))
     return(obj)
   }
-  stop("Object is not Haar implicit latent", call. = FALSE)
+  .encoder_cli_abort("Object is not Haar implicit latent",
+                     class = "fmrilatent_error_invalid_type")
 }
