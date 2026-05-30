@@ -98,6 +98,44 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
     label = label
   )
 
+  core_mode <- spec$core_mode %||% "auto"
+  if (identical(core_mode, "explicit")) {
+    # An explicit LatentNeuroVec is feasible whenever both separable factors
+    # are materializable dense matrices, which is the case for every supported
+    # spec_st time/space combination that reaches this point (wavelet_active
+    # space already aborts above). The separable decoder output
+    #   rec = B_t %*% core %*% t(L_s)
+    # factors exactly as (B_t %*% core) %*% t(L_s), so we store
+    # basis = B_t %*% core and loadings = L_s with no offset.
+    factors_explicit <- is.numeric(as.matrix(B_t)) &&
+      is.numeric(as.matrix(core)) && is.numeric(as.matrix(L_s))
+    if (factors_explicit) {
+      basis <- as.matrix(B_t) %*% as.matrix(core)
+      loadings <- .loadings_for_materialize(
+        Matrix::Matrix(as.matrix(L_s), sparse = FALSE),
+        materialize,
+        id_prefix = "st-loadings",
+        label = "st-loadings"
+      )
+      spc <- .space_with_time_from_mask(mask, n_time, "encode_spec.spec_st")
+      meta$core_mode <- "explicit"
+      return(LatentNeuroVec(
+        basis = Matrix::Matrix(basis, sparse = FALSE),
+        loadings = loadings,
+        space = spc,
+        mask = mask,
+        offset = numeric(0),
+        label = label,
+        meta = meta
+      ))
+    }
+    .encoder_cli_warn(
+      paste0("spec_st core_mode = 'explicit' requested but the separable ",
+             "factors are not both materializable; returning an ImplicitLatent."),
+      class = "fmrilatent_warning_explicit_core_unavailable"
+    )
+  }
+
   implicit_latent(
     coeff = list(core = core, B_t = B_t, L_s = L_s),
     decoder = decoder,

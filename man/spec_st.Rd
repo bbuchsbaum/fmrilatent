@@ -11,7 +11,14 @@ spec_st(time, space, core_mode = c("auto", "explicit"))
 
 \item{space}{Spatial spec (`spec_space_*`).}
 
-\item{core_mode}{Reserved (currently "auto").}
+\item{core_mode}{Controls the returned representation. `"auto"` (the
+default) always returns an `ImplicitLatent` (decoder-only separable
+form). `"explicit"` returns an explicit [LatentNeuroVec] (the separable
+`basis %*% t(loadings)` pair) when both the time and space factors are
+materializable, which holds for every currently supported `spec_st`
+combination; if the factors are not both materializable it falls back to
+`ImplicitLatent` with a `fmrilatent_warning_explicit_core_unavailable`
+warning. The reconstruction is identical either way.}
 }
 \value{
 A `spec_st` object.

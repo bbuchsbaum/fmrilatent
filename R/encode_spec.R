@@ -167,7 +167,14 @@ spec_space_wavelet_active <- function(levels_space = 2L, levels_time = 0L, thres
 #'
 #' @param time Temporal spec (`spec_time_*`).
 #' @param space Spatial spec (`spec_space_*`).
-#' @param core_mode Reserved (currently "auto").
+#' @param core_mode Controls the returned representation. `"auto"` (the
+#'   default) always returns an `ImplicitLatent` (decoder-only separable
+#'   form). `"explicit"` returns an explicit [LatentNeuroVec] (the separable
+#'   `basis %*% t(loadings)` pair) when both the time and space factors are
+#'   materializable, which holds for every currently supported `spec_st`
+#'   combination; if the factors are not both materializable it falls back to
+#'   `ImplicitLatent` with a `fmrilatent_warning_explicit_core_unavailable`
+#'   warning. The reconstruction is identical either way.
 #' @return A `spec_st` object.
 #' @export
 spec_st <- function(time, space, core_mode = c("auto", "explicit")) {
