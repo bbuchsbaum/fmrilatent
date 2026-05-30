@@ -7,7 +7,21 @@
 spec_space_hrbf(params = list())
 }
 \arguments{
-\item{params}{HRBF parameter list (sigma0, levels, radius_factor, kernel_type, seed).}
+\item{params}{Named list of HRBF parameters. Any keys not supplied fall
+back to package defaults. Recognized keys:
+\describe{
+  \item{`sigma0`}{Base kernel width (numeric, default `6`). Controls
+    the spatial extent of the coarsest HRBF atoms.}
+  \item{`levels`}{Number of dyadic resolution levels (integer, default
+    `3L`). Each level halves the kernel width.}
+  \item{`radius_factor`}{Atom support radius as a multiple of the
+    level width (numeric, default `2.5`).}
+  \item{`kernel_type`}{Radial kernel family (character, default
+    `"gaussian"`).}
+  \item{`seed`}{Random seed (integer, default `1L`) used when atom
+    centres are placed stochastically, so encodings are reproducible.}
+}
+Validated by `.validate_hrbf_params()`.}
 }
 \value{
 A `spec_space_hrbf` object.

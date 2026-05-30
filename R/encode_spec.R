@@ -127,7 +127,21 @@ spec_space_heat <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 1e-
 
 #' Spatial HRBF spec
 #'
-#' @param params HRBF parameter list (sigma0, levels, radius_factor, kernel_type, seed).
+#' @param params Named list of HRBF parameters. Any keys not supplied fall
+#'   back to package defaults. Recognized keys:
+#'   \describe{
+#'     \item{`sigma0`}{Base kernel width (numeric, default `6`). Controls
+#'       the spatial extent of the coarsest HRBF atoms.}
+#'     \item{`levels`}{Number of dyadic resolution levels (integer, default
+#'       `3L`). Each level halves the kernel width.}
+#'     \item{`radius_factor`}{Atom support radius as a multiple of the
+#'       level width (numeric, default `2.5`).}
+#'     \item{`kernel_type`}{Radial kernel family (character, default
+#'       `"gaussian"`).}
+#'     \item{`seed`}{Random seed (integer, default `1L`) used when atom
+#'       centres are placed stochastically, so encodings are reproducible.}
+#'   }
+#'   Validated by `.validate_hrbf_params()`.
 #' @return A `spec_space_hrbf` object.
 #' @export
 spec_space_hrbf <- function(params = list()) {
