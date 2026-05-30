@@ -377,9 +377,9 @@ unexpected post-threshold density signals a bug.
 
 ### Bucket A — Low-risk mechanical (each ~1 commit + targeted test)
 
-**Status (2026-05-30):** A1, A2, A5, A6, A7 are **DONE** (implemented +
-tested + committed). A3 and A4 are **DEFERRED** (not implemented in this
-pass).
+**Status (2026-05-30):** A1, A2, A3, A4, A5, A6, A7 are **DONE**
+(implemented + tested + committed). B3 is also **DONE**. B1, B2, C1, C2
+remain open.
 
 - A1. **DONE.** Doc-only: added per-family `@return` table to `?encode`
   and `?latent_factory`, documenting the `ExplicitLatent` /
@@ -387,11 +387,15 @@ pass).
 - A2. **DONE.** Assert return class of `wavelet_active_latent()` at the
   `spec_space_wavelet_active` seam via a classed
   `fmrilatent_error_invalid_type` abort; class-asserting test added. (F1.3)
-- A3. **DEFERRED.** Route HRBF (R/encode_methods_space.R:74-76) and
-  spec_st atoms (R/encode_methods_st.R:71-73) through one
-  `.atom_coefficients()`. (F4.1)
-- A4. **DEFERRED.** Extract `.slepian_default_k()` for
-  R/encode_methods_time.R:10 and R/encode_methods_st.R:18. (F4.4)
+- A3. **DONE.** Routed HRBF (R/encode_methods_space.R) and spec_st
+  atoms (R/encode_methods_st.R) through one shared `.atom_coefficients()`
+  helper (R/encode.R), which forms the Gram over the voxel axis and
+  returns time x atoms coefficients. Numerically identical to the prior
+  inline `.robust_gram_solve` expressions. (F4.1)
+- A4. **DONE.** Extracted `.slepian_default_k(n_time, tr, bandwidth)`
+  (R/encode.R) and routed the temporal (R/encode_methods_time.R) and
+  spatiotemporal (R/encode_methods_st.R) slepian encoders through it.
+  Formula unchanged. (F4.4)
 - A5. **DONE.** Added `expect_dense` arg (default `FALSE`) to
   `LatentNeuroVec()` / `.make_latent_neurovector()` suppressing the
   by-design dense message; `diffusion_wavelet_latent()` passes
@@ -409,8 +413,12 @@ pass).
   stays green). (F3 fix-1)
 - B2. Document the single offset contract in `?encode`/`?LatentNeuroVec`
   and add an `@section Offset` to family docs. (F3)
-- B3. Factor `.fista()` and `.awpt_penalty_term()` out of the two sparse
-  transport solvers. (F4.2/4.3)
+- B3. **DONE.** Factored `.fista()` (shared FISTA scaffold via
+  grad/obj/prox closures) and `.awpt_penalty_term()` (shared sparsity
+  penalty tail) out of the two sparse transport solvers in
+  R/encode_transport_solve.R. Step sizes, prox operator, momentum
+  update, divergence guard, and convergence checks are bit-identical to
+  the prior inline loops; behavior-preserving. (F4.2/4.3)
 
 ### Bucket C — DECISION NEEDED (human sign-off before implementing)
 - C1. **`spec_st` return class.** Keep always-`ImplicitLatent` (document
