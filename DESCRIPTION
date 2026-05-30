@@ -89,6 +89,7 @@ Collate:
     'hierarchical_template.R'
     'hrbf.R'
     'implicit_latent.R'
+    'latent_shared_validation.R'
     'slepian_handles.R'
     'latent_neurovec_materialize.R'
     'latent_surface_vector.R'

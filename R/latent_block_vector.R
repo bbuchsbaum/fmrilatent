@@ -1,4 +1,4 @@
-#' @include all_generic.R transport_latent.R
+#' @include all_generic.R transport_latent.R latent_shared_validation.R
 #' @importFrom methods setMethod setValidity new
 #' @importFrom Matrix Matrix
 NULL
@@ -18,9 +18,12 @@ NULL
 .validate_block_latent_blocks <- function(blocks, context = "BlockLatentNeuroVector") {
   blocks <- .normalize_block_latent_blocks(blocks, context = context)
   errs <- character()
-  ref_basis <- NULL
-  ref_dim <- NULL
 
+  # First pass: ensure each block is an explicit latent that exposes a
+  # materializable basis() matrix. Collect the bases (with labels) for the
+  # shared-basis comparison below.
+  bases <- list()
+  labels <- character()
   for (nm in names(blocks)) {
     block <- blocks[[nm]]
     ok_explicit <- FALSE
@@ -39,21 +42,21 @@ NULL
       next
     }
 
-    if (is.null(ref_basis)) {
-      ref_basis <- block_basis
-      ref_dim <- dim(block_basis)
-      next
-    }
+    bases[[length(bases) + 1L]] <- block_basis
+    labels <- c(labels, nm)
+  }
 
-    if (!identical(dim(block_basis), ref_dim)) {
-      errs <- c(errs, paste0("Block '", nm, "' basis dimensions do not match the reference block."))
-      next
-    }
-
-    same_basis <- isTRUE(all.equal(block_basis, ref_basis, tolerance = 1e-8, check.attributes = FALSE))
-    if (!same_basis) {
-      errs <- c(errs, paste0("Block '", nm, "' basis matrix must match the shared block basis."))
-    }
+  # Second pass: every usable basis must match the first (reference) block in
+  # both dimension and value. Message wording is preserved for back-compat.
+  basis_errs <- .validate_shared_basis(
+    bases,
+    labels = labels,
+    tolerance = 1e-8,
+    dim_msg = "Block '%s' basis dimensions do not match the reference block.",
+    value_msg = "Block '%s' basis matrix must match the shared block basis."
+  )
+  if (!isTRUE(basis_errs)) {
+    errs <- c(errs, basis_errs)
   }
 
   if (length(errs) == 0L) TRUE else errs

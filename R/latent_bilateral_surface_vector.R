@@ -1,4 +1,4 @@
-#' @include all_generic.R latent_surface_vector.R
+#' @include all_generic.R latent_surface_vector.R latent_shared_validation.R
 #' @importFrom methods setMethod setValidity new
 NULL
 
@@ -19,8 +19,15 @@ BilatLatentNeuroSurfaceVector <- function(left, right, label = "", meta = list()
     .encoder_cli_abort("'right' must be a LatentNeuroSurfaceVector.",
                        class = "fmrilatent_error_type", call = rlang::caller_env())
   }
-  if (!identical(dim(basis(left)), dim(basis(right)))) {
-    .encoder_cli_abort("left and right basis matrices must have identical dimensions.",
+  basis_check <- .validate_shared_basis(
+    list(as.matrix(basis(left)), as.matrix(basis(right))),
+    labels = c("left", "right"),
+    tolerance = 1e-8,
+    dim_msg = "left and right basis matrices must have identical dimensions.",
+    value_msg = "left and right basis matrices must be equal (the %s basis differs from the left basis)."
+  )
+  if (!isTRUE(basis_check)) {
+    .encoder_cli_abort(paste(basis_check, collapse = "\n"),
                        class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (!is.list(meta)) {
@@ -267,8 +274,15 @@ setMethod("project_vcov", "BilatLatentNeuroSurfaceVector",
     errors <- c(errors, "Slot @right must be a LatentNeuroSurfaceVector.")
   }
   if (length(errors) == 0L) {
-    if (!identical(dim(basis(object@left)), dim(basis(object@right)))) {
-      errors <- c(errors, "Left and right basis matrices must have identical dimensions.")
+    basis_check <- .validate_shared_basis(
+      list(as.matrix(basis(object@left)), as.matrix(basis(object@right))),
+      labels = c("left", "right"),
+      tolerance = 1e-8,
+      dim_msg = "Left and right basis matrices must have identical dimensions.",
+      value_msg = "Left and right basis matrices must be equal (the %s basis differs from the left basis)."
+    )
+    if (!isTRUE(basis_check)) {
+      errors <- c(errors, basis_check)
     }
   }
   if (length(errors) == 0L) TRUE else errors
