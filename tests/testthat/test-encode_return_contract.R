@@ -37,3 +37,37 @@ test_that("wavelet_active seam aborts if the inner latent has the wrong class", 
     class = "fmrilatent_error_invalid_type"
   )
 })
+
+test_that("diffusion-global latent emits no dense message (expect_dense)", {
+  set.seed(1)
+  dims <- c(6, 6, 4)
+  mask <- neuroim2::LogicalNeuroVol(array(TRUE, dims), neuroim2::NeuroSpace(dims))
+  n_time <- 20
+  n_vox <- prod(dims)
+  X <- matrix(rnorm(n_time * n_vox), n_time, n_vox)
+  red <- make_cluster_reduction(mask, seq_len(n_vox))
+
+  expect_no_message(
+    diffusion_wavelet_latent(X, mask, reduction = red)
+  )
+})
+
+test_that("genuinely-unexpected dense loadings still emit the dense message", {
+  dims <- c(3, 3, 2)
+  n_vox <- prod(dims)
+  k <- 2L
+  n_time <- 5L
+  space <- neuroim2::NeuroSpace(c(dims, n_time))
+  mask <- neuroim2::LogicalNeuroVol(array(TRUE, dims), neuroim2::NeuroSpace(dims))
+  basis <- matrix(rnorm(n_time * k), n_time, k)
+  loadings <- matrix(runif(n_vox * k) + 1, n_vox, k)  # fully dense base matrix
+
+  expect_message(
+    LatentNeuroVec(basis = basis, loadings = loadings, space = space, mask = mask),
+    "dense"
+  )
+  expect_no_message(
+    LatentNeuroVec(basis = basis, loadings = loadings, space = space, mask = mask,
+                   expect_dense = TRUE)
+  )
+})

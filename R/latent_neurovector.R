@@ -122,8 +122,14 @@ validate_same_dims <- function(x, y, dims_to_compare = NULL, msg = "Dimension mi
 #' }
 #'
 #' @param meta Optional list of metadata (e.g., HRBF params or centres).
+#' @param expect_dense Logical; if `TRUE`, suppress the informational
+#'   message emitted when a base-matrix `basis`/`loadings` is dense
+#'   (>50% non-zero) and stored as a dense `dgeMatrix`. Use this for
+#'   families (e.g. diffusion wavelets) where a dense factor is by design.
+#'   Defaults to `FALSE`, preserving the original message behavior.
 #' @export
-LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = "", meta = list()) {
+LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = "", meta = list(),
+                           expect_dense = FALSE) {
   # Validate 'space'
   if (!inherits(space, "NeuroSpace")) {
     stop("'space' must be a NeuroSpace object")
@@ -201,7 +207,9 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   if (is.matrix(basis) && !is(basis, "Matrix")) {
     density_basis <- sum(basis != 0) / length(basis)
     if (density_basis > 0.5) {
-      message("Input 'basis' is dense (", round(density_basis * 100), "% non-zero); storing as dense dgeMatrix.")
+      if (!isTRUE(expect_dense)) {
+        message("Input 'basis' is dense (", round(density_basis * 100), "% non-zero); storing as dense dgeMatrix.")
+      }
       basis <- Matrix::Matrix(basis, sparse = FALSE)
     } else {
       basis <- Matrix::Matrix(basis)
@@ -211,7 +219,9 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   if (is.matrix(loadings) && !is(loadings, "Matrix")) {
     density_loadings <- sum(loadings != 0) / length(loadings)
     if (density_loadings > 0.5) {
-      message("Input 'loadings' is dense (", round(density_loadings * 100), "% non-zero); storing as dense dgeMatrix.")
+      if (!isTRUE(expect_dense)) {
+        message("Input 'loadings' is dense (", round(density_loadings * 100), "% non-zero); storing as dense dgeMatrix.")
+      }
       loadings <- Matrix::Matrix(loadings, sparse = FALSE)
     } else {
       loadings <- Matrix::Matrix(loadings)

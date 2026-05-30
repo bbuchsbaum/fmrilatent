@@ -177,5 +177,6 @@ diffusion_wavelet_latent <- function(X, mask, reduction = NULL,
   loadings <- lift(reduction, spec, k_neighbors = k_neighbors)
   meta <- list(family = "diffusion_wavelet", spec = spec, k_neighbors = k_neighbors)
   .make_latent_neurovector(X, mask, loadings, label = label, meta = meta,
-                           location = "diffusion_wavelet_latent")
+                           location = "diffusion_wavelet_latent",
+                           expect_dense = TRUE)
 }

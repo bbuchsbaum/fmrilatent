@@ -11,7 +11,8 @@ LatentNeuroVec(
   mask,
   offset = NULL,
   label = "",
-  meta = list()
+  meta = list(),
+  expect_dense = FALSE
 )
 }
 \arguments{
@@ -33,6 +34,12 @@ If NULL, defaults to zero offset.}
 \item{label}{Optional character label for the object.}
 
 \item{meta}{Optional list of metadata (e.g., HRBF params or centres).}
+
+\item{expect_dense}{Logical; if `TRUE`, suppress the informational
+message emitted when a base-matrix `basis`/`loadings` is dense
+(>50% non-zero) and stored as a dense `dgeMatrix`. Use this for
+families (e.g. diffusion wavelets) where a dense factor is by design.
+Defaults to `FALSE`, preserving the original message behavior.}
 }
 \value{
 A new \code{\link{LatentNeuroVec-class}} instance.
