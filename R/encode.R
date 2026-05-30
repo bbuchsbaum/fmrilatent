@@ -271,6 +271,30 @@
 #'   In short: `ExplicitLatent` is the virtual S4 marker inherited by
 #'   [LatentNeuroVec]; `ImplicitLatent` and `TransportLatent` are S3
 #'   classes that deliberately do not inherit it.
+#' @section Offset and centering contract:
+#'   A [LatentNeuroVec] reconstructs its data as
+#'   `basis %*% t(loadings) + offset`, where `offset` is a per-voxel vector
+#'   (length = number of in-mask voxels) added back after the low-rank term.
+#'   The offset is owned by the encoder's *lift* step, which is the single
+#'   place that decides whether and how to center:
+#'   \describe{
+#'     \item{Families that populate `offset`}{Only `spec_space_pca` produces a
+#'       non-empty offset, and only when `center = TRUE` (the default): the
+#'       per-voxel column means are removed before the PCA and stored in the
+#'       `offset` slot so reconstruction restores them. The mean removal is
+#'       performed exactly once, inside `lift.basis_pca` (see the
+#'       `fmrilatent.mean_scores` attribute it returns); the encode caller does
+#'       not re-center. With `center = FALSE`, PCA stores `offset = numeric(0)`.}
+#'     \item{Families that never center}{All other explicit families
+#'       (`spec_space_slepian`, `spec_space_heat`, `spec_space_hrbf`,
+#'       `spec_time_slepian`, `spec_time_dct`, `spec_time_bspline`) store
+#'       `offset = numeric(0)`, i.e. no offset.}
+#'   }
+#'   By convention `offset = numeric(0)` means "no offset" and reconstruction
+#'   treats it as a zero vector; a populated `offset` always has one entry per
+#'   in-mask voxel. The shared `.encode_center()` helper is the single
+#'   implementation of column-mean centering used by the offset-producing
+#'   paths.
 #' @export
 encode <- function(x, spec, mask, reduction = NULL,
                    materialize = c("handle", "auto", "matrix"),
