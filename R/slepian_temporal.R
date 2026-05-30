@@ -16,9 +16,15 @@
 #' @export
 dpss_time_basis <- function(n_time, tr, bandwidth, k = NULL,
                             backend = c("tridiag", "dense")) {
-  if (missing(n_time) || n_time < 1) stop("n_time must be positive")
-  if (missing(tr) || tr <= 0) stop("tr must be positive (seconds)")
-  if (missing(bandwidth) || bandwidth <= 0) stop("bandwidth must be positive (Hz)")
+  if (missing(n_time) || n_time < 1) {
+    .encoder_cli_abort("n_time must be positive", class = "fmrilatent_error_invalid_argument")
+  }
+  if (missing(tr) || tr <= 0) {
+    .encoder_cli_abort("tr must be positive (seconds)", class = "fmrilatent_error_invalid_argument")
+  }
+  if (missing(bandwidth) || bandwidth <= 0) {
+    .encoder_cli_abort("bandwidth must be positive (Hz)", class = "fmrilatent_error_invalid_argument")
+  }
   W <- bandwidth * tr                    # normalized half-bandwidth (cycles/sample)
   NW <- n_time * W
   if (is.null(k)) k <- floor(2 * NW) - 1
@@ -54,7 +60,9 @@ slepian_temporal_latent <- function(X, mask, tr, bandwidth = 0.1, k = NULL,
                                     denoise = TRUE, backend = c("tridiag", "dense"),
                                     label = "") {
   n_time <- nrow(X)
-  if (is.null(n_time) || n_time < 1) stop("X must have time in rows")
+  if (is.null(n_time) || n_time < 1) {
+    .encoder_cli_abort("X must have time in rows", class = "fmrilatent_error_invalid_argument")
+  }
 
   W <- bandwidth * tr
   NW <- n_time * W
