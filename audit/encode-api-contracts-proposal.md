@@ -376,23 +376,32 @@ unexpected post-threshold density signals a bug.
 ## 3. Prioritized plan (incrementally committable)
 
 ### Bucket A — Low-risk mechanical (each ~1 commit + targeted test)
-- A1. Doc-only: add per-family `@return` table to `?encode`/`?encode_spec`
-  and document `ExplicitLatent`/`ImplicitLatent` taxonomy. (F1.1/1.2)
-- A2. Assert return class of `wavelet_active_latent()` at
-  R/encode_methods_space.R:179. (F1.3)
-- A3. Route HRBF (R/encode_methods_space.R:74-76) and spec_st atoms
-  (R/encode_methods_st.R:71-73) through one `.atom_coefficients()`. (F4.1)
-- A4. Extract `.slepian_default_k()` for R/encode_methods_time.R:10 and
-  R/encode_methods_st.R:18. (F4.4)
-- A5. Add `expect_dense`/`quiet_dense` arg to `.make_latent_neurovector`
-  and pass `TRUE` from `diffusion_wavelet_latent()`
-  (R/diffusion_wavelet.R:179) to suppress the false-positive message
-  (R/latent_neurovector.R:204/214). (F5)
-- A6. Make `latent_factory()` `k` a uniform fallback for
-  `k_time`/`k_space` in the `st_slepian` branch (R/encode.R:312-316).
-  (F2.1)
-- A7. Document HRBF `params` keys in `?spec_space_hrbf`
-  (R/encode_spec.R:128). (F2.2)
+
+**Status (2026-05-30):** A1, A2, A5, A6, A7 are **DONE** (implemented +
+tested + committed). A3 and A4 are **DEFERRED** (not implemented in this
+pass).
+
+- A1. **DONE.** Doc-only: added per-family `@return` table to `?encode`
+  and `?latent_factory`, documenting the `ExplicitLatent` /
+  `ImplicitLatent` / `TransportLatent` taxonomy. (F1.1/1.2)
+- A2. **DONE.** Assert return class of `wavelet_active_latent()` at the
+  `spec_space_wavelet_active` seam via a classed
+  `fmrilatent_error_invalid_type` abort; class-asserting test added. (F1.3)
+- A3. **DEFERRED.** Route HRBF (R/encode_methods_space.R:74-76) and
+  spec_st atoms (R/encode_methods_st.R:71-73) through one
+  `.atom_coefficients()`. (F4.1)
+- A4. **DEFERRED.** Extract `.slepian_default_k()` for
+  R/encode_methods_time.R:10 and R/encode_methods_st.R:18. (F4.4)
+- A5. **DONE.** Added `expect_dense` arg (default `FALSE`) to
+  `LatentNeuroVec()` / `.make_latent_neurovector()` suppressing the
+  by-design dense message; `diffusion_wavelet_latent()` passes
+  `expect_dense = TRUE`. Tests cover both the suppressed and the
+  genuinely-unexpected dense paths. (F5)
+- A6. **DONE.** `latent_factory()` bare `k` now falls back uniformly to
+  `k_time`/`k_space` in the `st_slepian` branch, matching
+  `st_bspline_hrbf`; test added. (F2.1)
+- A7. **DONE.** Documented HRBF `params` keys in `?spec_space_hrbf` as a
+  `\describe` block (incl. `seed`). (F2.2)
 
 ### Bucket B — Medium (aliases/shims/helper extraction + tests)
 - B1. Extract `.encode_center()` and use it in the PCA caller and
