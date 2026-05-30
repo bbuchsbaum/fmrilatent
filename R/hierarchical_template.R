@@ -49,17 +49,23 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
   n_vox <- sum(mask_arr)
 
   if (!is.list(parcellations) || length(parcellations) == 0L) {
-    stop("parcellations must be a non-empty list of integer vectors")
+    .encoder_cli_abort("parcellations must be a non-empty list of integer vectors",
+                       class = "fmrilatent_error_invalid_argument")
   }
   if (length(parcellations) != length(k_per_level)) {
-    stop("length(k_per_level) must match number of parcellation levels")
+    .encoder_cli_abort("length(k_per_level) must match number of parcellation levels",
+                       class = "fmrilatent_error_invalid_argument")
   }
 
   # Normalize parcellations to integer vectors
   parcellations <- lapply(parcellations, function(v) as.integer(v))
   for (lvl in seq_along(parcellations)) {
     if (length(parcellations[[lvl]]) != n_vox) {
-      stop("parcellation level ", lvl, " has length ", length(parcellations[[lvl]]), " but mask has ", n_vox, " voxels")
+      .encoder_cli_abort(
+        paste0("parcellation level ", lvl, " has length ",
+               length(parcellations[[lvl]]), " but mask has ", n_vox, " voxels"),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
   }
 
@@ -94,7 +100,10 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
     col_offset <- block_info$next_col
   }
 
-  if (col_offset == 0L) stop("No atoms were generated; check parcellations and k_per_level")
+  if (col_offset == 0L) {
+    .encoder_cli_abort("No atoms were generated; check parcellations and k_per_level",
+                       class = "fmrilatent_error_invalid_argument")
+  }
 
   B <- do.call(cbind, block_list)
 
@@ -153,7 +162,10 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
 encode_hierarchical <- function(X, template, label = NULL, mask = NULL,
                                 materialize = c("handle", "auto", "matrix")) {
   materialize <- .resolve_materialize(materialize, context = "encode_hierarchical")
-  if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
+  if (!is_hierarchical_template(template)) {
+    .encoder_cli_abort("template must be a HierarchicalBasisTemplate",
+                       class = "fmrilatent_error_invalid_type")
+  }
   X_mat <- Matrix::Matrix(X, sparse = FALSE)
   n_time <- nrow(X_mat)
   n_vox <- ncol(X_mat)
@@ -165,7 +177,10 @@ encode_hierarchical <- function(X, template, label = NULL, mask = NULL,
 
   mask_arr <- as.array(tmpl_mask)
   if (n_vox != sum(mask_arr)) {
-    stop("X has ", n_vox, " voxels, but template mask has ", sum(mask_arr))
+    .encoder_cli_abort(
+      paste0("X has ", n_vox, " voxels, but template mask has ", sum(mask_arr)),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
 
   proj <- template_project(template, X_mat)
@@ -205,10 +220,16 @@ encode_hierarchical <- function(X, template, label = NULL, mask = NULL,
 #' @return Matrix of coefficients (time x atoms)
 #' @export
 project_hierarchical <- function(template, X) {
-  if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
+  if (!is_hierarchical_template(template)) {
+    .encoder_cli_abort("template must be a HierarchicalBasisTemplate",
+                       class = "fmrilatent_error_invalid_type")
+  }
   X_mat <- Matrix::Matrix(X, sparse = FALSE)
   mask_arr <- as.array(template_mask(template))
-  if (ncol(X_mat) != sum(mask_arr)) stop("X voxel dimension does not match template mask")
+  if (ncol(X_mat) != sum(mask_arr)) {
+    .encoder_cli_abort("X voxel dimension does not match template mask",
+                       class = "fmrilatent_error_dimension_mismatch")
+  }
 
   B <- template_loadings(template)
   G_factor <- template@gram_factor   # S4 slot; no generic getter for gram_factor
@@ -222,7 +243,10 @@ project_hierarchical <- function(template, X) {
 #' @param compress Compression passed to saveRDS (default "xz")
 #' @export
 save_hierarchical_template <- function(template, file, compress = "xz") {
-  if (!is_hierarchical_template(template)) stop("template must be a HierarchicalBasisTemplate")
+  if (!is_hierarchical_template(template)) {
+    .encoder_cli_abort("template must be a HierarchicalBasisTemplate",
+                       class = "fmrilatent_error_invalid_type")
+  }
   save_template(template, file = file, compress = compress)
 }
 
@@ -232,7 +256,10 @@ save_hierarchical_template <- function(template, file, compress = "xz") {
 #' @export
 load_hierarchical_template <- function(file) {
   obj <- readRDS(file)
-  if (!is_hierarchical_template(obj)) stop("RDS does not contain a HierarchicalBasisTemplate")
+  if (!is_hierarchical_template(obj)) {
+    .encoder_cli_abort("RDS does not contain a HierarchicalBasisTemplate",
+                       class = "fmrilatent_error_invalid_type")
+  }
   obj
 }
 
@@ -242,7 +269,10 @@ load_hierarchical_template <- function(file) {
 #' @export
 load_template <- function(file) {
   obj <- readRDS(file)
-  if (!is_template(obj)) stop("RDS does not contain a supported template object")
+  if (!is_template(obj)) {
+    .encoder_cli_abort("RDS does not contain a supported template object",
+                       class = "fmrilatent_error_invalid_type")
+  }
   obj
 }
 
@@ -347,8 +377,11 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
     p_ids <- unique(parent[vox_idx])
     p_ids <- p_ids[!is.na(p_ids)]
     if (length(p_ids) != 1L) {
-      stop("Parcellations are not nested at level ", lvl, ": child ", cid,
-           " maps to parents ", paste(p_ids, collapse = ","))
+      .encoder_cli_abort(
+        paste0("Parcellations are not nested at level ", lvl, ": child ", cid,
+               " maps to parents ", paste(p_ids, collapse = ",")),
+        class = "fmrilatent_error_not_nested"
+      )
     }
     parent_map[as.character(cid)] <- p_ids
   }
@@ -384,7 +417,8 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
       vecs <- Matrix::Matrix(eig$vectors[, ord[seq_len(k_use)], drop = FALSE], sparse = TRUE)
     } else {
       if (!requireNamespace("RSpectra", quietly = TRUE)) {
-        stop("RSpectra is required to build hierarchical templates", call. = FALSE)
+        .encoder_cli_abort("RSpectra is required to build hierarchical templates",
+                           class = "fmrilatent_error_missing_dependency")
       }
       g <- voxel_subset_to_gsp(mask, vox_idx, k_neighbors = k_neighbors)
       L <- g$laplacian
