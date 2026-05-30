@@ -68,10 +68,12 @@ build_schaefer_levels <- function(mask,
   # --- Check dependencies ---
 
   if (!requireNamespace("neuroatlas", quietly = TRUE)) {
-    stop("neuroatlas package required; install from bbuchsbaum/neuroatlas", call. = FALSE)
+    .encoder_cli_abort("neuroatlas package required; install from bbuchsbaum/neuroatlas",
+                       class = "fmrilatent_error_missing_dependency")
   }
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
-    stop("neurosurf package required; install from bbuchsbaum/neurosurf", call. = FALSE)
+    .encoder_cli_abort("neurosurf package required; install from bbuchsbaum/neurosurf",
+                       class = "fmrilatent_error_missing_dependency")
   }
 
 
@@ -266,8 +268,11 @@ build_schaefer_hierarchical_template <- function(mask,
   )
 
   if (length(k_per_level) != length(levels_info$levels)) {
-    stop("k_per_level length (", length(k_per_level), ") must match number of levels (",
-         length(levels_info$levels), ")", call. = FALSE)
+    .encoder_cli_abort(
+      paste0("k_per_level length (", length(k_per_level), ") must match number of levels (",
+             length(levels_info$levels), ")"),
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
 
   # Build the template
@@ -302,13 +307,18 @@ build_schaefer_hierarchical_template <- function(mask,
 #' @return List of integer label vectors (same length as hc$labels), one per level, nested by construction.
 #' @export
 cut_hclust_nested <- function(hc, k_levels) {
-  if (!inherits(hc, "hclust")) stop("hc must be an hclust object")
+  if (!inherits(hc, "hclust")) {
+    .encoder_cli_abort("hc must be an hclust object", class = "fmrilatent_error_invalid_type")
+  }
   if (is.unsorted(k_levels, strictly = FALSE)) {
-    warning("k_levels not sorted; coercing to increasing")
+    .encoder_cli_warn("k_levels not sorted; coercing to increasing",
+                      class = "fmrilatent_warning_unsorted_levels")
     k_levels <- sort(unique(as.integer(k_levels)))
   }
   k_levels <- as.integer(k_levels)
-  if (any(k_levels < 1L)) stop("k_levels must be >= 1")
+  if (any(k_levels < 1L)) {
+    .encoder_cli_abort("k_levels must be >= 1", class = "fmrilatent_error_invalid_argument")
+  }
 
   levels <- lapply(k_levels, function(k) stats::cutree(hc, k = k))
   validate_nested_parcellations(levels)
@@ -335,9 +345,18 @@ cut_hclust_nested <- function(hc, k_levels) {
 #' @export
 parcel_similarity_matrix <- function(boundary_contact, geo_dist, yeo17,
                                      alpha = 0.5, beta = 0.3, gamma = 0.2, d0 = 30) {
-  if (!is.matrix(boundary_contact) || !is.matrix(geo_dist)) stop("boundary_contact and geo_dist must be matrices")
-  if (!all(dim(boundary_contact) == dim(geo_dist))) stop("boundary_contact and geo_dist must have same dimensions")
-  if (nrow(boundary_contact) != length(yeo17)) stop("yeo17 length must match parcel count")
+  if (!is.matrix(boundary_contact) || !is.matrix(geo_dist)) {
+    .encoder_cli_abort("boundary_contact and geo_dist must be matrices",
+                       class = "fmrilatent_error_invalid_type")
+  }
+  if (!all(dim(boundary_contact) == dim(geo_dist))) {
+    .encoder_cli_abort("boundary_contact and geo_dist must have same dimensions",
+                       class = "fmrilatent_error_dimension_mismatch")
+  }
+  if (nrow(boundary_contact) != length(yeo17)) {
+    .encoder_cli_abort("yeo17 length must match parcel count",
+                       class = "fmrilatent_error_dimension_mismatch")
+  }
   n <- nrow(boundary_contact)
   yeo17 <- as.integer(as.factor(yeo17))
   yeo_mat <- outer(yeo17, yeo17, FUN = "==") * 1.0
@@ -366,16 +385,21 @@ parcel_similarity_matrix <- function(boundary_contact, geo_dist, yeo17,
 #' @return hclust object.
 #' @export
 spectral_ward_hclust <- function(W, k_embed = 3, hemi = NULL, network = NULL) {
-  if (!is.matrix(W)) stop("W must be a matrix")
+  if (!is.matrix(W)) {
+    .encoder_cli_abort("W must be a matrix", class = "fmrilatent_error_invalid_type")
+  }
   n <- nrow(W)
-  if (n != ncol(W)) stop("W must be square")
+  if (n != ncol(W)) {
+    .encoder_cli_abort("W must be square", class = "fmrilatent_error_dimension_mismatch")
+  }
 
   d <- rowSums(W)
   D_inv_sqrt <- 1 / sqrt(pmax(d, .Machine$double.eps))
   L <- diag(n) - (D_inv_sqrt * W) * D_inv_sqrt
 
   if (!requireNamespace("RSpectra", quietly = TRUE)) {
-    stop("RSpectra is required for spectral embedding", call. = FALSE)
+    .encoder_cli_abort("RSpectra is required for spectral embedding",
+                       class = "fmrilatent_error_missing_dependency")
   }
 
   k_use <- min(k_embed, n - 1L)
@@ -426,9 +450,15 @@ parent_maps_from_levels <- function(levels) {
 #' @return Invisibly TRUE; stops with an error if nesting fails or lengths differ.
 #' @export
 validate_nested_parcellations <- function(levels) {
-  if (!is.list(levels) || length(levels) == 0L) stop("levels must be a non-empty list")
+  if (!is.list(levels) || length(levels) == 0L) {
+    .encoder_cli_abort("levels must be a non-empty list",
+                       class = "fmrilatent_error_invalid_argument")
+  }
   lens <- vapply(levels, length, integer(1))
-  if (length(unique(lens)) != 1L) stop("all parcellation levels must have the same length")
+  if (length(unique(lens)) != 1L) {
+    .encoder_cli_abort("all parcellation levels must have the same length",
+                       class = "fmrilatent_error_dimension_mismatch")
+  }
   if (length(levels) == 1L) return(invisible(TRUE))
   for (i in 2:length(levels)) {
     .parent_map_one(child = levels[[i]], parent = levels[[i - 1L]], lvl = i) # will stop on mismatch
@@ -447,7 +477,11 @@ validate_nested_parcellations <- function(levels) {
     p_ids <- unique(parent[idx])
     p_ids <- p_ids[!is.na(p_ids)]
     if (length(p_ids) != 1L) {
-      stop("Levels are not nested at level ", lvl, ": child ", cid, " maps to ", paste(p_ids, collapse = ","))
+      .encoder_cli_abort(
+        paste0("Levels are not nested at level ", lvl, ": child ", cid,
+               " maps to ", paste(p_ids, collapse = ",")),
+        class = "fmrilatent_error_not_nested"
+      )
     }
     parent_map[as.character(cid)] <- p_ids
   }
