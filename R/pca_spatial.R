@@ -70,7 +70,10 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
            backend = c("auto", "svds", "svd"), ...) {
     backend <- match.arg(backend)
     if (is.null(data)) {
-      stop("lift(ClusterReduction, spec_pca) requires 'data' (time x voxels).", call. = FALSE)
+      .encoder_cli_abort(
+        "lift(ClusterReduction, spec_pca) requires 'data' (time x voxels).",
+        class = "fmrilatent_error_missing_argument"
+      )
     }
 
     X <- as.matrix(data)
@@ -78,7 +81,10 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
     ids <- reduction@cluster_ids
     n_vox <- length(map)
     if (ncol(X) != n_vox) {
-      stop("data has ", ncol(X), " voxels, but reduction map has length ", n_vox, ".", call. = FALSE)
+      .encoder_cli_abort(
+        sprintf("data has %d voxels, but reduction map has length %d.", ncol(X), n_vox),
+        class = "fmrilatent_error_dimension_mismatch"
+      )
     }
 
     k_per_cluster <- as.integer(basis_spec$k %||% 3L)
@@ -87,7 +93,10 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
     if (isTRUE(center)) {
       if (!is.null(offset)) {
         if (!is.numeric(offset) || length(offset) != n_vox) {
-          stop("offset must be a numeric vector of length n_vox when provided.", call. = FALSE)
+          .encoder_cli_abort(
+            "offset must be a numeric vector of length n_vox when provided.",
+            class = "fmrilatent_error_invalid_argument"
+          )
         }
         mu <- as.numeric(offset)
       } else {
