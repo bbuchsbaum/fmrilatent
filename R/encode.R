@@ -72,6 +72,13 @@
   Matrix::Matrix(t(coeff), sparse = FALSE)
 }
 
+# Default Slepian/DPSS component count from the time-bandwidth product.
+# Mirrors the classic 2*N*W*tr - 1 rule, floored at 1. Shared by the
+# temporal and spatiotemporal slepian encoders.
+.slepian_default_k <- function(n_time, tr, bandwidth) {
+  max(1L, floor(2 * n_time * bandwidth * tr) - 1L)
+}
+
 # Least-squares coefficients of x (time x vox) onto a spatial atom dictionary
 # (atoms x vox), returned as a time x atoms matrix. The Gram is formed over the
 # voxel axis (atoms x atoms), so this complements .basis_coefficients (which

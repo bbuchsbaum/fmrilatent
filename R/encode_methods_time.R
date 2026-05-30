@@ -7,7 +7,7 @@ NULL
 encode_spec.spec_time_slepian <- function(x, spec, mask, materialize, label, ...) {
   materialize <- .resolve_materialize(materialize, context = "encode_spec.spec_time_slepian")
   n_time <- nrow(x)
-  k_use <- spec$k %||% max(1L, floor(2 * n_time * spec$bandwidth * spec$tr) - 1L)
+  k_use <- spec$k %||% .slepian_default_k(n_time, spec$tr, spec$bandwidth)
   if (materialize == "matrix") {
     basis <- dpss_time_basis(n_time, tr = spec$tr, bandwidth = spec$bandwidth, k = k_use, backend = spec$backend)
   } else {

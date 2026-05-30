@@ -15,7 +15,7 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
   n_time <- nrow(x)
 
   if (inherits(spec$time, "spec_time_slepian")) {
-    k_time <- spec$time$k %||% max(1L, floor(2 * n_time * spec$time$bandwidth * spec$time$tr) - 1L)
+    k_time <- spec$time$k %||% .slepian_default_k(n_time, spec$time$tr, spec$time$bandwidth)
     B_t <- basis_mat(slepian_temporal_handle(n_time = n_time, tr = spec$time$tr,
                                              bandwidth = spec$time$bandwidth, k = k_time,
                                              backend = spec$time$backend))
