@@ -204,7 +204,27 @@
 #' @param materialize "handle", "matrix", or "auto" (default "handle").
 #' @param label Optional label.
 #' @param ... Additional arguments passed to methods.
-#' @return A `LatentNeuroVec` (explicit bases) or `ImplicitLatent` (separable cases).
+#' @return The return class depends on the spec family:
+#'   \describe{
+#'     \item{Explicit spatial families}{`spec_space_slepian`,
+#'       `spec_space_heat`, `spec_space_hrbf`, `spec_space_pca`, and
+#'       `spec_space_wavelet_active` return a [LatentNeuroVec], which is a
+#'       concrete `ExplicitLatent` (the virtual marker defined at
+#'       `R/all_class.R`). It stores an explicit `basis x loadings + offset`
+#'       factorization.}
+#'     \item{Explicit temporal families}{`spec_time_slepian`,
+#'       `spec_time_dct`, and `spec_time_bspline` likewise return a
+#'       [LatentNeuroVec] (`ExplicitLatent`).}
+#'     \item{Spatiotemporal (`spec_st`)}{**Always** returns an
+#'       `ImplicitLatent` (a decoder-only / separable representation), even
+#'       when both the time and space factors are fully explicit dense
+#'       bases. `ImplicitLatent` is *not* an `ExplicitLatent`.}
+#'     \item{Transport (`spec_transport` / AWPT encoders)}{return a
+#'       `TransportLatent`, which is also *not* an `ExplicitLatent`.}
+#'   }
+#'   In short: `ExplicitLatent` is the virtual S4 marker inherited by
+#'   [LatentNeuroVec]; `ImplicitLatent` and `TransportLatent` are S3
+#'   classes that deliberately do not inherit it.
 #' @export
 encode <- function(x, spec, mask, reduction = NULL,
                    materialize = c("handle", "auto", "matrix"),
@@ -258,7 +278,13 @@ encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
 #' @param ... Passed to spec constructors and encode().
 #' @param materialize "handle", "matrix", or "auto" (default "handle").
 #' @param label Optional label for the resulting object.
-#' @return A LatentNeuroVec or ImplicitLatent object.
+#' @return The class follows the same per-family contract as [encode()]:
+#'   explicit spatial families (`slepian_space`, `pca_space`, `heat_space`,
+#'   `wavelet_active`) and explicit temporal families (`dct_time`,
+#'   `slepian_time`) return a [LatentNeuroVec] (a concrete `ExplicitLatent`);
+#'   the spatiotemporal families (`slepian_st`, `bspline_hrbf_st`) build a
+#'   `spec_st` and therefore always return an `ImplicitLatent`. See the
+#'   `@return` section of [encode()] for the full taxonomy.
 #' @export
 latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize = "handle", label = "") {
   if (identical(family, "awpt")) {

@@ -30,7 +30,13 @@ latent_factory(
 \item{label}{Optional label for the resulting object.}
 }
 \value{
-A LatentNeuroVec or ImplicitLatent object.
+The class follows the same per-family contract as [encode()]:
+  explicit spatial families (`slepian_space`, `pca_space`, `heat_space`,
+  `wavelet_active`) and explicit temporal families (`dct_time`,
+  `slepian_time`) return a [LatentNeuroVec] (a concrete `ExplicitLatent`);
+  the spatiotemporal families (`slepian_st`, `bspline_hrbf_st`) build a
+  `spec_st` and therefore always return an `ImplicitLatent`. See the
+  `@return` section of [encode()] for the full taxonomy.
 }
 \description{
 Simple factory to build a spec and encode in one call

@@ -30,7 +30,27 @@ encode(
 \item{...}{Additional arguments passed to methods.}
 }
 \value{
-A `LatentNeuroVec` (explicit bases) or `ImplicitLatent` (separable cases).
+The return class depends on the spec family:
+  \describe{
+    \item{Explicit spatial families}{`spec_space_slepian`,
+      `spec_space_heat`, `spec_space_hrbf`, `spec_space_pca`, and
+      `spec_space_wavelet_active` return a [LatentNeuroVec], which is a
+      concrete `ExplicitLatent` (the virtual marker defined at
+      `R/all_class.R`). It stores an explicit `basis x loadings + offset`
+      factorization.}
+    \item{Explicit temporal families}{`spec_time_slepian`,
+      `spec_time_dct`, and `spec_time_bspline` likewise return a
+      [LatentNeuroVec] (`ExplicitLatent`).}
+    \item{Spatiotemporal (`spec_st`)}{**Always** returns an
+      `ImplicitLatent` (a decoder-only / separable representation), even
+      when both the time and space factors are fully explicit dense
+      bases. `ImplicitLatent` is *not* an `ExplicitLatent`.}
+    \item{Transport (`spec_transport` / AWPT encoders)}{return a
+      `TransportLatent`, which is also *not* an `ExplicitLatent`.}
+  }
+  In short: `ExplicitLatent` is the virtual S4 marker inherited by
+  [LatentNeuroVec]; `ImplicitLatent` and `TransportLatent` are S3
+  classes that deliberately do not inherit it.
 }
 \description{
 Encode data into a latent representation using a spec
