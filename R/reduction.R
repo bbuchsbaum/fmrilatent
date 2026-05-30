@@ -91,8 +91,10 @@ setGeneric("lift", function(reduction, basis_spec, data = NULL, ...) {
 #' @export
 setMethod("lift", signature(reduction = "GraphReduction", basis_spec = "ANY"),
   function(reduction, basis_spec, data = NULL, ...) {
-    stop("No lift() implementation for this reduction/basis combination. ",
-         "Provide an external method (e.g., supervoxel Slepian or parcel PCA).")
+    .encoder_cli_abort(
+      paste0("No lift() implementation for this reduction/basis combination. ",
+             "Provide an external method (e.g., supervoxel Slepian or parcel PCA)."),
+      class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
   }
 )
 
@@ -112,10 +114,10 @@ make_cluster_reduction <- function(mask, map) {
   }
   n_vox <- sum(as.array(mask_vol))
   if (length(map) != n_vox) {
-    stop(
-      "map must have length ", n_vox, " (the number of voxels in the mask), got ",
-      length(map), ".",
-      call. = FALSE
+    .encoder_cli_abort(
+      paste0("map must have length ", n_vox, " (the number of voxels in the mask), got ",
+             length(map), "."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env()
     )
   }
   new("ClusterReduction",

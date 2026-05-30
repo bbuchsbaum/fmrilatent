@@ -5,7 +5,8 @@ NULL
 
 .require_neurosurf_surface_latent <- function(context = "LatentNeuroSurfaceVector") {
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
-    stop(context, " requires the 'neurosurf' package.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " requires the 'neurosurf' package."),
+                       class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
   }
 }
 
@@ -24,14 +25,17 @@ LatentNeuroSurfaceVector <- function(basis, loadings, geometry, support = NULL,
                                      offset = NULL, label = "", meta = list()) {
   .require_neurosurf_surface_latent()
   if (!(methods::is(geometry, "SurfaceGeometry") || methods::is(geometry, "SurfaceSet"))) {
-    stop("'geometry' must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet object.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "'geometry' must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet object.",
+      class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   if (!is.matrix(basis) && !inherits(basis, c("Matrix", "BasisHandle"))) {
-    stop("'basis' must be a matrix, Matrix, or BasisHandle object")
+    .encoder_cli_abort("'basis' must be a matrix, Matrix, or BasisHandle object",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   if (!is.matrix(loadings) && !inherits(loadings, c("Matrix", "LoadingsHandle"))) {
-    stop("'loadings' must be a matrix, Matrix, or LoadingsHandle object")
+    .encoder_cli_abort("'loadings' must be a matrix, Matrix, or LoadingsHandle object",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
 
   n_nodes <- length(neurosurf::nodes(geometry))
@@ -54,13 +58,17 @@ LatentNeuroSurfaceVector <- function(basis, loadings, geometry, support = NULL,
   l_dim <- .latent_loadings_dim(loadings)
 
   if (b_dim[2L] != l_dim[2L]) {
-    stop("'basis' and 'loadings' must have the same number of columns (components)")
+    .encoder_cli_abort("'basis' and 'loadings' must have the same number of columns (components)",
+                       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (l_dim[1L] != length(support)) {
-    stop("'loadings' must have ", length(support), " rows to match the support cardinality.")
+    .encoder_cli_abort(
+      paste0("'loadings' must have ", length(support), " rows to match the support cardinality."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (length(offset) > 0L && length(offset) != l_dim[1L]) {
-    stop("'offset' length must match number of rows in 'loadings'")
+    .encoder_cli_abort("'offset' length must match number of rows in 'loadings'",
+                       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (is.matrix(basis) && !is(basis, "Matrix")) {
     density_basis <- sum(basis != 0) / length(basis)
@@ -70,7 +78,10 @@ LatentNeuroSurfaceVector <- function(basis, loadings, geometry, support = NULL,
     density_loadings <- sum(loadings != 0) / length(loadings)
     loadings <- Matrix::Matrix(loadings, sparse = !(density_loadings > 0.5))
   }
-  if (!is.list(meta)) stop("'meta' must be a list")
+  if (!is.list(meta)) {
+    .encoder_cli_abort("'meta' must be a list",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
+  }
 
   new("LatentNeuroSurfaceVector",
       basis = basis,
@@ -133,8 +144,10 @@ setMethod("reconstruct_matrix", "LatentNeuroSurfaceVector",
 #' @rdname reconstruct_array
 setMethod("reconstruct_array", "LatentNeuroSurfaceVector",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
-            stop("reconstruct_array() is not defined for surface latent objects. ",
-                 "Use reconstruct_matrix() plus wrap_decoded().", call. = FALSE)
+            .encoder_cli_abort(
+              paste0("reconstruct_array() is not defined for surface latent objects. ",
+                     "Use reconstruct_matrix() plus wrap_decoded()."),
+              class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
           })
 
 #' @export
@@ -143,8 +156,9 @@ setMethod("wrap_decoded", "LatentNeuroSurfaceVector",
           function(x, values, time_idx = NULL, space = c("native", "template"), ...) {
             space <- match.arg(space)
             if (space != "native") {
-              stop("wrap_decoded() for LatentNeuroSurfaceVector currently supports only native-space wrapping.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "wrap_decoded() for LatentNeuroSurfaceVector currently supports only native-space wrapping.",
+                class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
             }
             .wrap_decoded_surface(values, x@geometry, x@support,
                                   context = "wrap_decoded.LatentNeuroSurfaceVector")

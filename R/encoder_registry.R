@@ -62,8 +62,9 @@ register_encoder <- function(family, spec_fn, description = "", package = "") {
   stopifnot(is.character(family), length(family) == 1L, nzchar(family))
   stopifnot(is.function(spec_fn))
   if (exists(family, envir = .encoder_registry_env, inherits = FALSE)) {
-    warning("Encoder '", family, "' is already registered; overwriting.",
-            call. = FALSE)
+    .encoder_cli_warn(
+      paste0("Encoder '", family, "' is already registered; overwriting."),
+      class = "fmrilatent_warning_encoder", call = rlang::caller_env())
   }
   assign(family, list(spec_fn = spec_fn, description = description, package = package),
          envir = .encoder_registry_env)
@@ -114,7 +115,8 @@ get_encoder <- function(family) {
       msg <- paste0(msg, " Available encoders: ",
                     paste(available, collapse = ", "))
     }
-    stop(msg, call. = FALSE)
+    .encoder_cli_abort(msg,
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
   get(family, envir = .encoder_registry_env, inherits = FALSE)
 }

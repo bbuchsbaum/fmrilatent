@@ -99,10 +99,12 @@ materialize_basis_from_spec <- function(handle) {
     if (!is.null(spec$matrix)) {
       Matrix::Matrix(spec$matrix)
     } else {
-      stop("BasisHandle(kind = 'explicit') requires spec$matrix.")
+      .encoder_cli_abort("BasisHandle(kind = 'explicit') requires spec$matrix.",
+                         class = "fmrilatent_error_missing_argument", call = rlang::caller_env())
     }
   } else {
-    stop("Unknown BasisHandle kind: ", kind)
+    .encoder_cli_abort(paste0("Unknown BasisHandle kind: ", kind),
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
 }
 
@@ -123,10 +125,12 @@ materialize_loadings_from_spec <- function(handle) {
     if (!is.null(spec$matrix)) {
       Matrix::Matrix(spec$matrix)
     } else {
-      stop("LoadingsHandle(kind = 'explicit') requires spec$matrix.")
+      .encoder_cli_abort("LoadingsHandle(kind = 'explicit') requires spec$matrix.",
+                         class = "fmrilatent_error_missing_argument", call = rlang::caller_env())
     }
   } else {
-    stop("Unknown LoadingsHandle kind: ", kind)
+    .encoder_cli_abort(paste0("Unknown LoadingsHandle kind: ", kind),
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
 }
 

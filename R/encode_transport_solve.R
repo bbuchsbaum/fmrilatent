@@ -89,7 +89,8 @@ NULL
 
     obj_next <- obj_fn(Z_next)
     if (!is.finite(obj_next)) {
-      stop(diverge_msg, call. = FALSE)
+      .encoder_cli_abort(diverge_msg,
+                         class = "fmrilatent_error_value", call = rlang::caller_env())
     }
     rel_change <- abs(obj_next - prev_obj) / max(1, abs(prev_obj))
     Z <- Z_next
@@ -112,8 +113,9 @@ NULL
   out <- map$forward(prep$data)
   out <- as.matrix(out)
   if (nrow(out) != map$n_target) {
-    stop(context, " returned ", nrow(out), " rows; expected ", map$n_target, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " returned ", nrow(out), " rows; expected ", map$n_target, "."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   out
 }
@@ -123,8 +125,9 @@ NULL
   out <- map$adjoint_apply(prep$data)
   out <- as.matrix(out)
   if (nrow(out) != map$n_source) {
-    stop(context, " returned ", nrow(out), " rows; expected ", map$n_source, ".",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " returned ", nrow(out), " rows; expected ", map$n_source, "."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   out
 }
@@ -266,15 +269,17 @@ NULL
     )
     denom <- .frobenius_inner(P, AP)
     if (!is.finite(denom) || denom <= 0) {
-      stop("Matrix-free quadratic solver encountered a non-positive curvature direction.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "Matrix-free quadratic solver encountered a non-positive curvature direction.",
+        class = "fmrilatent_error_value", call = rlang::caller_env())
     }
     alpha <- rr / denom
     Z <- Z + alpha * P
     R <- R - alpha * AP
     rr_new <- .frobenius_inner(R, R)
     if (!is.finite(rr_new)) {
-      stop("Matrix-free quadratic solver diverged.", call. = FALSE)
+      .encoder_cli_abort("Matrix-free quadratic solver diverged.",
+                         class = "fmrilatent_error_value", call = rlang::caller_env())
     }
     if (sqrt(rr_new) <= tol * max(1, sqrt(rr0))) {
       break
@@ -500,10 +505,11 @@ NULL
   # the matrix-free CG path (.solve_transport_coefficients_matrix_free).
   kron_dim <- as.double(n_time) * as.double(k)
   if (kron_dim > 10000) {
-    stop("Temporal-penalty + materialized-basis path would create a ",
-         n_time * k, "x", n_time * k,
-         " dense matrix. Use the matrix-free solver instead.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0("Temporal-penalty + materialized-basis path would create a ",
+             n_time * k, "x", n_time * k,
+             " dense matrix. Use the matrix-free solver instead."),
+      class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
   }
   system_mat <- kronecker(diag(k), temporal_lambda * Lt) + kronecker(t(A), diag(n_time))
   rhs_vec <- as.vector(rhs)

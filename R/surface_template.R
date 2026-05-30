@@ -7,7 +7,8 @@ NULL
 
 .require_neurosurf <- function(context = "surface support") {
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
-    stop(context, " requires the 'neurosurf' package.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " requires the 'neurosurf' package."),
+                       class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
   }
 }
 
@@ -30,8 +31,9 @@ surface_basis_template <- function(geometry, loadings, support = NULL, roughness
                                    label = "surface_basis", meta = list()) {
   .require_neurosurf("surface_basis_template")
   if (!(methods::is(geometry, "SurfaceGeometry") || methods::is(geometry, "SurfaceSet"))) {
-    stop("geometry must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      "geometry must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet.",
+      class = "fmrilatent_error_type", call = rlang::caller_env())
   }
 
   n_nodes <- length(neurosurf::nodes(geometry))
@@ -46,21 +48,27 @@ surface_basis_template <- function(geometry, loadings, support = NULL, roughness
 
   loadings <- Matrix::Matrix(as.matrix(loadings), sparse = FALSE)
   if (nrow(loadings) != length(support)) {
-    stop("loadings must have ", length(support),
-         " rows to match the surface support cardinality.", call. = FALSE)
+    .encoder_cli_abort(
+      paste0("loadings must have ", length(support),
+             " rows to match the surface support cardinality."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
 
   if (!is.null(measure)) {
     if (is.atomic(measure) && is.null(dim(measure))) {
       if (length(measure) != length(support)) {
-        stop("measure must have length ", length(support),
-             " when supplied as a vector.", call. = FALSE)
+        .encoder_cli_abort(
+          paste0("measure must have length ", length(support),
+                 " when supplied as a vector."),
+          class = "fmrilatent_error_dim", call = rlang::caller_env())
       }
     } else {
       measure <- as.matrix(measure)
       if (!identical(dim(measure), c(length(support), length(support)))) {
-        stop("measure must be either a support-length vector or a ",
-             length(support), "x", length(support), " matrix.", call. = FALSE)
+        .encoder_cli_abort(
+          paste0("measure must be either a support-length vector or a ",
+                 length(support), "x", length(support), " matrix."),
+          class = "fmrilatent_error_dim", call = rlang::caller_env())
       }
     }
   }
@@ -68,8 +76,10 @@ surface_basis_template <- function(geometry, loadings, support = NULL, roughness
   if (!is.null(roughness)) {
     roughness <- Matrix::Matrix(as.matrix(roughness), sparse = FALSE)
     if (!identical(dim(roughness), c(ncol(loadings), ncol(loadings)))) {
-      stop("roughness must be a ", ncol(loadings), "x", ncol(loadings),
-           " matrix.", call. = FALSE)
+      .encoder_cli_abort(
+        paste0("roughness must be a ", ncol(loadings), "x", ncol(loadings),
+               " matrix."),
+        class = "fmrilatent_error_dim", call = rlang::caller_env())
     }
   }
 
@@ -129,7 +139,8 @@ setMethod("template_loadings", "SurfaceBasisTemplate", function(x, ...) x$loadin
 #' @rdname template_mask
 setMethod("template_mask", "SurfaceBasisTemplate",
           function(x, ...) {
-            stop("template_mask() is not defined for SurfaceBasisTemplate.", call. = FALSE)
+            .encoder_cli_abort("template_mask() is not defined for SurfaceBasisTemplate.",
+                       class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
           })
 
 #' @export
@@ -213,8 +224,10 @@ setMethod("template_project", signature(x = "SurfaceBasisTemplate", data = "ANY"
           function(x, data, ...) {
             X <- as.matrix(data)
             if (ncol(X) != length(template_support(x))) {
-              stop("data must have ", length(template_support(x)),
-                   " columns to match the surface support cardinality.", call. = FALSE)
+              .encoder_cli_abort(
+                paste0("data must have ", length(template_support(x)),
+                       " columns to match the surface support cardinality."),
+                class = "fmrilatent_error_dim", call = rlang::caller_env())
             }
             .template_projection_payload(
               data = X,

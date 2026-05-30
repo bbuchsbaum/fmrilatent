@@ -215,21 +215,26 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
       # silently reuse an entry whose fingerprint differs OR is absent (an older
       # entry registered before fingerprinting cannot be verified to match).
       if (is.null(existing_fingerprint)) {
-        stop("Object with id '", id, "' is already registered in ", type,
-             " registry without a fingerprint; cannot confirm it matches the ",
-             "requested handle. Clear the registry or register with overwrite = TRUE.",
-             call. = FALSE)
+        .encoder_cli_abort(
+          paste0("Object with id '", id, "' is already registered in ", type,
+                 " registry without a fingerprint; cannot confirm it matches the ",
+                 "requested handle. Clear the registry or register with overwrite = TRUE."),
+          class = "fmrilatent_error_invalid_id", call = rlang::caller_env())
       }
       if (!identical(fingerprint, existing_fingerprint)) {
-        stop("Object with id '", id, "' is already registered in ", type,
-             " registry with a different fingerprint.", call. = FALSE)
+        .encoder_cli_abort(
+          paste0("Object with id '", id, "' is already registered in ", type,
+                 " registry with a different fingerprint."),
+          class = "fmrilatent_error_invalid_id", call = rlang::caller_env())
       }
       # Same id, same fingerprint: reuse the cached entry and mark it as fresh.
       .fmrilatent_cache_order$touch(type, id)
       return(invisible(FALSE))
     }
-    warning("Object with id '", id, "' already registered in ", type,
-            " registry; set overwrite = TRUE to replace.", call. = FALSE)
+    .encoder_cli_warn(
+      paste0("Object with id '", id, "' already registered in ", type,
+             " registry; set overwrite = TRUE to replace."),
+      class = "fmrilatent_warning_encoder", call = rlang::caller_env())
     return(invisible(FALSE))
   }
   if (!is.null(fingerprint)) {
@@ -253,9 +258,10 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
     existing_fingerprint <- attr(value, "fmrilatent.handle_fingerprint", exact = TRUE)
     if (!is.null(fingerprint) && !is.null(existing_fingerprint) &&
         !identical(fingerprint, existing_fingerprint)) {
-      stop("Registry entry '", id, "' in ", type,
-           " registry does not match the requested handle fingerprint.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        paste0("Registry entry '", id, "' in ", type,
+               " registry does not match the requested handle fingerprint."),
+        class = "fmrilatent_error_invalid_id", call = rlang::caller_env())
     }
     .fmrilatent_cache_order$touch(type, id)
     value
@@ -463,18 +469,18 @@ mask_to_array <- function(mask, location = "unknown function") {
   result <- tryCatch(
     as.array(mask),
     error = function(e) {
-      stop(
-        sprintf("In %s: mask must be array-like or LogicalNeuroVol. ", location),
-        "Underlying error: ", conditionMessage(e),
-        call. = FALSE
+      .encoder_cli_abort(
+        paste0(sprintf("In %s: mask must be array-like or LogicalNeuroVol. ", location),
+               "Underlying error: ", conditionMessage(e)),
+        class = "fmrilatent_error_invalid_mask", call = rlang::caller_env()
       )
     }
   )
   if (is.null(result)) {
-    stop(
-      sprintf("In %s: mask must be array-like or LogicalNeuroVol ", location),
-      "(conversion returned NULL).",
-      call. = FALSE
+    .encoder_cli_abort(
+      paste0(sprintf("In %s: mask must be array-like or LogicalNeuroVol ", location),
+             "(conversion returned NULL)."),
+      class = "fmrilatent_error_invalid_mask", call = rlang::caller_env()
     )
   }
   result
@@ -492,16 +498,17 @@ mask_to_array <- function(mask, location = "unknown function") {
 
   roi_arr <- .mask_to_array(roi_mask, location)
   if (!identical(dim(roi_arr), dim(mask_arr))) {
-    stop(
-      "roi_mask dimensions (", paste(dim(roi_arr), collapse = " x "),
-      ") do not match mask dimensions (", paste(dim(mask_arr), collapse = " x "), ").",
-      call. = FALSE
+    .encoder_cli_abort(
+      paste0("roi_mask dimensions (", paste(dim(roi_arr), collapse = " x "),
+             ") do not match mask dimensions (", paste(dim(mask_arr), collapse = " x "), ")."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env()
     )
   }
 
   roi_arr <- array(as.logical(roi_arr), dim = dim(mask_arr))
   if (any(roi_arr & !as.logical(mask_arr))) {
-    stop("roi_mask contains voxels outside the object mask.", call. = FALSE)
+    .encoder_cli_abort("roi_mask contains voxels outside the object mask.",
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
 
   roi_arr
@@ -526,15 +533,16 @@ mask_to_array <- function(mask, location = "unknown function") {
   template_mask_arr <- as.array(template_mask)
 
   if (!identical(supplied_mask_arr, template_mask_arr)) {
-    stop(
+    .encoder_cli_abort(
       "mask does not match the template mask. Shared templates require identical voxel support and ordering.",
-      call. = FALSE
+      class = "fmrilatent_error_dim", call = rlang::caller_env()
     )
   }
 
   if (inherits(mask, "LogicalNeuroVol")) {
     if (!isTRUE(all.equal(neuroim2::space(mask), neuroim2::space(template_mask)))) {
-      stop("mask space does not match the template mask space.", call. = FALSE)
+      .encoder_cli_abort("mask space does not match the template mask space.",
+                         class = "fmrilatent_error_dim", call = rlang::caller_env())
     }
   }
 
@@ -552,7 +560,9 @@ mask_to_array <- function(mask, location = "unknown function") {
   } else if (is(b, "BasisHandle")) {
     b@dim
   } else {
-    stop("Unsupported basis slot type: ", paste(class(b), collapse = ", "))
+    .encoder_cli_abort(
+      paste0("Unsupported basis slot type: ", paste(class(b), collapse = ", ")),
+      class = "fmrilatent_error_type", call = rlang::caller_env())
   }
 }
 
@@ -566,6 +576,8 @@ mask_to_array <- function(mask, location = "unknown function") {
   } else if (is(L, "LoadingsHandle")) {
     L@dim
   } else {
-    stop("Unsupported loadings slot type: ", paste(class(L), collapse = ", "))
+    .encoder_cli_abort(
+      paste0("Unsupported loadings slot type: ", paste(class(L), collapse = ", ")),
+      class = "fmrilatent_error_type", call = rlang::caller_env())
   }
 }

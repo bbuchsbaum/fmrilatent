@@ -26,7 +26,10 @@ check_same_dims <- function(x, y, dims_to_compare = NULL, msg = "Dimension misma
   }
 
   if (!identical(x_dims, y_dims)) {
-    stop(paste0(msg, ": ", paste(x_dims, collapse = "x"), " vs ", paste(y_dims, collapse = "x")))
+    .encoder_cli_abort(
+      paste0(msg, ": ", paste(x_dims, collapse = "x"), " vs ", paste(y_dims, collapse = "x")),
+      class = "fmrilatent_error_dim", call = rlang::caller_env()
+    )
   }
   invisible(TRUE)
 }
@@ -132,14 +135,17 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
                            expect_dense = FALSE) {
   # Validate 'space'
   if (!inherits(space, "NeuroSpace")) {
-    stop("'space' must be a NeuroSpace object")
+    .encoder_cli_abort("'space' must be a NeuroSpace object",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   # Validate 'basis' / 'loadings' (accept Matrix or handle)
   if (!is.matrix(basis) && !inherits(basis, c("Matrix", "BasisHandle"))) {
-    stop("'basis' must be a matrix, Matrix, or BasisHandle object")
+    .encoder_cli_abort("'basis' must be a matrix, Matrix, or BasisHandle object",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   if (!is.matrix(loadings) && !inherits(loadings, c("Matrix", "LoadingsHandle"))) {
-    stop("'loadings' must be a matrix, Matrix, or LoadingsHandle object")
+    .encoder_cli_abort("'loadings' must be a matrix, Matrix, or LoadingsHandle object",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
 
   # Ensure we have a LogicalNeuroVol for mask
@@ -160,8 +166,11 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
     )
     # Keep the check for space equality separate for now
     if (!isTRUE(all.equal(mask_space, space_3d))) {
-      stop("Space object of provided mask does not match the space derived ",
-        "from the main 4D space. Cannot create IndexLookupVol.")
+      .encoder_cli_abort(
+        paste0("Space object of provided mask does not match the space derived ",
+               "from the main 4D space. Cannot create IndexLookupVol."),
+        class = "fmrilatent_error_dim", call = rlang::caller_env()
+      )
     }
   }
 
@@ -174,7 +183,8 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   } else {
     # Check that provided offset matches loadings rows
     if (length(offset) != nrow(loadings)) {
-      stop("'offset' length must match number of rows in 'loadings'")
+      .encoder_cli_abort("'offset' length must match number of rows in 'loadings'",
+                         class = "fmrilatent_error_dim", call = rlang::caller_env())
     }
   }
 
@@ -183,24 +193,34 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   l_dim <- .latent_loadings_dim(loadings)
 
   if (b_dim[2L] != l_dim[2L]) {
-    stop("'basis' and 'loadings' must have the same number of columns (components)")
+    .encoder_cli_abort("'basis' and 'loadings' must have the same number of columns (components)",
+                       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (b_dim[1L] != dim(space)[4]) {
-    stop("'basis' must have ", dim(space)[4], " rows (the 4th dimension of space)")
+    .encoder_cli_abort(
+      paste0("'basis' must have ", dim(space)[4], " rows (the 4th dimension of space)"),
+      class = "fmrilatent_error_dim", call = rlang::caller_env()
+    )
   }
   if (l_dim[1L] != cardinality) {
-    stop(paste0("'loadings' must have ", cardinality, " rows (i.e. #non-zero in mask)"))
+    .encoder_cli_abort(
+      paste0("'loadings' must have ", cardinality, " rows (i.e. #non-zero in mask)"),
+      class = "fmrilatent_error_dim", call = rlang::caller_env()
+    )
   }
 
   # Ensure all numeric inputs are finite
   if ((is.matrix(basis) || is(basis, "Matrix")) && !all(is.finite(basis))) {
-    stop("'basis' must contain only finite values")
+    .encoder_cli_abort("'basis' must contain only finite values",
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
   if ((is.matrix(loadings) || is(loadings, "Matrix")) && !all(is.finite(loadings))) {
-    stop("'loadings' must contain only finite values")
+    .encoder_cli_abort("'loadings' must contain only finite values",
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
   if (length(offset) > 0 && !all(is.finite(offset))) {
-    stop("'offset' must contain only finite values")
+    .encoder_cli_abort("'offset' must contain only finite values",
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
 
   # Convert basis/loadings to Matrix objects when provided as base matrices
@@ -231,11 +251,15 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   # Check component count
   k <- b_dim[2L]
   if (k < 1) {
-    stop("Number of components (columns in basis and loadings) must be >= 1")
+    .encoder_cli_abort("Number of components (columns in basis and loadings) must be >= 1",
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
 
   if (is.null(meta)) meta <- list()
-  if (!is.list(meta)) stop("'meta' must be a list")
+  if (!is.list(meta)) {
+    .encoder_cli_abort("'meta' must be a list",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
+  }
 
   # Create the object
   new("LatentNeuroVec",

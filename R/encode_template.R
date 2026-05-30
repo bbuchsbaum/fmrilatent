@@ -35,15 +35,19 @@ NULL
       return(rep(measure, n_support))
     }
     if (length(measure) != n_support) {
-      stop(context, " vector must have length ", n_support, ".", call. = FALSE)
+      .encoder_cli_abort(
+        paste0(context, " vector must have length ", n_support, "."),
+        class = "fmrilatent_error_dim", call = rlang::caller_env())
     }
     return(measure)
   }
 
   measure <- as.matrix(measure)
   if (!identical(dim(measure), c(n_support, n_support))) {
-    stop(context, " matrix must have dimensions ",
-         n_support, "x", n_support, ".", call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " matrix must have dimensions ",
+             n_support, "x", n_support, "."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   measure
 }
@@ -74,7 +78,8 @@ NULL
 .symmetric_matrix_factor <- function(mat, tol = 1e-10, context = "matrix factor") {
   mat <- 0.5 * (as.matrix(mat) + t(as.matrix(mat)))
   if (nrow(mat) != ncol(mat)) {
-    stop(context, " requires a square matrix.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " requires a square matrix."),
+                       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
 
   if (isTRUE(all.equal(mat, diag(nrow(mat)), tolerance = tol))) {
@@ -95,7 +100,8 @@ NULL
   raw_metric <- 0.5 * (as.matrix(raw_metric) + t(as.matrix(raw_metric)))
   k <- nrow(raw_metric)
   if (!identical(dim(raw_metric), c(k, k))) {
-    stop("raw_metric must be square.", call. = FALSE)
+    .encoder_cli_abort("raw_metric must be square.",
+                       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (isTRUE(all.equal(raw_metric, diag(k), tolerance = tol))) {
     return(.transport_identity_transform(k))

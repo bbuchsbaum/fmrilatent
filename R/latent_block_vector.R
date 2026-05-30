@@ -5,7 +5,8 @@ NULL
 
 .normalize_block_latent_blocks <- function(blocks, context = "BlockLatentNeuroVector") {
   if (!is.list(blocks) || length(blocks) == 0L) {
-    stop(context, " requires a non-empty list of latent blocks.", call. = FALSE)
+    .encoder_cli_abort(paste0(context, " requires a non-empty list of latent blocks."),
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
   nm <- names(blocks)
   if (is.null(nm) || any(!nzchar(nm))) {
@@ -69,8 +70,9 @@ NULL
 
   if (is.atomic(values) && is.null(dim(values))) {
     if (length(values) != total) {
-      stop(context, " vector length does not match total block support cardinality.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        paste0(context, " vector length does not match total block support cardinality."),
+        class = "fmrilatent_error_dim", call = rlang::caller_env())
     }
     starts <- cumsum(c(1L, utils::head(sizes, -1L)))
     ends <- cumsum(sizes)
@@ -83,8 +85,9 @@ NULL
 
   values <- as.matrix(values)
   if (ncol(values) != total) {
-    stop(context, " matrix column count does not match total block support cardinality.",
-         call. = FALSE)
+    .encoder_cli_abort(
+      paste0(context, " matrix column count does not match total block support cardinality."),
+      class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   starts <- cumsum(c(1L, utils::head(sizes, -1L)))
   ends <- cumsum(sizes)
@@ -106,10 +109,12 @@ BlockLatentNeuroVector <- function(blocks, label = "", meta = list()) {
   blocks <- .normalize_block_latent_blocks(blocks)
   validity <- .validate_block_latent_blocks(blocks)
   if (!isTRUE(validity)) {
-    stop(paste(validity, collapse = "\n"), call. = FALSE)
+    .encoder_cli_abort(paste(validity, collapse = "\n"),
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
   }
   if (!is.list(meta)) {
-    stop("'meta' must be a list.", call. = FALSE)
+    .encoder_cli_abort("'meta' must be a list.",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   new("BlockLatentNeuroVector",
       blocks = blocks,
@@ -186,8 +191,10 @@ setMethod("reconstruct_matrix", "BlockLatentNeuroVector",
 #' @rdname reconstruct_array
 setMethod("reconstruct_array", "BlockLatentNeuroVector",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
-            stop("reconstruct_array() is not defined for block-domain latent objects. ",
-                 "Use reconstruct_matrix() plus wrap_decoded().", call. = FALSE)
+            .encoder_cli_abort(
+              paste0("reconstruct_array() is not defined for block-domain latent objects. ",
+                     "Use reconstruct_matrix() plus wrap_decoded()."),
+              class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
           })
 
 #' @export
@@ -196,8 +203,9 @@ setMethod("wrap_decoded", "BlockLatentNeuroVector",
           function(x, values, time_idx = NULL, space = c("native", "template"), ...) {
             space <- match.arg(space)
             if (space != "native") {
-              stop("wrap_decoded() for BlockLatentNeuroVector currently supports only native-space wrapping.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "wrap_decoded() for BlockLatentNeuroVector currently supports only native-space wrapping.",
+                class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
             }
             split_vals <- .block_latent_split_values(x, values)
             out <- stats::setNames(vector("list", length(x@blocks)), names(x@blocks))
@@ -255,8 +263,9 @@ setMethod("decoder", "BlockLatentNeuroVector",
             space <- match.arg(space)
             coordinates <- match.arg(coordinates)
             if (space == "template") {
-              warning("BlockLatentNeuroVector has no separate template domain; returning the stacked block decoder.",
-                      call. = FALSE)
+              .encoder_cli_warn(
+                "BlockLatentNeuroVector has no separate template domain; returning the stacked block decoder.",
+                class = "fmrilatent_warning_no_template_domain", call = rlang::caller_env())
             }
             .latent_loadings_map(x)
           })

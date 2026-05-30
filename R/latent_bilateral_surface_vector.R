@@ -12,16 +12,20 @@ NULL
 #' @export
 BilatLatentNeuroSurfaceVector <- function(left, right, label = "", meta = list()) {
   if (!methods::is(left, "LatentNeuroSurfaceVector")) {
-    stop("'left' must be a LatentNeuroSurfaceVector.", call. = FALSE)
+    .encoder_cli_abort("'left' must be a LatentNeuroSurfaceVector.",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   if (!methods::is(right, "LatentNeuroSurfaceVector")) {
-    stop("'right' must be a LatentNeuroSurfaceVector.", call. = FALSE)
+    .encoder_cli_abort("'right' must be a LatentNeuroSurfaceVector.",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   if (!identical(dim(basis(left)), dim(basis(right)))) {
-    stop("left and right basis matrices must have identical dimensions.", call. = FALSE)
+    .encoder_cli_abort("left and right basis matrices must have identical dimensions.",
+                       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
   if (!is.list(meta)) {
-    stop("'meta' must be a list.", call. = FALSE)
+    .encoder_cli_abort("'meta' must be a list.",
+                       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
   new("BilatLatentNeuroSurfaceVector",
       left = left,
@@ -96,8 +100,10 @@ setMethod("reconstruct_matrix", "BilatLatentNeuroSurfaceVector",
 #' @rdname reconstruct_array
 setMethod("reconstruct_array", "BilatLatentNeuroSurfaceVector",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
-            stop("reconstruct_array() is not defined for bilateral surface latent objects. ",
-                 "Use reconstruct_matrix() plus wrap_decoded().", call. = FALSE)
+            .encoder_cli_abort(
+              paste0("reconstruct_array() is not defined for bilateral surface latent objects. ",
+                     "Use reconstruct_matrix() plus wrap_decoded()."),
+              class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
           })
 
 #' @export
@@ -106,11 +112,13 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
           function(x, values, time_idx = NULL, space = c("native", "template"), ...) {
             space <- match.arg(space)
             if (space != "native") {
-              stop("wrap_decoded() for BilatLatentNeuroSurfaceVector currently supports only native-space wrapping.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "wrap_decoded() for BilatLatentNeuroSurfaceVector currently supports only native-space wrapping.",
+                class = "fmrilatent_error_unsupported_operation", call = rlang::caller_env())
             }
             if (!requireNamespace("neurosurf", quietly = TRUE)) {
-              stop("wrap_decoded() requires the 'neurosurf' package.", call. = FALSE)
+              .encoder_cli_abort("wrap_decoded() requires the 'neurosurf' package.",
+                         class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
             }
             methods::getClass("BilatNeuroSurfaceVector",
                               where = asNamespace("neurosurf"))
@@ -118,8 +126,9 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
               n_left <- length(latent_support(x@left))
               n_right <- length(latent_support(x@right))
               if (length(values) != n_left + n_right) {
-                stop("wrap_decoded() vector length does not match bilateral support cardinality.",
-                     call. = FALSE)
+                .encoder_cli_abort(
+                  "wrap_decoded() vector length does not match bilateral support cardinality.",
+                  class = "fmrilatent_error_dim", call = rlang::caller_env())
               }
               left_obj <- wrap_decoded(x@left, values[seq_len(n_left)], space = "native")
               right_obj <- wrap_decoded(x@right, values[seq.int(n_left + 1L, n_left + n_right)],
@@ -142,8 +151,9 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
             n_left <- length(latent_support(x@left))
             n_right <- length(latent_support(x@right))
             if (ncol(values) != n_left + n_right) {
-              stop("wrap_decoded() matrix column count does not match bilateral support cardinality.",
-                   call. = FALSE)
+              .encoder_cli_abort(
+                "wrap_decoded() matrix column count does not match bilateral support cardinality.",
+                class = "fmrilatent_error_dim", call = rlang::caller_env())
             }
             left_vals <- values[, seq_len(n_left), drop = FALSE]
             right_vals <- values[, seq.int(n_left + 1L, n_left + n_right), drop = FALSE]
@@ -198,8 +208,9 @@ setMethod("decoder", "BilatLatentNeuroSurfaceVector",
             space <- match.arg(space)
             coordinates <- match.arg(coordinates)
             if (space == "template") {
-              warning("BilatLatentNeuroSurfaceVector has no separate template domain; returning the stored surface decoder.",
-                      call. = FALSE)
+              .encoder_cli_warn(
+                "BilatLatentNeuroSurfaceVector has no separate template domain; returning the stored surface decoder.",
+                class = "fmrilatent_warning_no_template_domain", call = rlang::caller_env())
             }
             .latent_loadings_map(x)
           })
