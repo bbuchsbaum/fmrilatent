@@ -99,10 +99,8 @@ encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, la
     reduction <- make_cluster_reduction(mask, rep.int(1L, n_vox))
   }
 
-  offset <- numeric(0)
-  if (isTRUE(spec$center)) {
-    offset <- colMeans(x)
-  }
+  offset <- .encode_center(x, center = isTRUE(spec$center),
+                           context = "encode_spec.spec_space_pca")$offset
 
   loadings <- lift(
     reduction,

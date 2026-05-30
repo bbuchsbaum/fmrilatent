@@ -89,6 +89,35 @@
   t(.robust_gram_solve(gram, rhs, ridge = ridge, context = context))
 }
 
+# Shared column-mean centering for encoders that build a per-voxel offset.
+# Given x (time x vox) and a `center` flag, returns the offset and the centered
+# matrix. When `center` is FALSE the offset is numeric(0) (the package
+# convention for "no offset") and x is returned unchanged. When `center` is
+# TRUE the offset is the supplied `offset` (validated for length) or the column
+# means of x, and x is centered by subtracting it. Single source of truth for
+# the column-mean centering used by the PCA and template-projection paths.
+.encode_center <- function(x, center = FALSE, offset = NULL,
+                           context = "encode centering") {
+  x_mat <- as.matrix(x)
+  if (!isTRUE(center)) {
+    return(list(offset = numeric(0), x_centered = x_mat))
+  }
+  off <- if (!is.null(offset)) {
+    off <- as.numeric(offset)
+    if (length(off) != ncol(x_mat)) {
+      .encoder_cli_abort(
+        sprintf("%s: offset must have length %d (one per column).",
+                context, ncol(x_mat)),
+        class = "fmrilatent_error_invalid_argument"
+      )
+    }
+    off
+  } else {
+    colMeans(x_mat)
+  }
+  list(offset = off, x_centered = sweep(x_mat, 2L, off, "-"))
+}
+
 .resolve_materialize <- function(materialize,
                                  supported = c("handle", "matrix"),
                                  default = "handle",

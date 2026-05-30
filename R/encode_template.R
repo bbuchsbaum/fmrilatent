@@ -153,17 +153,10 @@ NULL
                                          analysis_transform = NULL,
                                          default_measure = c("unit", "null"),
                                          tol = 1e-10) {
-  X <- as.matrix(data)
-  offset_out <- numeric(0)
-  X_proj <- X
-  if (isTRUE(center)) {
-    offset_out <- if (!is.null(offset)) {
-      as.numeric(offset)
-    } else {
-      colMeans(X)
-    }
-    X_proj <- sweep(X, 2L, offset_out, "-")
-  }
+  centered <- .encode_center(data, center = center, offset = offset,
+                             context = ".template_projection_payload")
+  offset_out <- centered$offset
+  X_proj <- centered$x_centered
 
   payload <- .template_coordinate_payload(
     raw_loadings = raw_loadings,
