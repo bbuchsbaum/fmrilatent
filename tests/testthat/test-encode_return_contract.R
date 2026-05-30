@@ -1,0 +1,39 @@
+test_that("wavelet_active encoder returns a LatentNeuroVec", {
+  set.seed(1)
+  dims <- c(8, 8, 4)
+  mask_arr <- array(TRUE, dims)
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(dims))
+  n_time <- 16
+  n_vox <- prod(dims)
+  X <- matrix(rnorm(n_time * n_vox), n_time, n_vox)
+
+  spec <- spec_space_wavelet_active(levels_space = 1L, levels_time = 0L, threshold = 0)
+  lat <- encode(X, spec, mask = mask)
+  expect_s4_class(lat, "LatentNeuroVec")
+  expect_true(is(lat, "ExplicitLatent"))
+})
+
+test_that("wavelet_active seam aborts if the inner latent has the wrong class", {
+  # Stub wavelet_active_latent() in the package namespace so the seam sees a
+  # non-LatentNeuroVec return and must trip the class assertion.
+  ns <- asNamespace("fmrilatent")
+  orig <- get("wavelet_active_latent", envir = ns)
+  on.exit({
+    unlockBinding("wavelet_active_latent", ns)
+    assign("wavelet_active_latent", orig, envir = ns)
+    lockBinding("wavelet_active_latent", ns)
+  }, add = TRUE)
+  unlockBinding("wavelet_active_latent", ns)
+  assign("wavelet_active_latent", function(...) list(not = "a latent"), envir = ns)
+  lockBinding("wavelet_active_latent", ns)
+
+  dims <- c(4, 4, 2)
+  mask <- neuroim2::LogicalNeuroVol(array(TRUE, dims), neuroim2::NeuroSpace(dims))
+  X <- matrix(rnorm(8 * prod(dims)), 8, prod(dims))
+  spec <- spec_space_wavelet_active(levels_space = 1L)
+
+  expect_error(
+    encode(X, spec, mask = mask),
+    class = "fmrilatent_error_invalid_type"
+  )
+})

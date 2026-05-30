@@ -176,11 +176,22 @@ encode_spec.spec_space_wavelet_active <- function(x, spec, mask, reduction, mate
     context = "encode_spec.spec_space_wavelet_active"
   )
   mask_arr <- .extract_mask_array(mask, "encode_spec.spec_space_wavelet_active")
-  wavelet_active_latent(
+  result <- wavelet_active_latent(
     X = x,
     mask = mask,
     levels_space = spec$levels_space,
     levels_time = spec$levels_time,
     threshold = spec$threshold
   )
+  if (!is(result, "LatentNeuroVec")) {
+    .encoder_cli_abort(
+      paste0(
+        "encode_spec.spec_space_wavelet_active expected wavelet_active_latent() ",
+        "to return a LatentNeuroVec, got: ",
+        paste(class(result), collapse = ", ")
+      ),
+      class = "fmrilatent_error_invalid_type"
+    )
+  }
+  result
 }
