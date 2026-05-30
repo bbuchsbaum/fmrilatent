@@ -40,6 +40,21 @@ NULL
   out
 }
 
+# Additive sparsity penalty term shared by the dense and matrix-free AWPT
+# objectives. Returns 0 when sparsity is inactive. sparse_mode is assumed
+# already validated by the caller (objectives match.arg it up front).
+.awpt_penalty_term <- function(Z, sparse_lambda = 0,
+                               sparse_mode = c("none", "group_l2", "lasso")) {
+  if (sparse_lambda <= 0 || sparse_mode == "none") {
+    return(0)
+  }
+  if (sparse_mode == "lasso") {
+    sparse_lambda * sum(abs(Z))
+  } else {
+    sparse_lambda * sum(sqrt(colSums(Z^2)))
+  }
+}
+
 .awpt_objective <- function(Z, X, D_mat, A, Lt = NULL,
                             temporal_lambda = 0,
                             sparse_lambda = 0,
@@ -51,14 +66,41 @@ NULL
   if (temporal_lambda > 0 && !is.null(Lt)) {
     obj <- obj + 0.5 * temporal_lambda * sum((Lt %*% Z) * Z)
   }
-  if (sparse_lambda > 0 && sparse_mode != "none") {
-    if (sparse_mode == "lasso") {
-      obj <- obj + sparse_lambda * sum(abs(Z))
-    } else {
-      obj <- obj + sparse_lambda * sum(sqrt(colSums(Z^2)))
+  obj + .awpt_penalty_term(Z, sparse_lambda, sparse_mode)
+}
+
+# Shared FISTA scaffold for the sparse AWPT solvers. The caller supplies the
+# starting point, step, gradient closure grad_fn(Y), objective closure
+# obj_fn(Z), and prox closure prox_fn(W, step). The iteration (momentum
+# update, divergence guard, relative-objective stopping rule) is identical
+# across the dense and matrix-free solvers.
+.fista <- function(Z0, step, max_iter, tol, grad_fn, obj_fn, prox_fn,
+                   diverge_msg = "FISTA solver diverged.") {
+  Z <- Z0
+  Y <- Z
+  t_k <- 1
+  prev_obj <- obj_fn(Z)
+
+  for (iter in seq_len(as.integer(max_iter))) {
+    grad <- grad_fn(Y)
+    Z_next <- prox_fn(Y - step * grad, step)
+    t_next <- 0.5 * (1 + sqrt(1 + 4 * t_k^2))
+    Y <- Z_next + ((t_k - 1) / t_next) * (Z_next - Z)
+
+    obj_next <- obj_fn(Z_next)
+    if (!is.finite(obj_next)) {
+      stop(diverge_msg, call. = FALSE)
+    }
+    rel_change <- abs(obj_next - prev_obj) / max(1, abs(prev_obj))
+    Z <- Z_next
+    t_k <- t_next
+    prev_obj <- obj_next
+    if (rel_change < tol) {
+      break
     }
   }
-  obj
+
+  Z
 }
 
 .frobenius_inner <- function(x, y) {
@@ -140,14 +182,7 @@ NULL
   if (temporal_lambda > 0 && !is.null(Lt)) {
     obj <- obj + 0.5 * temporal_lambda * sum((Lt %*% Z) * Z)
   }
-  if (sparse_lambda > 0 && sparse_mode != "none") {
-    if (sparse_mode == "lasso") {
-      obj <- obj + sparse_lambda * sum(abs(Z))
-    } else {
-      obj <- obj + sparse_lambda * sum(sqrt(colSums(Z^2)))
-    }
-  }
-  obj
+  obj + .awpt_penalty_term(Z, sparse_lambda, sparse_mode)
 }
 
 .estimate_transport_lipschitz <- function(decoder_map, n_time, k,
@@ -307,41 +342,36 @@ NULL
   }
   step <- 1 / lipschitz
 
-  Z <- matrix(0, nrow = n_time, ncol = k)
-  Y <- Z
-  t_k <- 1
-  prev_obj <- .awpt_objective(Z, X, D_mat, A, Lt, temporal_lambda,
-                              sparse_lambda, sparse_mode = sparse_mode)
-
-  for (iter in seq_len(as.integer(max_iter))) {
+  grad_fn <- function(Y) {
     grad <- Y %*% A - rhs
     if (temporal_lambda > 0) {
       grad <- grad + temporal_lambda * Lt %*% Y
     }
-    Z_next <- .prox_sparse_awpt(
-      Y - step * grad,
+    grad
+  }
+  obj_fn <- function(Z) {
+    .awpt_objective(Z, X, D_mat, A, Lt, temporal_lambda,
+                    sparse_lambda, sparse_mode = sparse_mode)
+  }
+  prox_fn <- function(W, step) {
+    .prox_sparse_awpt(
+      W,
       step = step,
       sparse_lambda = sparse_lambda,
       sparse_mode = sparse_mode
     )
-    t_next <- 0.5 * (1 + sqrt(1 + 4 * t_k^2))
-    Y <- Z_next + ((t_k - 1) / t_next) * (Z_next - Z)
-
-    obj_next <- .awpt_objective(Z_next, X, D_mat, A, Lt, temporal_lambda,
-                                sparse_lambda, sparse_mode = sparse_mode)
-    if (!is.finite(obj_next)) {
-      stop("Sparse AWPT solver diverged.", call. = FALSE)
-    }
-    rel_change <- abs(obj_next - prev_obj) / max(1, abs(prev_obj))
-    Z <- Z_next
-    t_k <- t_next
-    prev_obj <- obj_next
-    if (rel_change < tol) {
-      break
-    }
   }
 
-  Z
+  .fista(
+    Z0 = matrix(0, nrow = n_time, ncol = k),
+    step = step,
+    max_iter = max_iter,
+    tol = tol,
+    grad_fn = grad_fn,
+    obj_fn = obj_fn,
+    prox_fn = prox_fn,
+    diverge_msg = "Sparse AWPT solver diverged."
+  )
 }
 
 .solve_transport_coefficients_sparse_matrix_free <- function(X, decoder_map,
@@ -377,23 +407,8 @@ NULL
   )
   step <- 1 / max(lipschitz, 1e-8)
 
-  Z <- matrix(0, nrow = n_time, ncol = k)
-  Y <- Z
-  t_k <- 1
-  prev_obj <- .awpt_objective_matrix_free(
-    Z,
-    X = X,
-    decoder_map = decoder_map,
-    spatial_penalty = Q,
-    spatial_lambda = spatial_lambda,
-    temporal_lambda = temporal_lambda,
-    Lt = Lt,
-    sparse_lambda = sparse_lambda,
-    sparse_mode = sparse_mode
-  )
-
-  for (iter in seq_len(as.integer(max_iter))) {
-    grad <- .transport_apply_quadratic_system(
+  grad_fn <- function(Y) {
+    .transport_apply_quadratic_system(
       Y,
       decoder_map = decoder_map,
       spatial_lambda = spatial_lambda,
@@ -401,17 +416,10 @@ NULL
       temporal_lambda = temporal_lambda,
       Lt = Lt
     ) - rhs
-    Z_next <- .prox_sparse_awpt(
-      Y - step * grad,
-      step = step,
-      sparse_lambda = sparse_lambda,
-      sparse_mode = sparse_mode
-    )
-    t_next <- 0.5 * (1 + sqrt(1 + 4 * t_k^2))
-    Y <- Z_next + ((t_k - 1) / t_next) * (Z_next - Z)
-
-    obj_next <- .awpt_objective_matrix_free(
-      Z_next,
+  }
+  obj_fn <- function(Z) {
+    .awpt_objective_matrix_free(
+      Z,
       X = X,
       decoder_map = decoder_map,
       spatial_penalty = Q,
@@ -421,19 +429,26 @@ NULL
       sparse_lambda = sparse_lambda,
       sparse_mode = sparse_mode
     )
-    if (!is.finite(obj_next)) {
-      stop("Sparse matrix-free AWPT solver diverged.", call. = FALSE)
-    }
-    rel_change <- abs(obj_next - prev_obj) / max(1, abs(prev_obj))
-    Z <- Z_next
-    t_k <- t_next
-    prev_obj <- obj_next
-    if (rel_change < tol) {
-      break
-    }
+  }
+  prox_fn <- function(W, step) {
+    .prox_sparse_awpt(
+      W,
+      step = step,
+      sparse_lambda = sparse_lambda,
+      sparse_mode = sparse_mode
+    )
   }
 
-  Z
+  .fista(
+    Z0 = matrix(0, nrow = n_time, ncol = k),
+    step = step,
+    max_iter = max_iter,
+    tol = tol,
+    grad_fn = grad_fn,
+    obj_fn = obj_fn,
+    prox_fn = prox_fn,
+    diverge_msg = "Sparse matrix-free AWPT solver diverged."
+  )
 }
 
 .solve_transport_coefficients <- function(X, D_mat,
