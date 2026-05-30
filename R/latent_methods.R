@@ -42,7 +42,10 @@ setMethod(
     # CASE A: user gave only i -> interpret as multiple 3D voxel indices
     if (!has_j && !has_k) {
       if (any(i < 1 | i > nels3d)) {
-        stop("Some voxel index in 'i' is out of range [1..(X*Y*Z)].")
+        .encoder_cli_abort(
+          "Some voxel index in 'i' is out of range [1..(X*Y*Z)].",
+          class = "fmrilatent_error_invalid_index"
+        )
       }
       n_vox_req <- length(i)
 
@@ -76,15 +79,24 @@ setMethod(
       }
     } else {
       if (xor(has_j, has_k)) {
-        stop("series() coordinate access requires i, j, and k together.")
+        .encoder_cli_abort(
+          "series() coordinate access requires i, j, and k together.",
+          class = "fmrilatent_error_invalid_argument"
+        )
       }
       # CASE B: user gave i,j,k => single voxel
       if (!(length(i) == 1 && length(j) == 1 && length(k) == 1)) {
-        stop("series(x, i,j,k): i,j,k must each be a single integer for one voxel.")
+        .encoder_cli_abort(
+          "series(x, i,j,k): i,j,k must each be a single integer for one voxel.",
+          class = "fmrilatent_error_invalid_argument"
+        )
       }
       idx_1d <- i + (j - 1) * dim(x)[1] + (k - 1) * dim(x)[1] * dim(x)[2]
       if (idx_1d < 1 || idx_1d > nels3d) {
-        stop("Voxel subscript (i,j,k) out of range for LatentNeuroVec.")
+        .encoder_cli_abort(
+          "Voxel subscript (i,j,k) out of range for LatentNeuroVec.",
+          class = "fmrilatent_error_invalid_index"
+        )
       }
       mr <- lookup(x@map, idx_1d)
       if (mr < 1) {
@@ -114,7 +126,10 @@ setMethod(
       return(series(x, i, ..., drop = drop))
     }
     if (missing(j) || missing(k)) {
-      stop("series() coordinate access requires i, j, and k together.")
+      .encoder_cli_abort(
+        "series() coordinate access requires i, j, and k together.",
+        class = "fmrilatent_error_invalid_argument"
+      )
     }
     j <- as.integer(j)
     k <- as.integer(k)
@@ -129,14 +144,20 @@ setMethod(
   signature = signature(x = "LatentNeuroVec"),
   definition = function(x, i, j, k, ..., drop = TRUE) {
     if (missing(i)) {
-      stop("series requires at least one index argument 'i'")
+      .encoder_cli_abort(
+        "series requires at least one index argument 'i'",
+        class = "fmrilatent_error_missing_argument"
+      )
     }
     if (is.numeric(i)) i <- as.integer(i)
 
     if (missing(j) && missing(k)) {
       series(x, i, ..., drop = drop)
     } else if (missing(j) || missing(k)) {
-      stop("series() coordinate access requires i, j, and k together.")
+      .encoder_cli_abort(
+        "series() coordinate access requires i, j, and k together.",
+        class = "fmrilatent_error_invalid_argument"
+      )
     } else {
       j <- as.integer(j)
       k <- as.integer(k)
@@ -494,8 +515,10 @@ setMethod(
   definition = function(x, values, time_idx = NULL, space = c("native", "template"), ...) {
     space <- match.arg(space)
     if (space != "native") {
-      stop("wrap_decoded() for LatentNeuroVec currently supports only native-space wrapping.",
-           call. = FALSE)
+      .encoder_cli_abort(
+        "wrap_decoded() for LatentNeuroVec currently supports only native-space wrapping.",
+        class = "fmrilatent_error_unsupported_operation"
+      )
     }
     .wrap_decoded_volume(values, latent_support(x), context = "wrap_decoded.LatentNeuroVec")
   }
