@@ -21,11 +21,21 @@ build_bspline_basis <- function(n_time,
   n_time <- as.integer(n_time)
   k <- as.integer(k)
   degree <- as.integer(degree)
-  if (k > n_time) stop("k (", k, ") cannot exceed n_time (", n_time, ").")
-  if (degree < 1) stop("degree must be >= 1")
+  if (k > n_time) {
+    .encoder_cli_abort(
+      paste0("k (", k, ") cannot exceed n_time (", n_time, ")."),
+      class = "fmrilatent_error_invalid_count"
+    )
+  }
+  if (degree < 1) {
+    .encoder_cli_abort("degree must be >= 1", class = "fmrilatent_error_invalid_argument")
+  }
   if (k <= degree && !include_intercept) {
-    stop("k (", k, ") must be greater than degree (", degree,
-      ") for a valid B-spline basis.")
+    .encoder_cli_abort(
+      paste0("k (", k, ") must be greater than degree (", degree,
+             ") for a valid B-spline basis."),
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
 
   # Ensure boundary knots defined
