@@ -68,9 +68,7 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
     )
   }
 
-  gram <- B_atoms %*% t(B_atoms)
-  rhs_st <- t(as.matrix(x) %*% t(B_atoms))
-  C_atoms <- t(.robust_gram_solve(as.matrix(gram), rhs_st))
+  C_atoms <- .atom_coefficients(x, B_atoms, context = "encode_spec.spec_st spatial projection")
 
   core <- .basis_coefficients(
     C_atoms,

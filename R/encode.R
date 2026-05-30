@@ -72,6 +72,16 @@
   Matrix::Matrix(t(coeff), sparse = FALSE)
 }
 
+# Least-squares coefficients of x (time x vox) onto a spatial atom dictionary
+# (atoms x vox), returned as a time x atoms matrix. The Gram is formed over the
+# voxel axis (atoms x atoms), so this complements .basis_coefficients (which
+# forms the Gram over rows). Used by the HRBF and spec_st spatial atom paths.
+.atom_coefficients <- function(x, atoms, ridge = 1e-8, context = "atom projection") {
+  gram <- as.matrix(atoms %*% Matrix::t(atoms))
+  rhs <- t(as.matrix(x) %*% Matrix::t(atoms))
+  t(.robust_gram_solve(gram, rhs, ridge = ridge, context = context))
+}
+
 .resolve_materialize <- function(materialize,
                                  supported = c("handle", "matrix"),
                                  default = "handle",

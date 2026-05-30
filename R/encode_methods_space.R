@@ -71,9 +71,7 @@ encode_spec.spec_space_hrbf <- function(x, spec, mask, reduction, materialize, l
   params <- spec$params %||% list()
   B_atoms <- hrbf_generate_basis(params, mask) # atoms x vox
   loadings_mat_hrbf <- Matrix::t(Matrix::Matrix(B_atoms, sparse = TRUE)) # vox x atoms
-  gram <- as.matrix(B_atoms %*% Matrix::t(B_atoms))
-  rhs <- t(as.matrix(x) %*% Matrix::t(B_atoms))
-  coeff <- t(.robust_gram_solve(gram, rhs))
+  coeff <- .atom_coefficients(x, B_atoms, context = "encode_spec.spec_space_hrbf")
   basis <- Matrix::Matrix(coeff, sparse = FALSE) # time x atoms
   loadings <- .loadings_for_materialize(
     loadings_mat_hrbf,
