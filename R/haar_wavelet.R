@@ -38,6 +38,22 @@ as_logical_mask <- function(arr, location = "haar_wavelet:mask") {
 
 # -- Morton ordering helpers -------------------------------------------------
 
+# Single source of truth for the Morton (Z-order) bit-width policy, shared by
+# every R and C++ Morton encoder in this package.
+#
+# All encoders interleave three axis coordinates into one Z-order code. The R
+# reference encoder builds that code with 32-bit signed `bitwShiftL`, which can
+# only safely pack 3 * 10 + 2 = 32 bits, i.e. at most 10 bits per axis, giving a
+# maximum 0-based per-axis coordinate of 2^10 - 1 = 1023 (dimension 1024). This
+# is the tightest of the two implementations, so we cap BOTH R and C++ at 10
+# bits/axis. This MUST match the `bits > 10` guard in
+# checkMortonBitsForIntegerCode() in src/haar_wavelet_rcpp.cpp, and the error
+# wording below must match that function's stop() message.
+.morton_max_bits_per_axis <- 10L
+.morton_max_coord <- bitwShiftL(1L, .morton_max_bits_per_axis) - 1L  # 1023
+.morton_overflow_msg <-
+  "dimensions too large for Morton codes (max 10 bits / 1024 per axis)"
+
 #' Morton-ordered voxel indices from a 3D mask
 #'
 #' @keywords internal
@@ -60,9 +76,11 @@ get_morton_ordered_indices <- function(mask_3d_array, z_order_seed = 42L) {
 
   max_dim <- max(dims)
   bits <- ceiling(log2(max_dim))
-  if (3L * (bits - 1L) + 2L > 30L) {
+  # Shared Morton bit-width policy: cap at .morton_max_bits_per_axis (10),
+  # matching checkMortonBitsForIntegerCode() in src/haar_wavelet_rcpp.cpp.
+  if (bits > .morton_max_bits_per_axis) {
     .encoder_cli_abort(
-      "Mask dimensions too large for 32-bit Morton codes (max ~1024 per axis)",
+      .morton_overflow_msg,
       class = "fmrilatent_error_morton_overflow"
     )
   }

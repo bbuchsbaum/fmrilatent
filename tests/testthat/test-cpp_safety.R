@@ -46,6 +46,6 @@ test_that("get_valid_finest_blocks_rcpp guards integer Morton code width", {
   mask <- array(TRUE, dim = c(2049, 1, 1))
   expect_error(
     get_valid_finest_blocks_rcpp(mask),
-    "too large for 32-bit Morton codes"
+    "too large for Morton codes \\(max 10 bits / 1024 per axis\\)"
   )
 })

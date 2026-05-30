@@ -47,9 +47,21 @@ inline void checkLevels(int levels, int max_levels, const char* context) {
   }
 }
 
+// Shared Morton (Z-order) bit-width policy. KEEP IN SYNC with the constant
+// .morton_max_bits_per_axis in R/haar_wavelet.R.
+//
+// Every Morton encoder in this package (R and C++) interleaves three axis
+// coordinates into a single Z-order code. The R reference encoder builds that
+// code with 32-bit signed `bitwShiftL`, which can only safely pack
+// 3 * 10 + 2 = 32 bits, i.e. at most 10 bits per axis (max 0-based coordinate
+// 2^10 - 1 = 1023, dimension 1024). That is the tightest of the two
+// implementations, so we cap BOTH R and C++ at 10 bits/axis to guarantee they
+// agree on exactly which volumes are too large. The message text here is
+// intentionally identical to the abort raised on the R side.
 inline void checkMortonBitsForIntegerCode(int bits, const char* context) {
-  if (bits > 10) {
-    stop("%s dimensions are too large for 32-bit Morton codes", context);
+  if (bits > 10) {  // 10 == .morton_max_bits_per_axis in R/haar_wavelet.R
+    stop("%s: dimensions too large for Morton codes (max 10 bits / 1024 per axis)",
+         context);
   }
 }
 
@@ -94,6 +106,13 @@ IntegerVector get_morton_ordered_indices_rcpp(LogicalVector mask) {
   const int nx = dims[0], ny = dims[1], nz = dims[2];
 
   const int bits = bitCeilLog2(std::max(nx, std::max(ny, nz)));
+  // Enforce the shared 10-bit-per-axis Morton policy. Although this function
+  // accumulates the code in a 64-bit unsigned long long (and so could pack
+  // more), the R reference path is limited to 32-bit codes. Without this guard
+  // a volume with more than 1024 voxels per axis would be ordered here by C++
+  // but rejected by the R fallback, causing silent R/C++ disagreement on large
+  // volumes. See checkMortonBitsForIntegerCode above.
+  checkMortonBitsForIntegerCode(bits, "get_morton_ordered_indices_rcpp");
   std::vector<MortonEntry> entries;
   entries.reserve(mask.size());
 

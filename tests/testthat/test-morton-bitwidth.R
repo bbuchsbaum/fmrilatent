@@ -1,50 +1,76 @@
 # Tests that the Morton (Z-order) bit-width guards agree between the R and C++
-# implementations. The shared policy is 21 bits per axis (0-based coordinate
-# in [0, 2097151]); both 64-bit Morton encoders mask inputs to 21 bits, so a
-# coordinate >= 2^21 must be rejected (not silently truncated).
+# implementations. The shared policy is 10 bits per axis (max dimension 1024,
+# max 0-based coordinate 1023). A volume with a dimension > 1024 along any axis
+# must be REJECTED identically by the R reference encoder and the C++ encoder,
+# rather than being silently accepted by one and rejected by the other.
 
-test_that("Morton cap constant matches across R", {
-  expect_identical(fmrilatent:::.morton_max_coord, 2097151L)
+test_that("shared Morton bit-width constants are as documented", {
+  expect_identical(fmrilatent:::.morton_max_bits_per_axis, 10L)
+  expect_identical(fmrilatent:::.morton_max_coord, 1023L)
+  expect_match(fmrilatent:::.morton_overflow_msg, "max 10 bits / 1024 per axis")
 })
 
-test_that("haar_octree_order accepts at the cap and rejects above it", {
-  cap <- fmrilatent:::.morton_max_coord  # 0-based max; 1-based = cap + 1
-  # 1-based coordinate exactly at the per-axis ceiling (0-based == cap).
-  at_cap <- matrix(c(cap + 1L, 1L, 1L), nrow = 1L)
-  expect_silent(fmrilatent:::haar_octree_order(at_cap))
+test_that("C++ Morton ordering accepts dim 1024 and rejects dim 1025", {
+  skip_if_not(fmrilatent:::use_haar_rcpp())
+  # Sparse masks keep the allocation tiny; only the bit-width guard is exercised.
+  mk <- function(d) {
+    a <- array(FALSE, dim = c(d, 1L, 1L))
+    a[1L, 1L, 1L] <- TRUE
+    a
+  }
+  # 1024 -> exactly 10 bits -> accepted.
+  expect_silent(fmrilatent:::get_morton_ordered_indices_rcpp(mk(1024L)))
+  # 1025 -> 11 bits -> rejected with the shared message.
+  expect_error(
+    fmrilatent:::get_morton_ordered_indices_rcpp(mk(1025L)),
+    "too large for Morton codes \\(max 10 bits / 1024 per axis\\)"
+  )
+})
 
-  # One past the ceiling must be rejected with the shared message.
-  over <- matrix(c(cap + 2L, 1L, 1L), nrow = 1L)
+test_that("R reference Morton ordering rejects dim 1025 with shared message", {
+  # Force the pure-R path so we exercise the R guard, not the C++ one.
+  mk <- function(d) {
+    a <- array(FALSE, dim = c(d, 1L, 1L))
+    a[1L, 1L, 1L] <- TRUE
+    a[d, 1L, 1L] <- TRUE
+    a
+  }
+  testthat::local_mocked_bindings(use_haar_rcpp = function() FALSE)
+  # 1024 -> accepted.
+  expect_silent(fmrilatent:::get_morton_ordered_indices(mk(1024L)))
+  # 1025 -> rejected; same human-readable text and classed condition as C++.
   err <- expect_error(
-    fmrilatent:::haar_octree_order(over),
-    "21-bit Morton limit \\(max 2097151 per axis\\)"
+    fmrilatent:::get_morton_ordered_indices(mk(1025L)),
+    "too large for Morton codes \\(max 10 bits / 1024 per axis\\)"
   )
-  # Classed-condition contract from abort_haar().
-  expect_s3_class(err, "fmrilatent_haar_error")
-  expect_s3_class(err, "fmrilatent_error")
+  expect_s3_class(err, "fmrilatent_error_morton_overflow")
 })
 
-test_that("haar_octree_order_cpp rejects 0-based coord above the cap", {
-  cap <- fmrilatent:::.morton_max_coord
-  # At the cap (0-based) is fine.
-  expect_silent(
-    fmrilatent:::haar_octree_order_cpp(cap, 0L, 0L, cap + 1L, 1L, 1L)
-  )
-  # Just above the cap is rejected with the identical wording.
-  expect_error(
-    fmrilatent:::haar_octree_order_cpp(cap + 1L, 0L, 0L, cap + 2L, 1L, 1L),
-    "21-bit Morton limit \\(max 2097151 per axis\\)"
-  )
-})
-
-test_that("active_morton_order_cpp rejects coord above the cap", {
-  cap <- fmrilatent:::.morton_max_coord
-  ok <- matrix(c(cap, 0L, 0L), nrow = 1L)
-  expect_silent(fmrilatent:::active_morton_order_cpp(ok))
-
-  over <- matrix(c(cap + 1L, 0L, 0L), nrow = 1L)
-  expect_error(
-    fmrilatent:::active_morton_order_cpp(over),
-    "21-bit Morton limit \\(max 2097151 per axis\\)"
-  )
+test_that("R and C++ agree at the dim-1024/1025 boundary", {
+  skip_if_not(fmrilatent:::use_haar_rcpp())
+  mk <- function(d) {
+    a <- array(FALSE, dim = c(d, 1L, 1L))
+    a[1L, 1L, 1L] <- TRUE
+    a[d, 1L, 1L] <- TRUE
+    a
+  }
+  cpp_status <- function(d) {
+    tryCatch({
+      fmrilatent:::get_morton_ordered_indices_rcpp(mk(d))
+      "accept"
+    }, error = function(e) "reject")
+  }
+  r_status <- function(d) {
+    testthat::with_mocked_bindings(
+      tryCatch({
+        fmrilatent:::get_morton_ordered_indices(mk(d))
+        "accept"
+      }, error = function(e) "reject"),
+      use_haar_rcpp = function() FALSE
+    )
+  }
+  for (d in c(1024L, 1025L)) {
+    expect_identical(cpp_status(d), r_status(d),
+                     info = sprintf("dim = %d", d))
+  }
 })
