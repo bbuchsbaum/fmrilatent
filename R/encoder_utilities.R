@@ -98,7 +98,8 @@ NULL
 }
 
 .make_latent_neurovector <- function(X, mask, loadings, basis = NULL, offset = numeric(0),
-                                     label = "", meta = list(), location = "encoder") {
+                                     label = "", meta = list(), location = "encoder",
+                                     expect_dense = FALSE) {
   mask_arr <- .extract_mask_array(mask, location)
   basis <- basis %||% (as.matrix(X) %*% as.matrix(loadings))
   spc <- .space_with_time_from_mask(mask, nrow(X), location)
@@ -110,6 +111,7 @@ NULL
     mask = mask_vol,
     offset = offset,
     label = label,
-    meta = meta
+    meta = meta,
+    expect_dense = expect_dense
   )
 }

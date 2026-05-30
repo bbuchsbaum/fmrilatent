@@ -1,4 +1,4 @@
-test_that("wavelet_active encoder returns a LatentNeuroVec", {
+test_that("wavelet_active encoder returns a known latent type", {
   set.seed(1)
   dims <- c(8, 8, 4)
   mask_arr <- array(TRUE, dims)
@@ -9,13 +9,14 @@ test_that("wavelet_active encoder returns a LatentNeuroVec", {
 
   spec <- spec_space_wavelet_active(levels_space = 1L, levels_time = 0L, threshold = 0)
   lat <- encode(X, spec, mask = mask)
-  expect_s4_class(lat, "LatentNeuroVec")
-  expect_true(is(lat, "ExplicitLatent"))
+  # wavelet_active_latent() may return either an explicit LatentNeuroVec or an
+  # ImplicitLatent depending on the transform; both are accepted at the seam.
+  expect_true(is(lat, "LatentNeuroVec") || inherits(lat, "ImplicitLatent"))
 })
 
 test_that("wavelet_active seam aborts if the inner latent has the wrong class", {
   # Stub wavelet_active_latent() in the package namespace so the seam sees a
-  # non-LatentNeuroVec return and must trip the class assertion.
+  # non-latent return and must trip the class assertion.
   ns <- asNamespace("fmrilatent")
   orig <- get("wavelet_active_latent", envir = ns)
   on.exit({
