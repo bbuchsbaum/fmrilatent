@@ -22,7 +22,8 @@ setMethod(
   signature = signature(x = "LatentNeuroVec", i = "matrix"),
   definition = function(x, i) {
     if (!is.numeric(i) || ncol(i) != 2L) {
-      stop("`i` must be a numeric matrix with 2 columns (time, spatial-index)")
+      .encoder_cli_abort("`i` must be a numeric matrix with 2 columns (time, spatial-index)",
+                         class = "fmrilatent_error_invalid_argument")
     }
 
     ## -- 1. split and sanity-check the two index columns
@@ -33,10 +34,12 @@ setMethod(
     nxy <- prod(dim(x)[1:3])
 
     if (any(t_idx < 1L | t_idx > nt)) {
-      stop("time index out of bounds")
+      .encoder_cli_abort("time index out of bounds",
+                         class = "fmrilatent_error_invalid_index")
     }
     if (any(s_idx < 1L | s_idx > nxy)) {
-      stop("spatial index out of bounds")
+      .encoder_cli_abort("spatial index out of bounds",
+                         class = "fmrilatent_error_invalid_index")
     }
 
     ## -- 2. map spatial -> mask rows (0 means 'outside the mask')
@@ -87,7 +90,8 @@ setMethod(
     )
 
     if (any(i < 1) || any(i > .latent_loadings_dim(x@loadings)[1L])) {
-      stop("Index out of bounds for 'loadings'")
+      .encoder_cli_abort("Index out of bounds for 'loadings'",
+                         class = "fmrilatent_error_invalid_index")
     }
     b1 <- basis_mat(x)
     b2 <- loadings_mat(x, i = as.integer(i))
@@ -152,10 +156,16 @@ setMethod(
     n_time <- dims_full[4]
 
     if (!is.numeric(i) || any(is.na(i))) {
-      stop("[linear_access,LatentNeuroVec] Index `i` must be numeric without NA values")
+      .encoder_cli_abort(
+        "[linear_access,LatentNeuroVec] Index `i` must be numeric without NA values",
+        class = "fmrilatent_error_invalid_index"
+      )
     }
     if (any(i < 1) || any(i > nels_4d)) {
-      stop(paste0("[linear_access,LatentNeuroVec] Index out of bounds for 4D volume [1..", nels_4d, "]"))
+      .encoder_cli_abort(
+        paste0("[linear_access,LatentNeuroVec] Index out of bounds for 4D volume [1..", nels_4d, "]"),
+        class = "fmrilatent_error_invalid_index"
+      )
     }
 
     # Convert 4D linear indices to 3D spatial index + time index
@@ -250,10 +260,18 @@ setMethod(
 setMethod(
   "[[", signature(x = "LatentNeuroVec", i = "numeric"),
   function(x, i) {
-    if (length(i) != 1L || is.na(i) || !is.finite(i)) stop("Index must be a single finite number")
-    if (!isTRUE(all.equal(i, as.integer(i)))) stop("Index must be integer-valued")
+    if (length(i) != 1L || is.na(i) || !is.finite(i)) {
+      .encoder_cli_abort("Index must be a single finite number",
+                         class = "fmrilatent_error_invalid_index")
+    }
+    if (!isTRUE(all.equal(i, as.integer(i)))) {
+      .encoder_cli_abort("Index must be integer-valued",
+                         class = "fmrilatent_error_invalid_index")
+    }
     i <- as.integer(i)
-    if (i < 1L || i > dim(x)[4]) stop("Index out of range")
+    if (i < 1L || i > dim(x)[4]) {
+      .encoder_cli_abort("Index out of range", class = "fmrilatent_error_invalid_index")
+    }
 
     b1 <- basis_mat(x, i = i)
     b2 <- loadings_mat(x)
@@ -294,7 +312,8 @@ setMethod(
 
     if (any(i < 1 | i > dims_full[1]) || any(j < 1 | j > dims_full[2]) ||
         any(k < 1 | k > dims_full[3]) || any(l < 1 | l > dims_full[4])) {
-      stop("Subscript out of range for LatentNeuroVec.")
+      .encoder_cli_abort("Subscript out of range for LatentNeuroVec.",
+                         class = "fmrilatent_error_invalid_index")
     }
 
     i <- as.integer(i)
@@ -366,12 +385,15 @@ setMethod(
         return(which(idx))
       }
       if (!is.numeric(idx)) {
-        stop("Subscript '", name, "' must be numeric or logical for LatentNeuroVec.",
-             call. = FALSE)
+        .encoder_cli_abort(
+          paste0("Subscript '", name, "' must be numeric or logical for LatentNeuroVec."),
+          class = "fmrilatent_error_invalid_index"
+        )
       }
       idx_int <- as.integer(idx)
       if (anyNA(idx_int) || any(idx_int < 1L | idx_int > extent)) {
-        stop("Subscript out of range for LatentNeuroVec.", call. = FALSE)
+        .encoder_cli_abort("Subscript out of range for LatentNeuroVec.",
+                           class = "fmrilatent_error_invalid_index")
       }
       idx_int
     }
@@ -387,7 +409,8 @@ setMethod(
       } else if (nc == 2L) {
         return(matricized_access(x, i))
       } else {
-        stop("Matrix index must have 2 or 4 columns for LatentNeuroVec")
+        .encoder_cli_abort("Matrix index must have 2 or 4 columns for LatentNeuroVec",
+                           class = "fmrilatent_error_invalid_argument")
       }
     }
 
