@@ -10,6 +10,114 @@ test_that("basis_mat materializes DCT handle and caches in registry", {
   expect_true(fmrilatent:::`.latent_has_matrix`(bh@id, type = "basis"))
 })
 
+test_that("custom basis handle kinds can be registered and materialized", {
+  kind <- "test_custom_basis_kind"
+  mat <- Matrix::Matrix(diag(2), sparse = FALSE)
+  register_handle_kind(kind, function(handle) {
+    Matrix::Matrix(handle@spec$matrix, sparse = FALSE)
+  }, type = "basis")
+
+  bh <- new("BasisHandle",
+    id = "custom-basis-kind-test",
+    dim = as.integer(dim(mat)),
+    kind = kind,
+    spec = list(matrix = mat),
+    label = "custom-basis"
+  )
+
+  expect_equal(as.matrix(basis_mat(bh)), as.matrix(mat))
+})
+
+test_that("custom loadings handle kinds can be registered and materialized", {
+  kind <- "test_custom_loadings_kind"
+  mat <- Matrix::Matrix(matrix(c(1, 2, 3, 4), nrow = 2), sparse = FALSE)
+  register_handle_kind(kind, function(handle) {
+    Matrix::Matrix(handle@spec$matrix, sparse = FALSE)
+  }, type = "loadings")
+
+  lh <- new("LoadingsHandle",
+    id = "custom-loadings-kind-test",
+    dim = as.integer(dim(mat)),
+    kind = kind,
+    spec = list(matrix = mat),
+    label = "custom-loadings"
+  )
+
+  expect_equal(as.matrix(loadings_mat(lh)), as.matrix(mat))
+})
+
+test_that("explicit handles support subset materialization", {
+  basis_mat_full <- Matrix::Matrix(matrix(seq_len(12), nrow = 4), sparse = TRUE)
+  loadings_mat_full <- Matrix::Matrix(matrix(seq_len(15), nrow = 5), sparse = TRUE)
+  bh <- new("BasisHandle",
+    id = "explicit-basis-subset-test",
+    dim = as.integer(dim(basis_mat_full)),
+    kind = "explicit",
+    spec = list(matrix = basis_mat_full),
+    label = "basis-subset"
+  )
+  lh <- new("LoadingsHandle",
+    id = "explicit-loadings-subset-test",
+    dim = as.integer(dim(loadings_mat_full)),
+    kind = "explicit",
+    spec = list(matrix = loadings_mat_full),
+    label = "loadings-subset"
+  )
+
+  expect_equal(
+    as.matrix(basis_mat(bh, i = 2:3, j = 2L)),
+    as.matrix(basis_mat_full[2:3, 2L, drop = FALSE])
+  )
+  expect_equal(
+    as.matrix(loadings_mat(lh, j = 3L)),
+    as.matrix(loadings_mat_full[, 3L, drop = FALSE])
+  )
+})
+
+test_that("as.matrix materializes explicit BasisHandle and LoadingsHandle", {
+  basis_mat_full <- Matrix::Matrix(matrix(seq_len(6), nrow = 3), sparse = TRUE)
+  loadings_mat_full <- Matrix::Matrix(matrix(seq_len(8), nrow = 4), sparse = TRUE)
+  bh <- new("BasisHandle",
+    id = "explicit-basis-as-matrix-test",
+    dim = as.integer(dim(basis_mat_full)),
+    kind = "explicit",
+    spec = list(matrix = basis_mat_full),
+    label = "basis-as-matrix"
+  )
+  lh <- new("LoadingsHandle",
+    id = "explicit-loadings-as-matrix-test",
+    dim = as.integer(dim(loadings_mat_full)),
+    kind = "explicit",
+    spec = list(matrix = loadings_mat_full),
+    label = "loadings-as-matrix"
+  )
+
+  expect_equal(as.matrix(bh), as.matrix(basis_mat_full))
+  expect_equal(as.matrix(lh), as.matrix(loadings_mat_full))
+})
+
+test_that("explicit handles materialize deterministic dense matrix classes", {
+  basis_mat_full <- Matrix::Matrix(matrix(0, nrow = 3, ncol = 2), sparse = TRUE)
+  loadings_mat_full <- Matrix::Matrix(matrix(0, nrow = 4, ncol = 2), sparse = TRUE)
+  bh <- new("BasisHandle",
+    id = "explicit-basis-dense-class-test",
+    dim = as.integer(dim(basis_mat_full)),
+    kind = "explicit",
+    spec = list(matrix = basis_mat_full),
+    label = "basis-dense-class"
+  )
+  lh <- new("LoadingsHandle",
+    id = "explicit-loadings-dense-class-test",
+    dim = as.integer(dim(loadings_mat_full)),
+    kind = "explicit",
+    spec = list(matrix = loadings_mat_full),
+    label = "loadings-dense-class"
+  )
+
+  expect_s4_class(basis_mat(bh), "dgeMatrix")
+  expect_s4_class(loadings_mat(lh), "dgeMatrix")
+})
+
 test_that("bspline handle builds correct dimensions", {
   n_time <- 10L
   k <- 6L

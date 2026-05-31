@@ -7,33 +7,67 @@ NULL
 #'
 #' @param target_rank Cap on retained components per scale (keeps runtime bounded).
 #' @param oversample Oversampling for randomized range finder.
-#' @param threshold Absolute value threshold to enforce sparsity in compressed ops.
+#' @param sparsify_eps Absolute value threshold to enforce sparsity in
+#'   compressed operators. Stored as `threshold` for compatibility.
+#' @param threshold Deprecated alias for `sparsify_eps`.
 #' @param max_scales Maximum diffusion scales to compute.
 #' @param epsilon Optional precision (unused in capped-rank path; kept for API parity).
 #' @param seed Optional integer seed for deterministic randomized range finding.
+#' @return A `spec_diffusion_wavelet` basis specification descriptor.
 #' @export
 basis_diffusion_wavelet <- function(target_rank = 2000L, oversample = 20L,
-                                    threshold = 1e-5, max_scales = 1L,
-                                    epsilon = NULL, seed = 1L) {
-  if (!is.null(seed)) {
-    seed <- as.integer(seed)
-    if (length(seed) != 1L || is.na(seed)) {
-      .encoder_cli_abort(
-        "seed must be NULL or a single non-missing integer.",
-        class = "fmrilatent_error_invalid_diffusion_seed"
-      )
-    }
+                                    threshold = NULL, max_scales = 1L,
+                                    epsilon = NULL, seed = 1L,
+                                    sparsify_eps = NULL) {
+  if (!is.null(sparsify_eps) && !is.null(threshold) &&
+      !identical(sparsify_eps, threshold)) {
+    .encoder_cli_abort(
+      "Specify only one of sparsify_eps or threshold.",
+      class = "fmrilatent_error_invalid_argument"
+    )
   }
-  structure(
-    list(
-      target_rank = as.integer(target_rank),
-      oversample = as.integer(oversample),
-      threshold = threshold,
-      max_scales = as.integer(max_scales),
-      epsilon = epsilon,
-      seed = seed
-    ),
-    class = "spec_diffusion_wavelet"
+  sparsify_eps <- sparsify_eps %||% threshold %||% 1e-5
+  spec <- .validate_diffusion_wavelet_spec(list(
+    target_rank = target_rank,
+    oversample = oversample,
+    threshold = sparsify_eps,
+    sparsify_eps = sparsify_eps,
+    max_scales = max_scales,
+    epsilon = epsilon,
+    seed = seed
+  ))
+  structure(spec, class = "spec_diffusion_wavelet")
+}
+
+.validate_diffusion_wavelet_spec <- function(spec) {
+  if (!is.list(spec)) {
+    .encoder_cli_abort(
+      "basis_spec must be a diffusion-wavelet specification list.",
+      class = "fmrilatent_error_invalid_diffusion_spec"
+    )
+  }
+  target_rank <- .validate_positive_count(spec$target_rank %||% 2000L, "target_rank")
+  oversample <- .validate_nonnegative_count(spec$oversample %||% 20L, "oversample")
+  threshold <- .validate_nonnegative_scalar(spec$sparsify_eps %||% spec$threshold %||% 1e-5,
+                                            "sparsify_eps")
+  max_scales <- .validate_positive_count(spec$max_scales %||% 1L, "max_scales")
+  epsilon <- spec$epsilon
+  if (!is.null(epsilon)) {
+    epsilon <- .validate_positive_scalar(epsilon, "epsilon")
+  }
+  seed <- spec$seed
+  if (!is.null(seed)) {
+    seed <- .validate_nonnegative_count(seed, "seed")
+  }
+
+  list(
+    target_rank = target_rank,
+    oversample = oversample,
+    threshold = threshold,
+    sparsify_eps = threshold,
+    max_scales = max_scales,
+    epsilon = epsilon,
+    seed = seed
   )
 }
 
@@ -60,9 +94,9 @@ randomized_diffusion_step <- function(T_op, n, target_rank, oversample, threshol
   qr_y <- base::qr(Y)
   Q <- base::qr.Q(qr_y, complete = FALSE)
 
-  # small operator: B^T B where B = T Q
+  # Galerkin restriction of T onto range(Q): Q^T T Q.
   B <- T_op(Q)
-  T_compressed <- crossprod(B)
+  T_compressed <- crossprod(Q, B)
   if (!is.null(threshold) && threshold > 0) {
     T_compressed[abs(T_compressed) < threshold] <- 0
   }
@@ -70,12 +104,13 @@ randomized_diffusion_step <- function(T_op, n, target_rank, oversample, threshol
   list(Q = Q, T_compressed = T_compressed)
 }
 
-diffusion_wavelet_loadings <- function(T_mat, spec) {
+diffusion_wavelet_loadings <- function(T_mat, spec, n = NULL) {
+  spec <- .validate_diffusion_wavelet_spec(spec)
   target_rank <- spec$target_rank %||% 2000L
   oversample <- spec$oversample %||% 20L
   threshold <- spec$threshold %||% 1e-5
   max_scales <- spec$max_scales %||% 1L
-  seed <- spec$seed %||% 1L
+  seed <- spec$seed
   if (!is.null(seed)) {
     old_seed <- if (exists(".Random.seed", envir = .GlobalEnv, inherits = FALSE)) {
       get(".Random.seed", envir = .GlobalEnv, inherits = FALSE)
@@ -95,13 +130,30 @@ diffusion_wavelet_loadings <- function(T_mat, spec) {
   }
 
   T_op <- as_linear_operator(T_mat)
-  if (is.null(dim(T_mat))) {
+  T_dim <- dim(T_mat)
+  if (is.null(T_dim)) {
+    if (is.null(n)) {
+      .encoder_cli_abort(
+        "Function T_mat operators require explicit n.",
+        class = "fmrilatent_error_invalid_diffusion_operator"
+      )
+    }
+    current_dim <- .validate_positive_count(n, "n")
+  } else {
+    if (length(T_dim) != 2L || T_dim[1L] != T_dim[2L]) {
+      .encoder_cli_abort(
+        "T_mat must be a square matrix-like operator.",
+        class = "fmrilatent_error_invalid_diffusion_operator"
+      )
+    }
+    current_dim <- nrow(T_mat)
+  }
+  if (!is.function(T_op)) {
     .encoder_cli_abort(
-      "T_mat must have dimensions or provide a linear operator with known size",
+      "T_mat must be matrix-like or a function.",
       class = "fmrilatent_error_invalid_diffusion_operator"
     )
   }
-  current_dim <- nrow(T_mat)
 
   phi_global_prev <- NULL
   loadings_list <- list()
@@ -137,7 +189,8 @@ build_cluster_graph <- function(reduction, k_neighbors = 6L) {
 #'
 #' @param reduction ClusterReduction describing voxel-to-cluster map.
 #' @param basis_spec Diffusion wavelet spec (basis_diffusion_wavelet()).
-#' @param data Optional (unused) for API symmetry.
+#' @param data Ignored for this graph-only spatial dictionary; accepted only
+#'   for the shared `lift()` method signature.
 #' @param k_neighbors k for graph building (cluster centroids).
 #' @param ... Additional arguments (unused).
 #' @return Matrix of loadings (voxels x components) concatenating scaling bases across scales.
@@ -164,6 +217,7 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_d
 #' @param spec diffusion wavelet spec (basis_diffusion_wavelet()).
 #' @param k_neighbors k for graph building.
 #' @param label Optional label.
+#' @return A `LatentNeuroVec` object.
 #' @export
 diffusion_wavelet_latent <- function(X, mask, reduction = NULL,
                                      spec = basis_diffusion_wavelet(),

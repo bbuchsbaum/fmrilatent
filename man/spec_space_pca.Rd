@@ -5,14 +5,16 @@
 \title{Spatial PCA spec (cluster-local)}
 \usage{
 spec_space_pca(
-  k = 3L,
+  k = NULL,
   center = TRUE,
   whiten = FALSE,
-  backend = c("auto", "svds", "svd")
+  backend = c("auto", "svds", "svd"),
+  scale = FALSE
 )
 }
 \arguments{
-\item{k}{Components per cluster.}
+\item{k}{Optional components per cluster. If `NULL`, encoders use their
+family default (`3L`).}
 
 \item{center}{Logical; center voxels before PCA (default TRUE). When TRUE,
 voxel means are stored in `LatentNeuroVec@offset`.}
@@ -21,6 +23,9 @@ voxel means are stored in `LatentNeuroVec@offset`.}
 rescaled loadings such that reconstruction is unchanged.}
 
 \item{backend}{SVD backend: "auto" (default), "svds" (RSpectra), or "svd" (base).}
+
+\item{scale}{Logical; scale voxels before PCA (default FALSE). Passed
+through to `lift(ClusterReduction, spec_pca)`.}
 }
 \value{
 A `spec_space_pca` object.

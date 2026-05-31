@@ -3,19 +3,38 @@
 #' @include latent_handles.R
 NULL
 
-.encoder_cli_abort <- function(message, class = "fmrilatent_error_encoder", call = NULL) {
-  cli::cli_abort(c(x = message), class = class, call = call)
+.encoder_cli_abort <- function(message, class = "fmrilatent_error_encoder", call = NULL, ...) {
+  cli::cli_abort(c(x = message), class = class, call = call, ...)
+}
+
+.encoder_has_namespace <- function(package) {
+  requireNamespace(package, quietly = TRUE)
+}
+
+.matrix_like_all_finite <- function(x) {
+  if (inherits(x, "sparseMatrix")) {
+    return(all(is.finite(x@x)))
+  }
+  all(is.finite(x))
 }
 
 .extract_mask_array <- function(mask, location = "unknown function") {
-  mask_arr <- tryCatch(.mask_to_array(mask, location), error = function(e) NULL)
+  mask_error <- NULL
+  mask_arr <- tryCatch(
+    .mask_to_array(mask, location),
+    error = function(e) {
+      mask_error <<- e
+      NULL
+    }
+  )
   if (is.null(mask_arr) || is.list(mask_arr)) {
     if (is.list(mask) && !is.null(mask$arr)) {
       mask_arr <- mask$arr
     } else {
       .encoder_cli_abort(
         sprintf("Cannot extract array from mask (%s)", location),
-        class = "fmrilatent_error_mask_extract"
+        class = "fmrilatent_error_mask_extract",
+        parent = mask_error
       )
     }
   }
@@ -101,7 +120,14 @@ NULL
                                      label = "", meta = list(), location = "encoder",
                                      expect_dense = FALSE) {
   mask_arr <- .extract_mask_array(mask, location)
-  basis <- basis %||% (as.matrix(X) %*% as.matrix(loadings))
+  basis <- basis %||% {
+    loadings_obj <- if (inherits(loadings, "LoadingsHandle")) {
+      loadings_mat(loadings)
+    } else {
+      loadings
+    }
+    as.matrix(X) %*% loadings_obj
+  }
   spc <- .space_with_time_from_mask(mask, nrow(X), location)
   mask_vol <- .mask_volume_from_array(mask, mask_arr, location)
   LatentNeuroVec(

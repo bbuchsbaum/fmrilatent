@@ -51,3 +51,21 @@ test_that("explicit spec_st reconstruction matches the ImplicitLatent decoder", 
   expect_equal(dim(rec_exp), dim(rec_imp))
   expect_lt(max(abs(rec_exp - rec_imp)), 1e-10)
 })
+
+test_that("implicit spec_st delegates ROI validation to roi_subset_columns", {
+  io <- make_st_inputs()
+  imp <- encode(io$X, st_spec("auto"), mask = io$mask, materialize = "matrix")
+
+  expect_error(
+    predict(imp, roi_mask = c(TRUE, FALSE)),
+    class = "fmrilatent_error_dim"
+  )
+
+  roi <- array(FALSE, dim = dim(as.array(io$mask)))
+  roi[1, 1, 1] <- TRUE
+  expect_equal(
+    predict(imp, roi_mask = roi),
+    roi_subset_columns(predict(imp), as.array(io$mask), roi),
+    tolerance = 1e-10
+  )
+})

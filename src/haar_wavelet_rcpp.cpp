@@ -47,6 +47,111 @@ inline void checkLevels(int levels, int max_levels, const char* context) {
   }
 }
 
+inline size_t checkedMaskFlatMorton(LogicalVector mask_flat_morton,
+                                    IntegerVector mask_dims,
+                                    const char* context) {
+  if (mask_dims.size() != 3) stop("%s mask_dims must have length 3", context);
+  if (mask_dims[0] <= 0 || mask_dims[1] <= 0 || mask_dims[2] <= 0) {
+    stop("%s mask_dims must contain positive values", context);
+  }
+  const size_t total = static_cast<size_t>(mask_dims[0]) *
+                       static_cast<size_t>(mask_dims[1]) *
+                       static_cast<size_t>(mask_dims[2]);
+  if (total > static_cast<size_t>(std::numeric_limits<int>::max())) {
+    stop("%s mask_dims product is too large for integer indexing", context);
+  }
+  if (total != static_cast<size_t>(mask_flat_morton.size())) {
+    stop("%s mask_flat_morton length must match mask_dims product", context);
+  }
+  size_t active_count = 0;
+  for (R_xlen_t idx = 0; idx < mask_flat_morton.size(); ++idx) {
+    const int value = mask_flat_morton[idx];
+    if (value == NA_LOGICAL) {
+      stop("%s mask_flat_morton must not contain NA", context);
+    }
+    if (value == TRUE) {
+      ++active_count;
+    }
+  }
+  if (active_count == 0) {
+    stop("%s mask_flat_morton must contain at least one TRUE value", context);
+  }
+  return active_count;
+}
+
+struct HaarScalingInfo {
+  std::vector<NumericVector> sqrtN;
+  std::vector<NumericVector> sqrtN_div8;
+  std::vector<std::vector<int> > counts;
+  size_t root_count;
+};
+
+inline HaarScalingInfo checkedHaarScalings(List scalings,
+                                           int levels,
+                                           size_t active_count,
+                                           const char* context) {
+  HaarScalingInfo info;
+  info.sqrtN.resize(levels);
+  info.sqrtN_div8.resize(levels);
+  info.counts.resize(levels);
+  size_t expected_count = active_count;
+
+  for (int lvl = 0; lvl < levels; ++lvl) {
+    List sc = scalings[lvl];
+    if (!sc.containsElementNamed("sqrt_nvalid") ||
+        !sc.containsElementNamed("sqrt_nvalid_div_8")) {
+      stop("%s scalings[%d] must contain sqrt_nvalid and sqrt_nvalid_div_8",
+           context, lvl + 1);
+    }
+    NumericVector s = sc["sqrt_nvalid"];
+    NumericVector s8 = sc["sqrt_nvalid_div_8"];
+    if (s.size() == 0) {
+      stop("%s scalings[%d] must not be empty", context, lvl + 1);
+    }
+    if (s8.size() != s.size()) {
+      stop("%s scalings[%d] vector lengths must match", context, lvl + 1);
+    }
+
+    std::vector<int> c(s.size());
+    size_t total_count = 0;
+    size_t present_count = 0;
+    for (int i = 0; i < s.size(); ++i) {
+      const double v = s[i];
+      const double v8 = s8[i];
+      if (!R_finite(v) || v < 0.0 || !R_finite(v8) || v8 < 0.0) {
+        stop("%s scalings[%d] values must be finite and non-negative",
+             context, lvl + 1);
+      }
+      const double count_double = v * v;
+      if (!R_finite(count_double) ||
+          count_double > static_cast<double>(std::numeric_limits<int>::max())) {
+        stop("%s scalings[%d] counts are too large", context, lvl + 1);
+      }
+      const int count = static_cast<int>(std::llround(count_double));
+      c[i] = count;
+      total_count += static_cast<size_t>(count);
+      if (count > 0) {
+        ++present_count;
+      }
+    }
+    if (total_count != expected_count) {
+      stop("%s scalings[%d] counts do not match the current data length",
+           context, lvl + 1);
+    }
+    if (present_count == 0) {
+      stop("%s scalings[%d] must contain at least one active block",
+           context, lvl + 1);
+    }
+
+    info.sqrtN[lvl] = s;
+    info.sqrtN_div8[lvl] = s8;
+    info.counts[lvl].swap(c);
+    expected_count = present_count;
+  }
+  info.root_count = expected_count;
+  return info;
+}
+
 // Shared Morton (Z-order) bit-width policy. KEEP IN SYNC with the constant
 // .morton_max_bits_per_axis in R/haar_wavelet.R.
 //
@@ -170,36 +275,61 @@ List precompute_haar_scalings_rcpp(LogicalVector mask, int levels) {
     const int nby = (cy + 1) / 2;
     const int nbz = (cz + 1) / 2;
     const int nblocks = nbx * nby * nbz;
+    const int bits = bitCeilLog2(std::max(nbx, std::max(nby, nbz)));
+    checkMortonBitsForIntegerCode(bits, "precompute_haar_scalings_rcpp");
+
+    std::vector<MortonEntry> blocks;
+    blocks.reserve(static_cast<size_t>(nblocks));
+    for (int bi = 0; bi < nbx; ++bi) {
+      for (int bj = 0; bj < nby; ++bj) {
+        for (int bk = 0; bk < nbz; ++bk) {
+          blocks.push_back({
+              mortonEncode3D(static_cast<unsigned int>(bi),
+                             static_cast<unsigned int>(bj),
+                             static_cast<unsigned int>(bk), bits),
+              bi,
+              bj,
+              bk});
+        }
+      }
+    }
+
+    std::sort(blocks.begin(), blocks.end(), [](const MortonEntry& a,
+                                                const MortonEntry& b) {
+      if (a.code != b.code) return a.code < b.code;
+      if (a.x != b.x) return a.x < b.x;
+      if (a.y != b.y) return a.y < b.y;
+      return a.z < b.z;
+    });
 
     NumericVector sqrt_nvalid(nblocks);
     NumericVector sqrt_nvalid_div8(nblocks);
     std::vector<unsigned char> next_occ(nblocks, 0U);
 
-    int idx = 0;
-    for (int bi = 0; bi < nbx; ++bi) {
+    for (int idx = 0; idx < nblocks; ++idx) {
+      const MortonEntry& block_entry = blocks[idx];
+      const int bi = block_entry.x;
+      const int bj = block_entry.y;
+      const int bk = block_entry.z;
       const int x0 = 2 * bi;
       const int x1 = std::min(x0 + 1, cx - 1);
-      for (int bj = 0; bj < nby; ++bj) {
-        const int y0 = 2 * bj;
-        const int y1 = std::min(y0 + 1, cy - 1);
-        for (int bk = 0; bk < nbz; ++bk, ++idx) {
-          const int z0 = 2 * bk;
-          const int z1 = std::min(z0 + 1, cz - 1);
-          int cnt = 0;
-          for (int z = z0; z <= z1; ++z) {
-            for (int y = y0; y <= y1; ++y) {
-              for (int x = x0; x <= x1; ++x) {
-                cnt += occ[lin3D(x, y, z, cx, cy, cz)];
-              }
-            }
+      const int y0 = 2 * bj;
+      const int y1 = std::min(y0 + 1, cy - 1);
+      const int z0 = 2 * bk;
+      const int z1 = std::min(z0 + 1, cz - 1);
+      int cnt = 0;
+      for (int z = z0; z <= z1; ++z) {
+        for (int y = y0; y <= y1; ++y) {
+          for (int x = x0; x <= x1; ++x) {
+            cnt += occ[lin3D(x, y, z, cx, cy, cz)];
           }
-          if (cnt > 0) {
-            next_occ[idx] = 1U;
-          }
-          sqrt_nvalid[idx] = std::sqrt(static_cast<double>(cnt));
-          sqrt_nvalid_div8[idx] = std::sqrt(static_cast<double>(cnt) / 8.0);
         }
       }
+      if (cnt > 0) {
+        next_occ[lin3D(bi, bj, bk, nbx, nby, nbz)] = 1U;
+      }
+      sqrt_nvalid[idx] = std::sqrt(static_cast<double>(cnt));
+      sqrt_nvalid_div8[idx] = std::sqrt(static_cast<double>(cnt) / 8.0);
     }
 
     List entry;
@@ -222,33 +352,20 @@ List forward_lift_rcpp(NumericVector data_morton,
                        IntegerVector mask_dims,
                        int levels,
                        List scalings) {
-  (void)mask_flat_morton;
-  if (mask_dims.size() != 3) stop("forward_lift_rcpp mask_dims must have length 3");
-  if (mask_dims[0] <= 0 || mask_dims[1] <= 0 || mask_dims[2] <= 0) {
-    stop("forward_lift_rcpp mask_dims must contain positive values");
+  const size_t active_count = checkedMaskFlatMorton(
+      mask_flat_morton, mask_dims, "forward_lift_rcpp");
+  if (static_cast<size_t>(data_morton.size()) != active_count) {
+    stop("forward_lift_rcpp data_morton length must match active mask count");
   }
   checkLevels(levels, scalings.size(), "forward_lift_rcpp");
-  std::vector<NumericVector> sqrtN(levels), sqrtN_div8(levels);
-  std::vector<std::vector<int> > counts(levels);
-  for (int lvl = 0; lvl < levels; ++lvl) {
-    List sc = scalings[lvl];
-    NumericVector s = sc["sqrt_nvalid"];
-    NumericVector s8 = sc["sqrt_nvalid_div_8"];
-    sqrtN[lvl] = s;
-    sqrtN_div8[lvl] = s8;
-    std::vector<int> c(s.size());
-    for (int i = 0; i < s.size(); ++i) {
-      const double v = s[i];
-      c[i] = static_cast<int>(std::llround(v * v));
-    }
-    counts[lvl].swap(c);
-  }
+  HaarScalingInfo scaling_info = checkedHaarScalings(
+      scalings, levels, active_count, "forward_lift_rcpp");
 
   NumericVector current = clone(data_morton);
   std::vector<NumericVector> details(levels);
 
   for (int lvl = 0; lvl < levels; ++lvl) {
-    const std::vector<int>& cnt = counts[lvl];
+    const std::vector<int>& cnt = scaling_info.counts[lvl];
     const int numBlocks = static_cast<int>(cnt.size());
 
     int present = 0;
@@ -269,8 +386,8 @@ List forward_lift_rcpp(NumericVector data_morton,
         double sum = 0.0;
         for (int t = 0; t < nv; ++t) sum += current[idx_in + t];
         const double avg = sum / static_cast<double>(nv);
-        next_data[idx_lp++] = avg * sqrtN[lvl][b];
-        const double s8 = sqrtN_div8[lvl][b];
+        next_data[idx_lp++] = avg * scaling_info.sqrtN[lvl][b];
+        const double s8 = scaling_info.sqrtN_div8[lvl][b];
         for (int t = 0; t < nv; ++t) dvec[idx_out + t] = (current[idx_in + t] - avg) * s8;
         idx_in += nv;
         idx_out += static_cast<size_t>(nv);
@@ -286,42 +403,31 @@ List forward_lift_rcpp(NumericVector data_morton,
 }
 
 // [[Rcpp::export]]
-NumericVector inverse_lift_rcpp(double root_coeff,
+NumericVector inverse_lift_rcpp(NumericVector root_coeff,
                                 List detail_vecs,
                                 LogicalVector mask_flat_morton,
                                 IntegerVector mask_dims,
                                 int levels,
                                 List scalings) {
-  (void)mask_flat_morton;
-  if (mask_dims.size() != 3) stop("inverse_lift_rcpp mask_dims must have length 3");
-  if (mask_dims[0] <= 0 || mask_dims[1] <= 0 || mask_dims[2] <= 0) {
-    stop("inverse_lift_rcpp mask_dims must contain positive values");
-  }
+  const size_t active_count = checkedMaskFlatMorton(
+      mask_flat_morton, mask_dims, "inverse_lift_rcpp");
   checkLevels(levels, scalings.size(), "inverse_lift_rcpp");
   if (detail_vecs.size() < levels) {
     stop("inverse_lift_rcpp detail_vecs length must be at least levels");
   }
-  std::vector<NumericVector> sqrtN(levels), sqrtN_div8(levels);
-  std::vector<std::vector<int> > counts(levels);
-  for (int lvl = 0; lvl < levels; ++lvl) {
-    List sc = scalings[lvl];
-    NumericVector s = sc["sqrt_nvalid"];
-    NumericVector s8 = sc["sqrt_nvalid_div_8"];
-    sqrtN[lvl] = s;
-    sqrtN_div8[lvl] = s8;
-    std::vector<int> c(s.size());
-    for (int i = 0; i < s.size(); ++i) {
-      const double v = s[i];
-      c[i] = static_cast<int>(std::llround(v * v));
-    }
-    counts[lvl].swap(c);
+  if (root_coeff.size() == 0) {
+    stop("inverse_lift_rcpp root_coeff must not be empty");
+  }
+  HaarScalingInfo scaling_info = checkedHaarScalings(
+      scalings, levels, active_count, "inverse_lift_rcpp");
+  if (static_cast<size_t>(root_coeff.size()) != scaling_info.root_count) {
+    stop("inverse_lift_rcpp root_coeff length must match coarsest active count");
   }
 
-  NumericVector current(1);
-  current[0] = root_coeff;
+  NumericVector current = clone(root_coeff);
 
   for (int lvl = levels - 1; lvl >= 0; --lvl) {
-    const std::vector<int>& cnt = counts[lvl];
+    const std::vector<int>& cnt = scaling_info.counts[lvl];
     const int numBlocks = static_cast<int>(cnt.size());
 
     size_t total = 0; for (int nv : cnt) total += static_cast<size_t>(nv);
@@ -339,12 +445,15 @@ NumericVector inverse_lift_rcpp(double root_coeff,
       const int nv = cnt[b];
       if (nv > 0) {
         if (idx_lp >= static_cast<int>(current.size())) stop("Inverse lowpass underflow.");
-        const double avg = current[idx_lp++] / sqrtN[lvl][b];
-        const double s8 = sqrtN_div8[lvl][b];
+        const double avg = current[idx_lp++] / scaling_info.sqrtN[lvl][b];
+        const double s8 = scaling_info.sqrtN_div8[lvl][b];
         for (int t = 0; t < nv; ++t) next_data[idx_out + t] = dvec[idx_det + t] / s8 + avg;
         idx_out += static_cast<size_t>(nv);
         idx_det += static_cast<size_t>(nv);
       }
+    }
+    if (idx_lp != static_cast<int>(current.size())) {
+      stop("Inverse lowpass length mismatch.");
     }
     current = next_data;
   }

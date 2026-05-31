@@ -84,6 +84,30 @@ test_that("awpt_operator_from_subject_conductances returns mean and operator", {
   expect_equal(as.matrix(out$operator), matrix(c(3, -3, -3, 3), nrow = 2, byrow = TRUE))
 })
 
+test_that("encode_awpt skips template roughness when spatial penalty is inactive", {
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+  tmpl <- make_awpt_template_manual(diag(2), roughness_diag = c(1, 2))
+  X <- matrix(c(1, 2, 3, 4), nrow = 2)
+  local_mocked_bindings(
+    template_roughness = function(...) {
+      stop("template_roughness should not be called")
+    },
+    .package = "fmrilatent"
+  )
+
+  latent <- encode_awpt(
+    X,
+    tmpl,
+    field_operator = make_awpt_operator(2L),
+    spatial_lambda = 0,
+    temporal_lambda = 0,
+    sparse_lambda = 0
+  )
+
+  expect_true(is_transport_latent(latent))
+})
+
 test_that("awpt_basis_template accepts an anatomical operator", {
   reduction <- make_cluster_reduction(make_awpt_mask(2), c(1L, 2L))
   L_field <- matrix(c(2, -1,
@@ -138,6 +162,30 @@ test_that("awpt_basis_template uses operator derived from subject conductances",
   expect_equal(as.matrix(template_roughness(tmpl)), as.matrix(derived$operator), tolerance = 1e-8)
 })
 
+test_that("awpt_basis_template symmetrizes roughness from random-walk operators", {
+  reduction <- make_cluster_reduction(make_awpt_mask(3), c(1L, 2L, 3L))
+  conductance <- matrix(
+    c(0, 1, 1,
+      1, 0, 0,
+      1, 0, 0),
+    nrow = 3L,
+    byrow = TRUE
+  )
+  op <- as.matrix(awpt_operator_from_conductance(conductance, normalize = "rw"))
+  expect_false(isTRUE(all.equal(op, t(op), tolerance = 1e-8)))
+
+  tmpl <- awpt_basis_template(
+    parcellation = reduction,
+    basis_spec = basis_awpt_wavelet(scales = 1),
+    loadings = diag(3),
+    anatomical_operator = op
+  )
+  roughness <- as.matrix(template_roughness(tmpl))
+
+  expect_equal(roughness, 0.5 * (op + t(op)), tolerance = 1e-8)
+  expect_true(isTRUE(all.equal(roughness, t(roughness), tolerance = 1e-8)))
+})
+
 test_that("AWPT template exposes decoder and roughness contracts", {
   tmpl <- make_awpt_template_manual(diag(2), roughness_diag = c(0.25, 1))
   dec <- basis_decoder(tmpl)
@@ -178,6 +226,8 @@ test_that("encode_awpt applies spatial roughness shrinkage", {
   expect_true(abs(coef_pen[[2]]) < abs(coef_free[[2]]))
   expect_true(abs(coef_pen[[1]]) >= abs(coef_pen[[2]]))
   expect_equal(latent_meta(fit_pen)$method, "AWPT")
+  expect_equal(latent_meta(fit_pen)$lambda, 0)
+  expect_equal(latent_meta(fit_pen)$spatial_lambda, 1)
 })
 
 test_that("encode_awpt temporal smoothing respects run boundaries", {

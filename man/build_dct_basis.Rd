@@ -2,7 +2,7 @@
 % Please edit documentation in R/dct_basis.R
 \name{build_dct_basis}
 \alias{build_dct_basis}
-\title{Build an orthonormal DCT-II basis matrix}
+\title{Build a DCT-II temporal basis matrix}
 \usage{
 build_dct_basis(n_time, k = n_time, norm = c("ortho", "none"))
 }
@@ -11,12 +11,15 @@ build_dct_basis(n_time, k = n_time, norm = c("ortho", "none"))
 
 \item{k}{Number of components (columns); must satisfy k <= n_time.}
 
-\item{norm}{Normalization: "ortho" (default) or "none".}
+\item{norm}{Normalization: `"ortho"` (default) gives orthonormal columns;
+`"none"` returns raw cosine columns with non-unit L2 norms.}
 }
 \value{
-Dense Matrix (n_time x k).
+Dense Matrix (`n_time x k`). Columns are orthonormal only when
+  `norm = "ortho"`; with `norm = "none"` they are unnormalized DCT-II
+  cosine columns.
 }
 \description{
-Build an orthonormal DCT-II basis matrix
+Build a DCT-II temporal basis matrix
 }
 \keyword{internal}

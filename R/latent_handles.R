@@ -1,3 +1,6 @@
+#' @include latent_utils.R
+NULL
+
 # Handle classes and registry for shared/implicit dictionaries
 
 #' @keywords internal
@@ -12,7 +15,52 @@ setClass(
   )
 )
 
-.known_basis_handle_kinds <- c("dct", "slepian_temporal", "bspline", "lifted", "explicit")
+.handle_kind_registries <- local({
+  basis <- new.env(parent = emptyenv())
+  loadings <- new.env(parent = emptyenv())
+  function(type = c("basis", "loadings")) {
+    type <- match.arg(type)
+    if (identical(type, "basis")) basis else loadings
+  }
+})
+
+.handle_kind_names <- function(type = c("basis", "loadings")) {
+  sort(ls(.handle_kind_registries(type)))
+}
+
+.handle_kind_materializer <- function(type = c("basis", "loadings"), kind) {
+  type <- match.arg(type)
+  env <- .handle_kind_registries(type)
+  if (!exists(kind, envir = env, inherits = FALSE)) {
+    .encoder_cli_abort(
+      paste0("Unknown ", type, " handle kind: ", kind),
+      class = "fmrilatent_error_value",
+      call = rlang::caller_env()
+    )
+  }
+  get(kind, envir = env, inherits = FALSE)
+}
+
+#' Register a lazy handle materializer
+#'
+#' @param kind Character scalar handle kind.
+#' @param materializer Function that accepts a handle and returns a matrix-like object.
+#' @param type Registry to update: \code{"basis"} or \code{"loadings"}.
+#' @return Invisibly, the registered kind.
+#' @export
+register_handle_kind <- function(kind, materializer, type = c("basis", "loadings")) {
+  type <- match.arg(type)
+  if (length(kind) != 1L || is.na(kind) || !nzchar(kind)) {
+    .encoder_cli_abort("kind must be a non-empty character scalar.",
+                       class = "fmrilatent_error_invalid_argument")
+  }
+  if (!is.function(materializer)) {
+    .encoder_cli_abort("materializer must be a function.",
+                       class = "fmrilatent_error_invalid_argument")
+  }
+  assign(kind, materializer, envir = .handle_kind_registries(type))
+  invisible(kind)
+}
 
 .validate_handle_dim <- function(dim, class_name) {
   if (length(dim) != 2L) {
@@ -37,10 +85,11 @@ setValidity("BasisHandle", function(object) {
   }
   dim_valid <- .validate_handle_dim(object@dim, "BasisHandle")
   if (!isTRUE(dim_valid)) return(dim_valid)
-  if (length(object@kind) != 1L || is.na(object@kind) || !(object@kind %in% .known_basis_handle_kinds)) {
+  basis_kinds <- .handle_kind_names("basis")
+  if (length(object@kind) != 1L || is.na(object@kind) || !(object@kind %in% basis_kinds)) {
     return(paste0(
-      "BasisHandle@kind must be one of: ",
-      paste(.known_basis_handle_kinds, collapse = ", "),
+      "BasisHandle@kind must be a registered basis handle kind. Registered kinds: ",
+      paste(basis_kinds, collapse = ", "),
       "."
     ))
   }
@@ -69,18 +118,17 @@ setClass(
   )
 )
 
-.known_loadings_handle_kinds <- c("lifted", "slepian_spatial", "explicit")
-
 setValidity("LoadingsHandle", function(object) {
   if (length(object@id) != 1L || is.na(object@id) || !nzchar(object@id)) {
     return("LoadingsHandle@id must be a non-empty character scalar.")
   }
   dim_valid <- .validate_handle_dim(object@dim, "LoadingsHandle")
   if (!isTRUE(dim_valid)) return(dim_valid)
-  if (length(object@kind) != 1L || is.na(object@kind) || !(object@kind %in% .known_loadings_handle_kinds)) {
+  loadings_kinds <- .handle_kind_names("loadings")
+  if (length(object@kind) != 1L || is.na(object@kind) || !(object@kind %in% loadings_kinds)) {
     return(paste0(
-      "LoadingsHandle@kind must be one of: ",
-      paste(.known_loadings_handle_kinds, collapse = ", "),
+      "LoadingsHandle@kind must be a registered loadings handle kind. Registered kinds: ",
+      paste(loadings_kinds, collapse = ", "),
       "."
     ))
   }
@@ -108,9 +156,15 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
   basis_env <- NULL
   loadings_env <- NULL
 
+  new_registry_env <- function() {
+    env <- new.env(parent = emptyenv())
+    attr(env, "fmrilatent.lru_order") <- character(0)
+    env
+  }
+
   init <- function() {
-    basis_env <<- new.env(parent = emptyenv())
-    loadings_env <<- new.env(parent = emptyenv())
+    basis_env <<- new_registry_env()
+    loadings_env <<- new_registry_env()
     invisible(TRUE)
   }
 
@@ -123,40 +177,26 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
   }
 })
 
-# Access-order tracker for LRU eviction. Kept separate from the storage
-# environments so `.latent_get_registry_env()` keeps returning a plain
-# environment (relied on by the registry stats/list/clear helpers). Each per-type
-# vector lists ids least-recently-used first, most-recently-used last.
-.fmrilatent_cache_order <- local({
-  basis_order    <- character(0)
-  loadings_order <- character(0)
+.latent_registry_order <- function(env) {
+  attr(env, "fmrilatent.lru_order", exact = TRUE) %||% character(0)
+}
 
-  touch <- function(type, id) {
-    if (type == "basis") {
-      basis_order    <<- c(setdiff(basis_order, id), id)
-    } else {
-      loadings_order <<- c(setdiff(loadings_order, id), id)
-    }
-    invisible(NULL)
-  }
-  drop <- function(type, ids) {
-    if (type == "basis") {
-      basis_order    <<- setdiff(basis_order, ids)
-    } else {
-      loadings_order <<- setdiff(loadings_order, ids)
-    }
-    invisible(NULL)
-  }
-  reset <- function(type = c("all", "basis", "loadings")) {
-    type <- match.arg(type)
-    if (type %in% c("all", "basis"))    basis_order    <<- character(0)
-    if (type %in% c("all", "loadings")) loadings_order <<- character(0)
-    invisible(NULL)
-  }
-  peek <- function(type) if (type == "basis") basis_order else loadings_order
+.latent_registry_set_order <- function(env, order) {
+  attr(env, "fmrilatent.lru_order") <- as.character(order)
+  invisible(NULL)
+}
 
-  list(touch = touch, drop = drop, reset = reset, peek = peek)
-})
+.latent_registry_touch <- function(env, id) {
+  .latent_registry_set_order(env, c(setdiff(.latent_registry_order(env), id), id))
+}
+
+.latent_registry_drop <- function(env, ids) {
+  .latent_registry_set_order(env, setdiff(.latent_registry_order(env), ids))
+}
+
+.latent_registry_reset <- function(env) {
+  .latent_registry_set_order(env, character(0))
+}
 
 .latent_registry_enabled <- function() {
   isTRUE(getOption("fmrilatent.registry.enabled", TRUE))
@@ -175,21 +215,16 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
 }
 
 # Evict least-recently-used entries from a registry env until it fits the cap.
-# Reconciles the order tracker against the env's actual contents first so the
-# two never drift (any untracked id is treated as least-recently-used).
 .latent_enforce_cap <- function(type) {
   cap <- .latent_registry_max_entries()
   if (is.infinite(cap)) return(invisible(NULL))
   env     <- .latent_get_registry_env(type)
-  present <- ls(env, all.names = TRUE)
-  order   <- .fmrilatent_cache_order$peek(type)
-  order   <- order[order %in% present]
-  order   <- c(setdiff(present, order), order)
+  order   <- .latent_registry_order(env)
   n_over  <- length(order) - cap
   if (n_over > 0) {
     evict <- order[seq_len(n_over)]
     rm(list = evict, envir = env)
-    .fmrilatent_cache_order$drop(type, evict)
+    .latent_registry_drop(env, evict)
   }
   invisible(NULL)
 }
@@ -228,7 +263,7 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
           class = "fmrilatent_error_invalid_id", call = rlang::caller_env())
       }
       # Same id, same fingerprint: reuse the cached entry and mark it as fresh.
-      .fmrilatent_cache_order$touch(type, id)
+      .latent_registry_touch(env, id)
       return(invisible(FALSE))
     }
     .encoder_cli_warn(
@@ -241,7 +276,7 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
     attr(value, "fmrilatent.handle_fingerprint") <- fingerprint
   }
   assign(id, value, envir = env)
-  .fmrilatent_cache_order$touch(type, id)
+  .latent_registry_touch(env, id)
   .latent_enforce_cap(type)
   invisible(TRUE)
 }
@@ -263,7 +298,7 @@ setClassUnion("MatrixOrLoadingsHandle", c("Matrix", "matrix", "LoadingsHandle"))
                " registry does not match the requested handle fingerprint."),
         class = "fmrilatent_error_invalid_id", call = rlang::caller_env())
     }
-    .fmrilatent_cache_order$touch(type, id)
+    .latent_registry_touch(env, id)
     value
   } else {
     NULL
@@ -316,14 +351,14 @@ fmrilatent_registry_clear <- function(type = c("all", "basis", "loadings")) {
     env <- .latent_get_registry_env("basis")
     removed <- removed + length(ls(env))
     rm(list = ls(env), envir = env)
-    .fmrilatent_cache_order$reset("basis")
+    .latent_registry_reset(env)
   }
 
   if (type %in% c("all", "loadings")) {
     env <- .latent_get_registry_env("loadings")
     removed <- removed + length(ls(env))
     rm(list = ls(env), envir = env)
-    .fmrilatent_cache_order$reset("loadings")
+    .latent_registry_reset(env)
   }
 
   invisible(removed)
@@ -451,102 +486,6 @@ fmrilatent_registry_disable <- function() {
 #' @export
 fmrilatent_registry_enabled <- function() {
   .latent_registry_enabled()
-}
-
-# Utility: safe NULL coalesce
-`%||%` <- function(x, y) if (is.null(x)) y else x
-
-#' Convert mask to array
-#'
-#' Safely converts a \code{LogicalNeuroVol} or array-like mask to a plain
-#' logical array, with informative error messages on failure.
-#'
-#' @param mask A \code{LogicalNeuroVol} or logical array.
-#' @param location Character string used in error messages to identify the caller.
-#' @return A logical array.
-#' @export
-mask_to_array <- function(mask, location = "unknown function") {
-  result <- tryCatch(
-    as.array(mask),
-    error = function(e) {
-      .encoder_cli_abort(
-        paste0(sprintf("In %s: mask must be array-like or LogicalNeuroVol. ", location),
-               "Underlying error: ", conditionMessage(e)),
-        class = "fmrilatent_error_invalid_mask", call = rlang::caller_env()
-      )
-    }
-  )
-  if (is.null(result)) {
-    .encoder_cli_abort(
-      paste0(sprintf("In %s: mask must be array-like or LogicalNeuroVol ", location),
-             "(conversion returned NULL)."),
-      class = "fmrilatent_error_invalid_mask", call = rlang::caller_env()
-    )
-  }
-  result
-}
-
-# Internal alias so existing callers don't break
-.mask_to_array <- function(mask, location = "unknown function") {
-  mask_to_array(mask, location)
-}
-
-.normalize_roi_mask <- function(mask_arr, roi_mask = NULL, location = "unknown function") {
-  if (is.null(roi_mask)) {
-    return(NULL)
-  }
-
-  roi_arr <- .mask_to_array(roi_mask, location)
-  if (!identical(dim(roi_arr), dim(mask_arr))) {
-    .encoder_cli_abort(
-      paste0("roi_mask dimensions (", paste(dim(roi_arr), collapse = " x "),
-             ") do not match mask dimensions (", paste(dim(mask_arr), collapse = " x "), ")."),
-      class = "fmrilatent_error_dim", call = rlang::caller_env()
-    )
-  }
-
-  roi_arr <- array(as.logical(roi_arr), dim = dim(mask_arr))
-  if (any(roi_arr & !as.logical(mask_arr))) {
-    .encoder_cli_abort("roi_mask contains voxels outside the object mask.",
-                       class = "fmrilatent_error_value", call = rlang::caller_env())
-  }
-
-  roi_arr
-}
-
-.space_with_time_from_mask <- function(mask, n_time, location = "unknown function") {
-  mask_arr <- .mask_to_array(mask, location)
-  if (inherits(mask, "LogicalNeuroVol")) {
-    mask_space <- neuroim2::space(mask)
-    return(neuroim2::NeuroSpace(
-      c(dim(mask_arr), as.integer(n_time)),
-      spacing = neuroim2::spacing(mask_space),
-      origin = neuroim2::origin(mask_space)
-    ))
-  }
-
-  neuroim2::NeuroSpace(c(dim(mask_arr), as.integer(n_time)))
-}
-
-.assert_template_mask_match <- function(mask, template_mask, location = "unknown function") {
-  supplied_mask_arr <- .mask_to_array(mask, location)
-  template_mask_arr <- as.array(template_mask)
-
-  if (!identical(supplied_mask_arr, template_mask_arr)) {
-    .encoder_cli_abort(
-      "mask does not match the template mask. Shared templates require identical voxel support and ordering.",
-      class = "fmrilatent_error_dim", call = rlang::caller_env()
-    )
-  }
-
-  if (inherits(mask, "LogicalNeuroVol")) {
-    if (!isTRUE(all.equal(neuroim2::space(mask), neuroim2::space(template_mask)))) {
-      .encoder_cli_abort("mask space does not match the template mask space.",
-                         class = "fmrilatent_error_dim", call = rlang::caller_env())
-    }
-  }
-
-  invisible(template_mask_arr)
 }
 
 # Dimension helpers that avoid materializing handles

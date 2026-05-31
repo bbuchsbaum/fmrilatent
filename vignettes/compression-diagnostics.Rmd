@@ -16,7 +16,9 @@ params:
   preset: homage
 
 vignette: |
-  %\VignetteIndexEntry{Compression Diagnostics} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Compression Diagnostics}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}

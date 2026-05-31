@@ -391,11 +391,9 @@ test_that("latent_dct_heatwavelet returns LatentNeuroVec with correct structure"
 
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 10L
-  k_time <- 4L
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask,
     label = "test-dct-hw"
   )
@@ -417,11 +415,9 @@ test_that("latent_dct_heatwavelet creates correct metadata", {
 
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 8L
-  k_time <- 3L
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask
   )
 
@@ -440,12 +436,10 @@ test_that("latent_dct_heatwavelet works with explicit cluster_map", {
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
-  k_time <- 2L
   cluster_map <- rep(1:2, each = n_vox / 2)
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask,
     cluster_map = cluster_map
   )
@@ -461,13 +455,11 @@ test_that("latent_dct_heatwavelet works with custom reduction", {
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
-  k_time <- 2L
   cluster_map <- rep(1:2, each = n_vox / 2)
   reduction <- make_cluster_reduction(mask, cluster_map)
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask,
     reduction = reduction
   )
@@ -480,12 +472,10 @@ test_that("latent_dct_heatwavelet respects custom hw_basis_spec", {
 
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 6L
-  k_time <- 2L
   custom_spec <- basis_heat_wavelet(scales = c(1, 2), order = 10, threshold = 1e-5)
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask,
     hw_basis_spec = custom_spec
   )
@@ -503,12 +493,10 @@ test_that("latent_dct_heatwavelet accepts valid offset", {
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
-  k_time <- 2L
   offset <- rnorm(n_vox)
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask,
     offset = offset
   )
@@ -524,18 +512,41 @@ test_that("latent_dct_heatwavelet rejects invalid offset length", {
   mask <- make_test_mask(c(2, 2, 2))
   n_vox <- sum(mask)
   n_time <- 6L
-  k_time <- 2L
   bad_offset <- rnorm(n_vox + 1)
 
   # This error should occur before the space/mask bug is hit
   expect_error(
     latent_dct_heatwavelet(
       n_time = n_time,
-      k_time = k_time,
       mask = mask,
       offset = bad_offset
     ),
-    regexp = "offset"
+    regexp = "offset",
+    class = "fmrilatent_error_dim"
+  )
+})
+
+test_that("latent_dct_heatwavelet validates n_time before building handles", {
+  mask <- make_test_mask(c(2, 2, 1))
+
+  expect_error(
+    latent_dct_heatwavelet(n_time = 0L, mask = mask),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    latent_dct_heatwavelet(n_time = NA_integer_, mask = mask),
+    class = "fmrilatent_error_invalid_count"
+  )
+})
+
+test_that("latent_dct_heatwavelet warns for ignored legacy k_time", {
+  skip_if_not_installed("rgsp")
+
+  mask <- make_test_mask(c(2, 2, 2))
+
+  expect_warning(
+    latent_dct_heatwavelet(n_time = 6L, k_time = 2L, mask = mask),
+    class = "fmrilatent_warning_deprecated"
   )
 })
 
@@ -544,11 +555,9 @@ test_that("latent_dct_heatwavelet uses explicit basis matrix", {
 
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 6L
-  k_time <- 2L
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask
   )
 
@@ -563,11 +572,9 @@ test_that("latent_dct_heatwavelet uses LoadingsHandle for spatial loadings", {
 
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 6L
-  k_time <- 2L
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask
   )
 
@@ -579,20 +586,22 @@ test_that("latent_dct_heatwavelet works with LogicalNeuroVol mask", {
   skip_if_not_installed("rgsp")
 
   mask_arr <- make_test_mask(c(2, 2, 2))
+  spacing <- c(2, 3, 4)
+  origin <- c(10, 20, 30)
   mask_vol <- neuroim2::LogicalNeuroVol(
     mask_arr,
-    neuroim2::NeuroSpace(dim(mask_arr))
+    neuroim2::NeuroSpace(dim(mask_arr), spacing = spacing, origin = origin)
   )
   n_time <- 6L
-  k_time <- 2L
 
   lv <- latent_dct_heatwavelet(
     n_time = n_time,
-    k_time = k_time,
     mask = mask_vol
   )
 
   expect_s4_class(lv, "LatentNeuroVec")
+  expect_equal(neuroim2::spacing(lv@space), spacing)
+  expect_equal(neuroim2::origin(lv@space), origin)
 })
 
 # ---------------------------------------------------------------------------
@@ -605,12 +614,10 @@ test_that("latent_dct_heatwavelet fails without rgsp package", {
 
   mask <- make_test_mask(c(2, 2, 2))
   n_time <- 6L
-  k_time <- 2L
 
   expect_error(
     latent_dct_heatwavelet(
       n_time = n_time,
-      k_time = k_time,
       mask = mask
     ),
     regexp = "rgsp"

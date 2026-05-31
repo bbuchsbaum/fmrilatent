@@ -2,7 +2,7 @@
 % Please edit documentation in R/encode.R
 \name{encode_spec}
 \alias{encode_spec}
-\title{Dispatch encoding based on spec type}
+\title{Dispatch standard encoding based on spec type}
 \usage{
 encode_spec(x, spec, ...)
 }
@@ -17,5 +17,14 @@ encode_spec(x, spec, ...)
 Encoded representation.
 }
 \description{
-Dispatch encoding based on spec type
+Dispatch standard encoding based on spec type
+}
+\details{
+`encode_spec()` is the S3 dispatch seam for standard `encode()` specs:
+temporal, spatial, hierarchical, parcel, and spatiotemporal specs. AWPT's
+`basis_awpt_wavelet()` object is a template-construction spec, not a complete
+subject-encoding spec, because AWPT fitting additionally needs a shared
+template/basis asset and subject field or observation operators. AWPT
+therefore uses the parallel transport API [encode_awpt()] /
+[encode_operator()].
 }

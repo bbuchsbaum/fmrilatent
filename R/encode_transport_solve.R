@@ -217,16 +217,8 @@ NULL
     if (!is.finite(norm_w) || norm_w <= 0) {
       return(1)
     }
+    lambda_est <- norm_w
     V <- W / norm_w
-    AV <- .transport_apply_quadratic_system(
-      V,
-      decoder_map = decoder_map,
-      spatial_lambda = spatial_lambda,
-      spatial_penalty = Q,
-      temporal_lambda = temporal_lambda,
-      Lt = Lt
-    )
-    lambda_est <- .frobenius_inner(V, AV)
   }
 
   if (!is.finite(lambda_est) || lambda_est <= 0) 1 else lambda_est
@@ -334,14 +326,17 @@ NULL
   gram <- crossprod(D_mat)
   Q <- .normalize_penalty_matrix(spatial_penalty, k, context = "spatial_penalty")
   A <- gram + spatial_lambda * Q
+  objective_penalty <- spatial_lambda * Q
   Lt <- if (temporal_lambda > 0) {
     .block_temporal_penalty(n_time, temporal_order = temporal_order, run_info = run_info)
   } else {
-    matrix(0, nrow = n_time, ncol = n_time)
+    NULL
   }
   rhs <- X %*% D_mat
-  lipschitz <- .largest_symmetric_eigenvalue(A) +
-    temporal_lambda * .largest_symmetric_eigenvalue(Lt)
+  lipschitz <- .largest_symmetric_eigenvalue(A)
+  if (temporal_lambda > 0) {
+    lipschitz <- lipschitz + temporal_lambda * .largest_symmetric_eigenvalue(Lt)
+  }
   if (!is.finite(lipschitz) || lipschitz <= 0) {
     lipschitz <- 1
   }
@@ -355,7 +350,7 @@ NULL
     grad
   }
   obj_fn <- function(Z) {
-    .awpt_objective(Z, X, D_mat, A, Lt, temporal_lambda,
+    .awpt_objective(Z, X, D_mat, objective_penalty, Lt, temporal_lambda,
                     sparse_lambda, sparse_mode = sparse_mode)
   }
   prox_fn <- function(W, step) {

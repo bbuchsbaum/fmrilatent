@@ -38,5 +38,21 @@ test_that("slepian spatiotemporal latent reconstructs simulated data", {
   reco <- predict(lv)
   # expected from stored factors
   expected <- lv$coeff$B_t %*% lv$coeff$core %*% t(lv$coeff$L_s)
-  expect_equal(reco, expected, tolerance = 1e-8)
+  expect_equal(reco, as.matrix(expected), tolerance = 1e-8)
+})
+
+test_that("slepian spatiotemporal latent rejects non-matrix time input with a classed error", {
+  mask <- array(TRUE, dim = c(2, 2, 1))
+
+  expect_error(
+    slepian_spatiotemporal_latent(
+      X = c(1, 2, 3),
+      mask = mask,
+      tr = 2,
+      k_time = 1L,
+      k_space = 1L
+    ),
+    "time in rows",
+    class = "fmrilatent_error_invalid_argument"
+  )
 })

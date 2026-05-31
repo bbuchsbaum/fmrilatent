@@ -6,7 +6,7 @@
 \usage{
 diffusion_wavelet_loadings_handle(
   reduction,
-  basis_spec,
+  basis_spec = basis_diffusion_wavelet(),
   data = NULL,
   k_neighbors = 6L,
   id = NULL,
@@ -16,9 +16,10 @@ diffusion_wavelet_loadings_handle(
 \arguments{
 \item{reduction}{Graph/cluster reduction used by `lift()`.}
 
-\item{basis_spec}{Basis specification, e.g., from `basis_diffusion_wavelet()`.}
+\item{basis_spec}{Basis specification; defaults to `basis_diffusion_wavelet()`.}
 
-\item{data}{Optional data passed through to `lift()` (often NULL).}
+\item{data}{Ignored by diffusion-wavelet lifting; accepted only to keep
+the lifted-handle constructor signature aligned across families.}
 
 \item{k_neighbors}{k for graph building when lifting.}
 
@@ -32,7 +33,7 @@ reduction.}
 A \code{LoadingsHandle}.
 }
 \description{
-Wraps `lift(reduction, basis_spec, data)` so multiple `LatentNeuroVec`
+Wraps a diffusion-wavelet `lift()` call so multiple `LatentNeuroVec`
 instances can share the same spatial dictionary without embedding the
 full matrix in each object.
 }

@@ -83,6 +83,7 @@ NumericMatrix cdf53_time_lift(NumericMatrix X, int levels, bool forward) {
   NumericMatrix out = clone(X);
   int nrow = out.nrow();
   int ncol = out.ncol();
+  if (levels < 0) stop("levels must be non-negative");
   if (levels <= 0) return out;
   std::vector<double> buf(nrow);
   for (int j = 0; j < ncol; ++j) {
@@ -105,6 +106,7 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
                                     bool forward) {
   if (dims.size() != 3) stop("dims must have length 3");
   if (coords.ncol() != 3) stop("coords must have exactly 3 columns");
+  if (levels <= 0) stop("active_pencil_wavelet levels must be positive");
   int nx = dims[0], ny = dims[1], nz = dims[2];
   if (nx <= 0 || ny <= 0 || nz <= 0) stop("dims must contain positive values");
   size_t total_vol_size = static_cast<size_t>(nx) *
@@ -115,6 +117,7 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
   }
   int total_vol = static_cast<int>(total_vol_size);
   int n_vox = coords.nrow();
+  if (n_vox < 1) stop("coords must contain at least one row");
   if (data_voxels.size() != n_vox) stop("Data size mismatch");
   for (int i = 0; i < n_vox; ++i) {
     int x = coords(i, 0) - 1;
@@ -130,7 +133,11 @@ NumericVector active_pencil_wavelet(NumericVector data_voxels,
     int x = coords(i, 0) - 1;
     int y = coords(i, 1) - 1;
     int z = coords(i, 2) - 1;
-    grid[flat_idx(x, y, z, nx, ny)] = i;
+    const int flat = flat_idx(x, y, z, nx, ny);
+    if (grid[flat] != -1) {
+      stop("coords must be unique; duplicate voxel at row %d", i + 1);
+    }
+    grid[flat] = i;
   }
 
   std::vector<double> buffer = as<std::vector<double>>(data_voxels);

@@ -1,27 +1,49 @@
 # Tests for benchmark_roundtrip.R
 
+test_that("benchmark time conversion reports milliseconds", {
+  expect_equal(fmrilatent:::.bench_time_to_ms(0.002), 2)
+})
+
 test_that("benchmark_roundtrip requires bench package", {
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+  local_mocked_bindings(
+    .encoder_has_namespace = function(package) FALSE,
+    .package = "fmrilatent"
+  )
+
+  expect_error(
+    benchmark_roundtrip(
+      mask_dims = c(4, 4, 2),
+      n_time = 3L,
+      methods = "slepian_space",
+      iterations = 1L
+    ),
+    "bench package required",
+    class = "fmrilatent_error_missing_dependency"
+  )
+})
+
+test_that("benchmark_roundtrip runs when bench package is available", {
   skip_if_not_installed("bench")
-  # If we get here, bench is installed, so just verify we can call the function
-  # with minimal settings
-  result <- benchmark_roundtrip(
+  result <- without_dense_basis_warning(benchmark_roundtrip(
     mask_dims = c(4, 4, 2),
     n_time = 3L,
     methods = "slepian_space",
     iterations = 1L
-  )
+  ))
   expect_s3_class(result, "data.frame")
 })
 
 test_that("benchmark_roundtrip returns correct structure for slepian_space", {
   skip_if_not_installed("bench")
 
-  result <- benchmark_roundtrip(
+  result <- without_dense_basis_warning(benchmark_roundtrip(
     mask_dims = c(4, 4, 2),
     n_time = 3L,
     methods = "slepian_space",
     iterations = 1L
-  )
+  ))
 
   # Check structure
 
@@ -88,12 +110,12 @@ test_that("benchmark_roundtrip works with bspline_hrbf_st method", {
 test_that("benchmark_roundtrip handles multiple methods", {
   skip_if_not_installed("bench")
 
-  result <- benchmark_roundtrip(
+  result <- without_dense_basis_warning(benchmark_roundtrip(
     mask_dims = c(4, 4, 2),
     n_time = 5L,
     methods = c("slepian_space", "hrbf"),
     iterations = 1L
-  )
+  ))
 
 
   expect_s3_class(result, "data.frame")
@@ -111,7 +133,8 @@ test_that("benchmark_roundtrip errors on unknown method", {
       methods = "unknown_method",
       iterations = 1L
     ),
-    "Unknown method"
+    "Unknown method",
+    class = "fmrilatent_error_invalid_argument"
   )
 })
 
@@ -119,12 +142,12 @@ test_that("plot_benchmark_roundtrip returns ggplot when ggplot2 available", {
   skip_if_not_installed("bench")
   skip_if_not_installed("ggplot2")
 
-  result <- benchmark_roundtrip(
+  result <- without_dense_basis_warning(benchmark_roundtrip(
     mask_dims = c(4, 4, 2),
     n_time = 3L,
     methods = "slepian_space",
     iterations = 1L
-  )
+  ))
 
   p <- plot_benchmark_roundtrip(result)
   expect_s3_class(p, "ggplot")
@@ -159,12 +182,12 @@ test_that("plot_benchmark_roundtrip handles multiple methods", {
   skip_if_not_installed("bench")
   skip_if_not_installed("ggplot2")
 
-  result <- benchmark_roundtrip(
+  result <- without_dense_basis_warning(benchmark_roundtrip(
     mask_dims = c(4, 4, 2),
     n_time = 5L,
     methods = c("slepian_space", "hrbf"),
     iterations = 1L
-  )
+  ))
 
   p <- plot_benchmark_roundtrip(result)
   expect_s3_class(p, "ggplot")

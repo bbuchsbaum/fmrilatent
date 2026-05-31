@@ -7,10 +7,11 @@
 basis_diffusion_wavelet(
   target_rank = 2000L,
   oversample = 20L,
-  threshold = 1e-05,
+  threshold = NULL,
   max_scales = 1L,
   epsilon = NULL,
-  seed = 1L
+  seed = 1L,
+  sparsify_eps = NULL
 )
 }
 \arguments{
@@ -18,13 +19,19 @@ basis_diffusion_wavelet(
 
 \item{oversample}{Oversampling for randomized range finder.}
 
-\item{threshold}{Absolute value threshold to enforce sparsity in compressed ops.}
+\item{threshold}{Deprecated alias for `sparsify_eps`.}
 
 \item{max_scales}{Maximum diffusion scales to compute.}
 
 \item{epsilon}{Optional precision (unused in capped-rank path; kept for API parity).}
 
 \item{seed}{Optional integer seed for deterministic randomized range finding.}
+
+\item{sparsify_eps}{Absolute value threshold to enforce sparsity in
+compressed operators. Stored as `threshold` for compatibility.}
+}
+\value{
+A `spec_diffusion_wavelet` basis specification descriptor.
 }
 \description{
 Diffusion wavelet basis specification

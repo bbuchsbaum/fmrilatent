@@ -54,7 +54,8 @@ test_that("LatentNeuroVec constructor accepts base matrices", {
     basis = basis,
     loadings = loadings,
     space = space,
-    mask = mask_vol
+    mask = mask_vol,
+    expect_dense = TRUE
   )
 
   expect_s4_class(lvec, "LatentNeuroVec")
@@ -179,7 +180,8 @@ test_that("LatentNeuroVec accepts NULL or empty offset", {
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
     mask = mask_vol,
-    offset = NULL
+    offset = NULL,
+    expect_dense = TRUE
   )
   expect_length(offset(lvec1), 0)
 
@@ -188,9 +190,27 @@ test_that("LatentNeuroVec accepts NULL or empty offset", {
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
     mask = mask_vol,
-    offset = numeric(0)
+    offset = numeric(0),
+    expect_dense = TRUE
   )
   expect_length(offset(lvec2), 0)
+})
+
+test_that("offset accessor accepts extension arguments", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
+
+  lvec <- LatentNeuroVec(
+    basis = matrix(rnorm(6), 3, 2),
+    loadings = matrix(rnorm(8), 4, 2),
+    space = space,
+    mask = mask_vol,
+    offset = 1:4,
+    expect_dense = TRUE
+  )
+
+  expect_equal(offset(lvec, unused = TRUE), 1:4)
 })
 
 test_that("LatentNeuroVec constructor validates meta is a list", {
@@ -204,7 +224,8 @@ test_that("LatentNeuroVec constructor validates meta is a list", {
       loadings = matrix(1, 4, 2),
       space = space,
       mask = mask_vol,
-      meta = "not a list"
+      meta = "not a list",
+      expect_dense = TRUE
     ),
     "'meta' must be a list"
   )
@@ -272,7 +293,8 @@ test_that("LatentNeuroVec constructor can create from logical array mask", {
     basis = matrix(rnorm(6), 3, 2),
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
-    mask = mask_arr
+    mask = mask_arr,
+    expect_dense = TRUE
   )
 
   expect_s4_class(lvec, "LatentNeuroVec")
@@ -794,6 +816,38 @@ test_that("concat concatenates compatible LatentNeuroVec objects", {
   expect_equal(dim(result)[4], 3 + 4)  # Combined time points
 })
 
+test_that("concat compares identical loadings handles without materializing them", {
+  kind <- "test_no_materialize_loadings_kind"
+  register_handle_kind(kind, function(handle) {
+    stop("loadings should not be materialized for concat compatibility", call. = FALSE)
+  }, type = "loadings")
+
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  loadings_handle <- new("LoadingsHandle",
+    id = "concat-no-materialize-loadings",
+    dim = as.integer(c(sum(mask_arr), 2L)),
+    kind = kind,
+    spec = list(token = "same"),
+    label = "no-materialize"
+  )
+  make_lvec <- function(values) {
+    LatentNeuroVec(
+      basis = Matrix::Matrix(matrix(values, nrow = 2L, ncol = 2L), sparse = FALSE),
+      loadings = loadings_handle,
+      space = neuroim2::NeuroSpace(c(2, 2, 1, 2)),
+      mask = mask_vol,
+      expect_dense = TRUE
+    )
+  }
+
+  combined <- concat(make_lvec(1:4), make_lvec(5:8))
+
+  expect_s4_class(combined, "LatentNeuroVec")
+  expect_true(is(combined@loadings, "LoadingsHandle"))
+  expect_identical(combined@loadings@id, loadings_handle@id)
+})
+
 test_that("concat falls back to NeuroVecSeq for incompatible masks", {
   mask_arr1 <- array(TRUE, dim = c(2, 2, 1))
   mask_arr2 <- array(FALSE, dim = c(2, 2, 1))
@@ -830,6 +884,34 @@ test_that("concat falls back to NeuroVecSeq for different loadings", {
 
   lvec1 <- LatentNeuroVec(basis = basis, loadings = loadings1, space = space, mask = mask_vol)
   lvec2 <- LatentNeuroVec(basis = basis, loadings = loadings2, space = space, mask = mask_vol)
+
+  result <- concat(lvec1, lvec2)
+
+  expect_s4_class(result, "NeuroVecSeq")
+})
+
+test_that("concat falls back to NeuroVecSeq for different offsets", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+
+  set.seed(1)
+  basis1 <- Matrix::Matrix(matrix(rnorm(6), 3, 2), sparse = FALSE)
+  basis2 <- Matrix::Matrix(matrix(rnorm(8), 4, 2), sparse = FALSE)
+  loadings <- Matrix::Matrix(matrix(rnorm(8), 4, 2), sparse = FALSE)
+  offset1 <- c(1, 2, 3, 4)
+  offset2 <- c(4, 3, 2, 1)
+
+  space1 <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
+  space2 <- neuroim2::NeuroSpace(c(2, 2, 1, 4))
+
+  lvec1 <- LatentNeuroVec(
+    basis = basis1, loadings = loadings, space = space1, mask = mask_vol,
+    offset = offset1
+  )
+  lvec2 <- LatentNeuroVec(
+    basis = basis2, loadings = loadings, space = space2, mask = mask_vol,
+    offset = offset2
+  )
 
   result <- concat(lvec1, lvec2)
 
@@ -1083,7 +1165,8 @@ test_that("label slot is accessible", {
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
     mask = mask_vol,
-    label = "my_label"
+    label = "my_label",
+    expect_dense = TRUE
   )
 
   expect_equal(lvec@label, "my_label")
@@ -1101,7 +1184,8 @@ test_that("meta slot stores metadata", {
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
     mask = mask_vol,
-    meta = meta_data
+    meta = meta_data,
+    expect_dense = TRUE
   )
 
   expect_equal(lvec@meta$method, "pca")
@@ -1125,7 +1209,8 @@ test_that("sparse basis matrices are converted appropriately", {
     basis = basis_dense,
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
-    mask = mask_vol
+    mask = mask_vol,
+    expect_dense = TRUE
   )
 
   # Should be converted to a Matrix object
@@ -1378,6 +1463,19 @@ test_that("series with numeric i,j,k dispatches correctly", {
   expect_true(length(s) > 0)
 })
 
+test_that("series coordinate indexing rejects missing and fractional coordinates", {
+  lvec <- create_test_lvec(nx = 3, ny = 3, nz = 2, nt = 5)
+
+  expect_error(
+    series(lvec, NA_real_, 1, 1),
+    class = "fmrilatent_error_invalid_index"
+  )
+  expect_error(
+    series(lvec, 1.5, 1, 1),
+    class = "fmrilatent_error_invalid_index"
+  )
+})
+
 test_that("series rejects partial coordinate indexing", {
   lvec <- create_test_lvec(nx = 3, ny = 3, nz = 2, nt = 5)
 
@@ -1470,6 +1568,34 @@ test_that("[ returns zeros for voxels outside mask", {
 
   # Inside mask should be non-zero
   expect_equal(lvec[2, 2, 1, 1], 5, tolerance = 1e-10)
+})
+
+test_that("[ scatters duplicate and out-of-mask spatial requests correctly", {
+  mask_arr <- array(FALSE, dim = c(3, 2, 1))
+  mask_arr[c(1, 3), 1, 1] <- TRUE
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 2, 1)))
+  space <- neuroim2::NeuroSpace(c(3, 2, 1, 2))
+  basis <- Matrix::Matrix(diag(2), sparse = FALSE)
+  loadings <- Matrix::Matrix(
+    matrix(c(10, 20,
+             30, 40), nrow = 2L, byrow = TRUE),
+    sparse = FALSE
+  )
+  lvec <- LatentNeuroVec(
+    basis = basis,
+    loadings = loadings,
+    space = space,
+    mask = mask_vol
+  )
+
+  result <- lvec[c(3, 2, 1, 3), 1, 1, c(1, 2), drop = FALSE]
+  expected <- array(
+    c(30, 0, 10, 30,
+      40, 0, 20, 40),
+    dim = c(4, 1, 1, 2)
+  )
+
+  expect_equal(result, expected, tolerance = 1e-10)
 })
 
 # ============================================================================
@@ -1642,7 +1768,8 @@ test_that("LatentNeuroVec accepts correct offset length", {
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
     mask = mask_vol,
-    offset = c(1, 2, 3, 4)  # Correct length = 4
+    offset = c(1, 2, 3, 4),  # Correct length = 4
+    expect_dense = TRUE
   )
 
   expect_equal(length(offset(lvec)), 4)
@@ -1688,7 +1815,8 @@ test_that("show method displays sparsity info", {
     basis = matrix(rnorm(6), 3, 2),
     loadings = matrix(rnorm(16), 8, 2),
     space = space,
-    mask = mask_vol
+    mask = mask_vol,
+    expect_dense = TRUE
   )
 
   output <- capture.output(show(lvec))
@@ -1837,27 +1965,29 @@ test_that("validate_same_dims with dims_to_compare subset", {
 
 # --- Dense base matrix conversion messages (lines 199-218) ---
 
-test_that("constructor emits message for dense base matrix basis", {
+test_that("constructor emits warning for dense base matrix basis", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
   space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
 
-  # Dense basis (100% non-zero) as base R matrix triggers the message path
+  # Dense basis (100% non-zero) as base R matrix triggers the warning path
   dense_basis <- matrix(c(1, 2, 3, 4, 5, 6), 3, 2)
-  dense_loadings <- matrix(c(1, 2, 3, 4, 5, 6, 7, 8), 4, 2)
+  dense_loadings <- Matrix::Matrix(matrix(c(1, 2, 3, 4, 5, 6, 7, 8), 4, 2),
+                                   sparse = FALSE)
 
-  expect_message(
+  expect_warning(
     LatentNeuroVec(
       basis = dense_basis,
       loadings = dense_loadings,
       space = space,
       mask = mask_vol
     ),
-    "dense.*dgeMatrix"
+    "dense.*dgeMatrix",
+    class = "fmrilatent_warning_dense_storage"
   )
 })
 
-test_that("constructor emits message for dense base matrix loadings", {
+test_that("constructor emits warning for dense base matrix loadings", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
   space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
@@ -1866,14 +1996,15 @@ test_that("constructor emits message for dense base matrix loadings", {
   basis_mat <- Matrix::Matrix(matrix(rnorm(6), 3, 2), sparse = FALSE)
   dense_loadings <- matrix(c(1, 2, 3, 4, 5, 6, 7, 8), 4, 2)
 
-  expect_message(
+  expect_warning(
     LatentNeuroVec(
       basis = basis_mat,
       loadings = dense_loadings,
       space = space,
       mask = mask_vol
     ),
-    "loadings.*dense.*dgeMatrix"
+    "loadings.*dense.*dgeMatrix",
+    class = "fmrilatent_warning_dense_storage"
   )
 })
 
@@ -1887,22 +2018,24 @@ test_that("constructor converts sparse base matrix loadings without message", {
   sparse_loadings <- matrix(0, 4, 2)
   sparse_loadings[1, 1] <- 1
 
-  # Should not emit the "dense" message
-  expect_no_message(
-    LatentNeuroVec(
-      basis = basis_mat,
-      loadings = sparse_loadings,
-      space = space,
-      mask = mask_vol
+  # Should not emit the "dense" warning
+  expect_no_warning(
+    expect_no_message(
+      LatentNeuroVec(
+        basis = basis_mat,
+        loadings = sparse_loadings,
+        space = space,
+        mask = mask_vol
+      )
     )
   )
 
-  lvec <- suppressMessages(LatentNeuroVec(
+  lvec <- LatentNeuroVec(
     basis = basis_mat,
     loadings = sparse_loadings,
     space = space,
     mask = mask_vol
-  ))
+  )
   expect_true(inherits(lvec@loadings, "Matrix"))
 })
 
@@ -2255,6 +2388,28 @@ test_that(".validate_LatentNeuroVec detects invalid label type", {
   expect_true(any(grepl("label.*single character", result)))
 })
 
+test_that(".validate_LatentNeuroVec keeps dimension diagnostics with bad label", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
+
+  lvec <- LatentNeuroVec(
+    basis = Matrix::Matrix(matrix(rnorm(6), 3, 2)),
+    loadings = Matrix::Matrix(matrix(rnorm(8), 4, 2)),
+    space = space,
+    mask = mask_vol
+  )
+
+  corrupted <- lvec
+  corrupted@label <- c("a", "b")
+  corrupted@basis <- Matrix::Matrix(matrix(rnorm(9), 3, 3))
+
+  result <- fmrilatent:::.validate_LatentNeuroVec(corrupted)
+  expect_true(is.character(result))
+  expect_true(any(grepl("label.*single character", result)))
+  expect_true(any(grepl("Component mismatch", result)))
+})
+
 test_that(".validate_LatentNeuroVec detects non-numeric offset", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
@@ -2318,7 +2473,8 @@ test_that("constructor converts integer array to LogicalNeuroVol mask", {
     basis = matrix(rnorm(6), 3, 2),
     loadings = matrix(rnorm(8), 4, 2),
     space = space,
-    mask = mask_arr
+    mask = mask_arr,
+    expect_dense = TRUE
   )
 
   expect_s4_class(lvec, "LatentNeuroVec")
@@ -2499,20 +2655,21 @@ test_that("LatentNeuroVec converts sparse basis appropriately", {
   expect_s4_class(lvec, "LatentNeuroVec")
 })
 
-test_that("LatentNeuroVec messages for dense loadings", {
+test_that("LatentNeuroVec warns for dense loadings", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
   space <- neuroim2::NeuroSpace(c(2, 2, 1, 3))
 
   # Dense loadings (all non-zero)
-  expect_message(
+  expect_warning(
     lvec <- LatentNeuroVec(
-      basis = matrix(rnorm(6), 3, 2),
+      basis = Matrix::Matrix(matrix(rnorm(6), 3, 2), sparse = FALSE),
       loadings = matrix(rep(1, 8), 4, 2),  # Dense
       space = space,
       mask = mask_vol
     ),
-    "dense"
+    "dense",
+    class = "fmrilatent_warning_dense_storage"
   )
 })
 
@@ -3666,6 +3823,20 @@ test_that("[,ANY,ANY] handles 4-column matrix indexing correctly", {
   vals <- lvec[mat]
   expected <- c(arr[1, 1, 1, 1], arr[2, 2, 2, 2], arr[1, 1, 1, 5], arr[2, 2, 2, 10])
   expect_equal(vals, expected, tolerance = 1e-10)
+
+  storage.mode(mat) <- "double"
+  vals <- lvec[mat]
+  expect_equal(vals, expected, tolerance = 1e-10)
+})
+
+test_that("[,ANY,ANY] 4-column matrix indexing rejects missing coordinates", {
+  lvec <- create_indexing_lvec()
+  mat <- matrix(c(1, NA_real_, 1, 1), nrow = 1)
+
+  expect_error(
+    lvec[mat],
+    class = "fmrilatent_error_invalid_index"
+  )
 })
 
 test_that("[,ANY,ANY] matrix indexing returns 0 for out-of-mask voxels", {

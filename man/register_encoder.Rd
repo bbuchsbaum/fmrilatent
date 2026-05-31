@@ -60,6 +60,13 @@ family must do \strong{both}:
 Calling \code{register_encoder()} alone is \strong{not enough}: without an
 \code{encode_spec.spec_*} method, \code{encode()} will fall through to
 \code{encode_spec.default} and raise an error.
+
+Transport-backed AWPT is an intentional parallel API, not a registry-dispatch
+family. \code{basis_awpt_wavelet()} describes a shared template basis, while
+subject fitting also needs a template/basis asset plus subject field or
+observation operators. Use \code{\link{encode_awpt}} or
+\code{\link{encode_operator}} for those fits; do not expect
+\code{register_encoder()} or \code{encode()} to route AWPT subject encoding.
 }
 
 \examples{

@@ -59,6 +59,13 @@ NULL
   arr
 }
 
+.logical_neurovol_like <- function(mask_like, mask_arr) {
+  if (inherits(mask_like, "LogicalNeuroVol")) {
+    return(neuroim2::LogicalNeuroVol(mask_arr, neuroim2::space(mask_like)))
+  }
+  mask_arr
+}
+
 .is_surface_domain <- function(domain) {
   if (is.null(domain) || !requireNamespace("neurosurf", quietly = TRUE)) {
     return(FALSE)
@@ -147,10 +154,11 @@ implicit_latent <- function(coeff, decoder, meta, mask = NULL, domain = NULL, su
   }
   fmls <- names(formals(decoder))
   has_dots <- "..." %in% fmls
-  missing <- setdiff(c("time_idx", "roi_mask"), fmls)
+  required_formals <- c("time_idx", "roi_mask", "levels_keep")
+  missing <- setdiff(required_formals, fmls)
   if (length(missing) > 0L && !has_dots) {
     .encoder_cli_abort(
-      paste0("decoder must accept formals 'time_idx' and 'roi_mask' ",
+      paste0("decoder must accept formals 'time_idx', 'roi_mask', and 'levels_keep' ",
              "(or use '...'). Missing: ", paste(missing, collapse = ", ")),
       class = "fmrilatent_error_invalid_argument"
     )
@@ -318,11 +326,17 @@ setMethod("reconstruct_array", "ImplicitLatent",
                 class = "fmrilatent_error_unsupported_operation"
               )
             }
-            mask_arr <- as.array(mask(x))
+            mask_like <- x$mask
+            mask_arr <- if (inherits(mask_like, "LogicalNeuroVol")) {
+              as.array(mask_like)
+            } else {
+              as.array(mask(x))
+            }
             roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "reconstruct_array.ImplicitLatent")
             rec <- reconstruct_matrix(x, time_idx = time_idx, roi_mask = roi_arr, ...)
             fill_mask <- if (is.null(roi_arr)) mask_arr else (mask_arr & roi_arr)
-            .wrap_decoded_volume(rec, fill_mask, context = "reconstruct_array.ImplicitLatent")
+            fill_like <- .logical_neurovol_like(mask_like, fill_mask)
+            .wrap_decoded_volume(rec, fill_like, context = "reconstruct_array.ImplicitLatent")
           })
 
 .wrap_decoded_by_support <- function(values, support, domain, context) {
@@ -405,6 +419,17 @@ setMethod("wrap_decoded", "ImplicitLatent",
 #' roi  <- array(c(TRUE, FALSE, FALSE, TRUE), dim = c(2, 2, 1))
 #' roi_subset_columns(rec, mask, roi)  # keeps columns 1 and 3
 roi_subset_columns <- function(rec_mat, mask_arr, roi_mask = NULL) {
+  if (is.logical(roi_mask) && is.null(dim(roi_mask))) {
+    n_active <- sum(as.logical(mask_arr))
+    if (length(roi_mask) != n_active) {
+      .encoder_cli_abort(
+        paste0("roi_mask length (", length(roi_mask),
+               ") does not match active mask voxel count (", n_active, ")."),
+        class = "fmrilatent_error_dim", call = rlang::caller_env()
+      )
+    }
+    return(rec_mat[, which(roi_mask), drop = FALSE])
+  }
   roi_arr <- .normalize_roi_mask(mask_arr, roi_mask, "roi_subset_columns")
   if (is.null(roi_arr)) return(rec_mat)
   global_idx <- which(as.logical(mask_arr))

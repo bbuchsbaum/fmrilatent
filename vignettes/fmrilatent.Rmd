@@ -16,7 +16,9 @@ params:
   preset: homage
 
 vignette: |
-  %\VignetteIndexEntry{Getting started with fmrilatent} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Getting started with fmrilatent}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}

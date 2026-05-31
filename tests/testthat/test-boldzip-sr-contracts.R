@@ -217,6 +217,24 @@ test_that("BOLDZip-SR metrics match independent reference calculations", {
   )
 })
 
+test_that("BOLDZip-SR reliability weight vectors are row aligned", {
+  X <- matrix(seq_len(12), nrow = 3L)
+  X_hat <- X
+  X_hat[1L, ] <- X_hat[1L, ] + 1
+  X_hat[3L, ] <- X_hat[3L, ] - 2
+  weights <- c(10, 1, 2)
+  err <- X - X_hat
+  weight_matrix <- matrix(rep(weights, times = ncol(X)), nrow = nrow(X))
+
+  metrics <- evaluate_boldzip_sr(X, X_hat, reliability_weights = weights)
+
+  expect_equal(
+    metrics[["reliability_weighted_mse"]],
+    sum(weight_matrix * err^2) / sum(weight_matrix),
+    tolerance = 1e-12
+  )
+})
+
 test_that("BOLDZip-SR advertised low-budget codec preserves clean modeled signal compactly", {
   sim <- boldzip_sr_simulate(
     n_voxels = 60L,
@@ -465,7 +483,10 @@ test_that("BOLDZip-SR spatial coercion orthonormalizes near-collinear template i
     c(1, 1, 0, 0) + 1e-13,
     c(0, 0, 1, 1)
   )
-  basis <- as_boldzip_spatial_basis(raw)
+  expect_warning(
+    basis <- as_boldzip_spatial_basis(raw),
+    "dropped 1 linearly dependent column"
+  )
 
   expect_s3_class(basis, "BoldZipSRSpatialBasis")
   expect_equal(nrow(basis$phi_d), 4L)
@@ -510,19 +531,34 @@ test_that("BOLDZip-SR event encoding requires paired split support", {
   expect_true(all(sign(events$amplitude) > 0))
 })
 
+test_that("BOLDZip-SR half split pairing drops odd trailing time points", {
+  expect_equal(fmrilatent:::.boldzip_pair_time(1L, 5L, "halves"), 3L)
+  expect_equal(fmrilatent:::.boldzip_pair_time(3L, 5L, "halves"), 1L)
+  expect_equal(fmrilatent:::.boldzip_pair_time(5L, 5L, "halves"), NA_integer_)
+  expect_equal(fmrilatent:::.boldzip_pair_time(4L, 4L, "halves"), 2L)
+})
+
 test_that("evaluate_boldzip_sr rejects invalid reliability weights", {
   X <- matrix(rnorm(4L * 10L), nrow = 4L)
 
   expect_error(
-    evaluate_boldzip_sr(X, X, reliability_weights = -1),
+    evaluate_boldzip_sr(X, X, reliability_weights = rep(1, ncol(X))),
+    "length must match nrow\\(X\\)"
+  )
+  expect_error(
+    evaluate_boldzip_sr(X, X, reliability_weights = matrix(1, nrow = nrow(X), ncol = ncol(X) - 1L)),
+    "matrix dimensions must match X"
+  )
+  expect_error(
+    evaluate_boldzip_sr(X, X, reliability_weights = c(1, -1, 1, 1)),
     "finite non-negative"
   )
   expect_error(
-    evaluate_boldzip_sr(X, X, reliability_weights = rep(0, length(X))),
+    evaluate_boldzip_sr(X, X, reliability_weights = rep(0, nrow(X))),
     "positive sum"
   )
   expect_error(
-    evaluate_boldzip_sr(X, X, reliability_weights = c(1, Inf)),
+    evaluate_boldzip_sr(X, X, reliability_weights = c(1, Inf, 1, 1)),
     "finite non-negative"
   )
 })

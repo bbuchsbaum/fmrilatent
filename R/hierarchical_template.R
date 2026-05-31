@@ -2,6 +2,7 @@
 
 #' Check whether an object is a HierarchicalBasisTemplate
 #' @param x object to test
+#' @return Logical scalar.
 #' @export
 is_hierarchical_template <- function(x) inherits(x, "HierarchicalBasisTemplate")
 
@@ -52,10 +53,19 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
     .encoder_cli_abort("parcellations must be a non-empty list of integer vectors",
                        class = "fmrilatent_error_invalid_argument")
   }
+  if (missing(k_per_level)) {
+    .encoder_cli_abort("k_per_level must be provided",
+                       class = "fmrilatent_error_invalid_argument")
+  }
   if (length(parcellations) != length(k_per_level)) {
     .encoder_cli_abort("length(k_per_level) must match number of parcellation levels",
                        class = "fmrilatent_error_invalid_argument")
   }
+  k_per_level <- vapply(seq_along(k_per_level), function(i) {
+    .validate_positive_count(k_per_level[[i]], paste0("k_per_level[", i, "]"))
+  }, integer(1))
+  k_neighbors <- .validate_positive_count(k_neighbors, "k_neighbors")
+  ridge <- .validate_nonnegative_scalar(ridge, "ridge")
 
   # Normalize parcellations to integer vectors
   parcellations <- lapply(parcellations, function(v) as.integer(v))
@@ -84,7 +94,7 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
   col_offset <- 0L
 
   for (lvl in seq_along(parcellations)) {
-    k_lvl <- as.integer(k_per_level[[lvl]])
+    k_lvl <- k_per_level[[lvl]]
     block_info <- .build_level_block(
       mask = mask_vol,
       labels = parcellations[[lvl]],
@@ -117,7 +127,12 @@ build_hierarchical_template <- function(mask, parcellations, k_per_level,
     G_factor <- try(Matrix::Cholesky(G, perm = TRUE, LDL = TRUE), silent = TRUE)
   }
   if (inherits(G_factor, "try-error") || is.null(G_factor)) {
-    if (solver == "chol") message("Cholesky failed; falling back to sparse QR")
+    if (solver == "chol") {
+      .encoder_cli_warn(
+        "Cholesky factorisation of Gram matrix failed; falling back to sparse QR.",
+        class = "fmrilatent_warning_cholesky_fallback"
+      )
+    }
     G_factor <- qr(G)
     solver <- "qr"
   }
@@ -231,16 +246,14 @@ project_hierarchical <- function(template, X) {
                        class = "fmrilatent_error_dimension_mismatch")
   }
 
-  B <- template_loadings(template)
-  G_factor <- template@gram_factor   # S4 slot; no generic getter for gram_factor
-  proj <- Matrix::crossprod(B, Matrix::t(X_mat))
-  Matrix::t(Matrix::solve(G_factor, proj))  # time x atoms
+  template_project(template, X_mat)$coefficients
 }
 
 #' Save a hierarchical template to disk
 #' @param template HierarchicalBasisTemplate
 #' @param file Path to .rds file
 #' @param compress Compression passed to saveRDS (default "xz")
+#' @return The path in `file`, invisibly.
 #' @export
 save_hierarchical_template <- function(template, file, compress = "xz") {
   if (!is_hierarchical_template(template)) {
@@ -388,6 +401,72 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
   parent_map
 }
 
+.hierarchical_eigs_is_usable <- function(eig, k) {
+  if (inherits(eig, "error") || is.null(eig$vectors)) {
+    return(FALSE)
+  }
+  vecs <- eig$vectors
+  if (!is.matrix(vecs) || ncol(vecs) < k || any(!is.finite(vecs))) {
+    return(FALSE)
+  }
+  nconv <- eig$nconv %||% k
+  if (length(nconv) > 0L && is.finite(nconv[[1L]]) && nconv[[1L]] < k) {
+    return(FALSE)
+  }
+  values <- eig$values %||% numeric()
+  length(values) == 0L || all(is.finite(values))
+}
+
+.order_hierarchical_laplacian_eigs <- function(eig, L) {
+  vecs <- as.matrix(eig$vectors)
+  L_vecs <- L %*% vecs
+  values <- colSums(vecs * as.matrix(L_vecs)) / pmax(colSums(vecs^2), .Machine$double.eps)
+  ord <- order(values)
+  eig$vectors <- vecs[, ord, drop = FALSE]
+  eig$values <- values[ord]
+  eig
+}
+
+.hierarchical_laplacian_eigs <- function(L, k) {
+  k <- .validate_positive_count(k, "k")
+  n <- nrow(L)
+  if (is.null(n) || n < 1L) {
+    .encoder_cli_abort("L must have at least one row.",
+                       class = "fmrilatent_error_dimension_mismatch")
+  }
+  k <- min(k, n)
+  if (n < 3L || k >= n) {
+    eig <- eigen(as.matrix(L), symmetric = TRUE)
+    ord <- order(eig$values)
+    keep <- ord[seq_len(k)]
+    return(list(
+      values = eig$values[keep],
+      vectors = eig$vectors[, keep, drop = FALSE]
+    ))
+  }
+  if (!requireNamespace("RSpectra", quietly = TRUE)) {
+    .encoder_cli_abort("RSpectra is required to build hierarchical templates",
+                       class = "fmrilatent_error_missing_dependency")
+  }
+  eig <- tryCatch(
+    RSpectra::eigs(L, k = k, which = "LM", sigma = 0),
+    error = function(e) e
+  )
+  if (!.hierarchical_eigs_is_usable(eig, k)) {
+    eig <- tryCatch(
+      RSpectra::eigs(L, k = k, which = "LM", sigma = sqrt(.Machine$double.eps)),
+      error = function(e) e
+    )
+  }
+  if (!.hierarchical_eigs_is_usable(eig, k)) {
+    .encoder_cli_abort(
+      "RSpectra failed to compute hierarchical Laplacian eigenvectors.",
+      class = "fmrilatent_error_eigensolver"
+    )
+  }
+  .order_hierarchical_laplacian_eigs(eig, L)
+}
+
 .build_level_block <- function(mask, labels, k, k_neighbors, level, parent_map, col_offset) {
   ids <- sort(unique(labels))
   n_vox <- length(labels)
@@ -416,13 +495,9 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
       ord <- order(eig$values)
       vecs <- Matrix::Matrix(eig$vectors[, ord[seq_len(k_use)], drop = FALSE], sparse = TRUE)
     } else {
-      if (!requireNamespace("RSpectra", quietly = TRUE)) {
-        .encoder_cli_abort("RSpectra is required to build hierarchical templates",
-                           class = "fmrilatent_error_missing_dependency")
-      }
       g <- voxel_subset_to_gsp(mask, vox_idx, k_neighbors = k_neighbors)
       L <- g$laplacian
-      eig <- RSpectra::eigs(L, k = k_use, which = "SM")
+      eig <- .hierarchical_laplacian_eigs(L, k = k_use)
       vecs <- Matrix::Matrix(eig$vectors, sparse = TRUE)
     }
     k_eff <- ncol(vecs)

@@ -5,7 +5,9 @@ output:
     toc: yes
     toc_depth: 2.0
 vignette: |
-  %\VignetteIndexEntry{Standalone Codecs} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Standalone Codecs}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}

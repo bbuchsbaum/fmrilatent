@@ -20,7 +20,10 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
                                              bandwidth = spec$time$bandwidth, k = k_time,
                                              backend = spec$time$backend))
   } else if (inherits(spec$time, "spec_time_bspline")) {
-    k_time <- spec$time$k
+    k_time <- .validate_auto_positive_count(spec$time$k, n_time,
+                                            default = min(5L, n_time),
+                                            name = "spec_time_bspline$k",
+                                            n_name = "n_time")
     B_t <- as.matrix(build_bspline_basis(
       n_time = n_time,
       k = k_time,
@@ -28,18 +31,10 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
       include_intercept = spec$time$include_intercept,
       orthonormalize = spec$time$orthonormalize
     ))
-    if (!spec$time$orthonormalize) {
-      q <- qr(B_t)
-      B_t <- qr.Q(q)
-    }
   } else if (inherits(spec$time, "spec_time_dct")) {
-    k_time <- spec$time$k
-    if (k_time > n_time) {
-      .encoder_cli_abort(
-        paste0("spec_time_dct$k (", k_time, ") cannot exceed n_time (", n_time, ")."),
-        class = "fmrilatent_error_invalid_count"
-      )
-    }
+    k_time <- .validate_auto_positive_count(spec$time$k, n_time, default = n_time,
+                                            name = "spec_time_dct$k",
+                                            n_name = "n_time")
     B_t <- as.matrix(build_dct_basis(n_time = n_time, k = k_time, norm = spec$time$norm))
   } else {
     .encoder_cli_abort(
@@ -50,7 +45,9 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
 
   if (is.null(reduction)) reduction <- make_cluster_reduction(mask, seq_len(sum(mask_arr)))
   if (inherits(spec$space, "spec_space_slepian")) {
-    L_s <- as.matrix(lift(reduction, basis_slepian(k = spec$space$k), k_neighbors = spec$space$k_neighbors))
+    k_space <- spec$space$k %||% 3L
+    k_space <- .validate_positive_count(k_space, "spec_space_slepian$k")
+    L_s <- as.matrix(lift(reduction, basis_slepian(k = k_space), k_neighbors = spec$space$k_neighbors))
     B_atoms <- t(L_s)
   } else if (inherits(spec$space, "spec_space_hrbf")) {
     params <- spec$space$params %||% list()
@@ -81,10 +78,7 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
     B_sel <- B_t[t_sel, , drop = FALSE]
     rec <- B_sel %*% core %*% t(L_s)
     if (!is.null(roi_mask)) {
-      global_idx <- which(as.logical(mask_arr))
-      roi_global <- which(as.logical(roi_mask))
-      col_keep <- which(global_idx %in% roi_global)
-      rec <- rec[, col_keep, drop = FALSE]
+      rec <- roi_subset_columns(rec, mask_arr, roi_mask)
     }
     rec
   }
@@ -140,6 +134,6 @@ encode_spec.spec_st <- function(x, spec, mask, reduction, materialize, label, ..
     coeff = list(core = core, B_t = B_t, L_s = L_s),
     decoder = decoder,
     meta = meta,
-    mask = mask_arr
+    mask = if (inherits(mask, "LogicalNeuroVol")) mask else mask_arr
   )
 }

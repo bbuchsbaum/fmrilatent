@@ -11,6 +11,9 @@
 
 \item{...}{Ignored.}
 }
+\value{
+The input `x`, invisibly.
+}
 \description{
 Print method for SurfaceBasisTemplate
 }

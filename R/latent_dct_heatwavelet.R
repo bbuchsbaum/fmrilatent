@@ -16,8 +16,9 @@
 #' passed to \code{\link{encode}}.
 #'
 #' @param n_time        Number of time points.
-#' @param k_time        Ignored (kept for backwards compatibility). The number
-#'   of components is determined by the heat-wavelet loadings.
+#' @param k_time        Optional ignored legacy argument. The number of
+#'   components is determined by the heat-wavelet loadings. Supplying a
+#'   non-NULL value warns with class `fmrilatent_warning_deprecated`.
 #' @param mask          LogicalNeuroVol or logical array mask (3D).
 #' @param cluster_map   Optional integer vector mapping voxels (mask order) to clusters.
 #' @param reduction     Graph reduction object; if NULL, built via
@@ -29,13 +30,26 @@
 #' @return A \code{LatentNeuroVec} with placeholder basis matrix.
 #' @export
 latent_dct_heatwavelet <- function(n_time,
-                                   k_time,
+                                   k_time = NULL,
                                    mask,
                                    cluster_map   = NULL,
                                    reduction     = NULL,
                                    hw_basis_spec = NULL,
                                    offset        = numeric(0),
                                    label         = "DCT + heat-wavelet") {
+  if (missing(n_time)) {
+    .encoder_cli_abort("n_time must be a positive integer.",
+                       class = "fmrilatent_error_invalid_count")
+  }
+  n_time <- .validate_positive_count(n_time, "n_time")
+  if (!is.null(k_time)) {
+    .encoder_cli_warn(
+      "k_time is ignored by latent_dct_heatwavelet(); omit it in new code.",
+      class = "fmrilatent_warning_deprecated",
+      call = rlang::caller_env()
+    )
+  }
+
   # Build mask volume and array first
 
   mask_arr <- .mask_to_array(mask, "latent_dct_heatwavelet")
@@ -73,8 +87,12 @@ latent_dct_heatwavelet <- function(n_time,
   if (!length(offset)) {
     offset <- numeric(n_vox)
   } else if (length(offset) != n_vox) {
-    stop("length(offset) (", length(offset),
-         ") must equal n_vox (", n_vox, ").")
+    .encoder_cli_abort(
+      paste0("length(offset) (", length(offset),
+             ") must equal n_vox (", n_vox, ")."),
+      class = "fmrilatent_error_dim",
+      call = rlang::caller_env()
+    )
   }
 
   # Create explicit basis matrix with matching number of columns
@@ -87,8 +105,8 @@ latent_dct_heatwavelet <- function(n_time,
     sparse = FALSE
   )
 
-  # Build 4D space
-  spc <- neuroim2::NeuroSpace(c(dim(mask_arr), as.integer(n_time)))
+  # Build 4D space with any geometry carried by a LogicalNeuroVol mask.
+  spc <- .space_with_time_from_mask(mask, n_time, "latent_dct_heatwavelet")
 
   LatentNeuroVec(
     basis    = basis0,

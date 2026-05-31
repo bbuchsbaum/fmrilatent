@@ -2,6 +2,47 @@
 #' @importFrom methods setMethod setValidity new
 NULL
 
+.bilat_neurosurfacevector_as_matrix <- function(x, ...) {
+  left_obj <- neurosurf::left(x)
+  right_obj <- neurosurf::right(x)
+  mat_left <- Matrix::Matrix(as.matrix(left_obj), sparse = FALSE)
+  mat_right <- Matrix::Matrix(as.matrix(right_obj), sparse = FALSE)
+  out <- rbind(mat_left, mat_right)
+  attr(out, "coords") <- rbind(
+    neuroim2::coords(left_obj),
+    neuroim2::coords(right_obj)
+  )
+  attr(out, "indices") <- c(
+    neuroim2::indices(left_obj),
+    neuroim2::indices(right_obj)
+  )
+  attr(out, "hemi") <- c(
+    rep(1, nrow(mat_left)),
+    rep(2, nrow(mat_right))
+  )
+  out
+}
+
+.require_bilat_neurosurfacevector_class <- function(context) {
+  caller <- rlang::caller_env()
+  tryCatch(
+    methods::getClass("BilatNeuroSurfaceVector", where = asNamespace("neurosurf")),
+    error = function(e) {
+      .encoder_cli_abort(
+        paste0(context, " requires neurosurf::BilatNeuroSurfaceVector."),
+        class = "fmrilatent_error_missing_dependency",
+        call = caller
+      )
+    }
+  )
+}
+
+if (requireNamespace("neurosurf", quietly = TRUE)) {
+  .require_bilat_neurosurfacevector_class("bilateral surface support")
+  methods::setMethod("as.matrix", "BilatNeuroSurfaceVector",
+                     .bilat_neurosurfacevector_as_matrix)
+}
+
 #' Construct a bilateral surface latent object
 #'
 #' @param left Left \code{LatentNeuroSurfaceVector}.
@@ -80,16 +121,13 @@ setMethod("basis", "BilatLatentNeuroSurfaceVector", function(x) basis(x@left))
 #' @rdname loadings-methods
 setMethod("loadings", "BilatLatentNeuroSurfaceVector",
           function(x) {
-            Matrix::Matrix(
-              rbind(as.matrix(loadings(x@left)), as.matrix(loadings(x@right))),
-              sparse = FALSE
-            )
+            rbind(loadings(x@left), loadings(x@right))
           })
 
 #' @export
 #' @rdname offset-methods
 setMethod("offset", "BilatLatentNeuroSurfaceVector",
-          function(object) c(offset(object@left), offset(object@right)))
+          function(object, ...) c(offset(object@left), offset(object@right)))
 
 #' @export
 #' @rdname reconstruct_matrix
@@ -127,8 +165,7 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
               .encoder_cli_abort("wrap_decoded() requires the 'neurosurf' package.",
                          class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
             }
-            methods::getClass("BilatNeuroSurfaceVector",
-                              where = asNamespace("neurosurf"))
+            .require_bilat_neurosurfacevector_class("wrap_decoded()")
             if (is.atomic(values) && is.null(dim(values))) {
               n_left <- length(latent_support(x@left))
               n_right <- length(latent_support(x@right))
@@ -137,22 +174,7 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
                   "wrap_decoded() vector length does not match bilateral support cardinality.",
                   class = "fmrilatent_error_dim", call = rlang::caller_env())
               }
-              left_obj <- wrap_decoded(x@left, values[seq_len(n_left)], space = "native")
-              right_obj <- wrap_decoded(x@right, values[seq.int(n_left + 1L, n_left + n_right)],
-                                        space = "native")
-              return(methods::new(
-                "BilatNeuroSurfaceVector",
-                left = neurosurf::NeuroSurfaceVector(
-                  neurosurf::geometry(left_obj),
-                  neuroim2::indices(left_obj),
-                  Matrix::Matrix(left_obj@data, ncol = 1)
-                ),
-                right = neurosurf::NeuroSurfaceVector(
-                  neurosurf::geometry(right_obj),
-                  neuroim2::indices(right_obj),
-                  Matrix::Matrix(right_obj@data, ncol = 1)
-                )
-              ))
+              values <- matrix(values, nrow = 1L)
             }
             values <- as.matrix(values)
             n_left <- length(latent_support(x@left))
@@ -196,7 +218,7 @@ setMethod("coef_time", "BilatLatentNeuroSurfaceVector",
 #' @export
 #' @rdname coef_metric
 setMethod("coef_metric", "BilatLatentNeuroSurfaceVector",
-          function(x, coordinates = c("raw", "analysis"), ...) diag(ncol(basis(x))))
+          function(x, coordinates = c("analysis", "raw"), ...) diag(ncol(basis(x))))
 
 #' @export
 #' @rdname analysis_transform
@@ -274,13 +296,26 @@ setMethod("project_vcov", "BilatLatentNeuroSurfaceVector",
     errors <- c(errors, "Slot @right must be a LatentNeuroSurfaceVector.")
   }
   if (length(errors) == 0L) {
-    basis_check <- .validate_shared_basis(
-      list(as.matrix(basis(object@left)), as.matrix(basis(object@right))),
-      labels = c("left", "right"),
-      tolerance = 1e-8,
-      dim_msg = "Left and right basis matrices must have identical dimensions.",
-      value_msg = "Left and right basis matrices must be equal (the %s basis differs from the left basis)."
-    )
+    handle_backed <- methods::is(object@left@basis, "BasisHandle") ||
+      methods::is(object@right@basis, "BasisHandle")
+    basis_check <- if (handle_backed) {
+      .validate_shared_basis_dims(
+        list(
+          .explicit_latent_basis_dim(object@left),
+          .explicit_latent_basis_dim(object@right)
+        ),
+        labels = c("left", "right"),
+        dim_msg = "Left and right basis matrices must have identical dimensions."
+      )
+    } else {
+      .validate_shared_basis(
+        list(as.matrix(object@left@basis), as.matrix(object@right@basis)),
+        labels = c("left", "right"),
+        tolerance = 1e-8,
+        dim_msg = "Left and right basis matrices must have identical dimensions.",
+        value_msg = "Left and right basis matrices must be equal (the %s basis differs from the left basis)."
+      )
+    }
     if (!isTRUE(basis_check)) {
       errors <- c(errors, basis_check)
     }

@@ -37,7 +37,11 @@ test_that("plot_spatial_atom validates idx range", {
 
   loadings <- matrix(rnorm(n_vox * k), nrow = n_vox, ncol = k)
 
-  expect_error(plot_spatial_atom(loadings, mask_arr, idx = 0), "out of range")
+  expect_error(
+    plot_spatial_atom(loadings, mask_arr, idx = 0),
+    "out of range",
+    class = "fmrilatent_error_invalid_argument"
+  )
   expect_error(plot_spatial_atom(loadings, mask_arr, idx = 4), "out of range")
   expect_error(plot_spatial_atom(loadings, mask_arr, idx = -1), "out of range")
 })
@@ -45,8 +49,20 @@ test_that("plot_spatial_atom validates idx range", {
 test_that("plot_spatial_atom rejects invalid loadings", {
   mask_arr <- array(TRUE, dim = c(2, 2, 2))
 
-  expect_error(plot_spatial_atom(NULL, mask_arr, idx = 1), "must be a matrix")
+  expect_error(
+    plot_spatial_atom(NULL, mask_arr, idx = 1),
+    "must be a matrix",
+    class = "fmrilatent_error_invalid_type"
+  )
   expect_error(plot_spatial_atom(c(1, 2, 3), mask_arr, idx = 1), "must be a matrix")
+  expect_error(
+    plot_spatial_atom(matrix(numeric(0), nrow = 8, ncol = 0), mask_arr, idx = 1),
+    class = "fmrilatent_error_dim"
+  )
+  expect_error(
+    plot_spatial_atom(matrix(1, nrow = 7, ncol = 1), mask_arr, idx = 1),
+    class = "fmrilatent_error_dim"
+  )
 })
 
 test_that("plot_spatial_atom rejects invalid mask", {
@@ -220,6 +236,28 @@ test_that("plot_spatial_atom does not error with ggplot2 available", {
   expect_no_error({
     result <- plot_spatial_atom(loadings, mask_arr, idx = 1L, main = "Test Plot")
   })
+})
+
+test_that("plot_spatial_atom prints the ggplot object when ggplot2 is available", {
+  skip_if_not_installed("ggplot2")
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  loadings <- matrix(seq_len(4), nrow = 4, ncol = 1)
+  printed <- FALSE
+  local_mocked_bindings(
+    .plot_spatial_atom_display = function(x) {
+      printed <<- inherits(x, "ggplot")
+      invisible(x)
+    },
+    .package = "fmrilatent"
+  )
+
+  result <- plot_spatial_atom(loadings, mask_arr, idx = 1L)
+
+  expect_true(printed)
+  expect_equal(result, array(seq_len(4), dim = c(2, 2, 1)))
 })
 
 test_that("plot_spatial_atom works with LoadingsHandle", {

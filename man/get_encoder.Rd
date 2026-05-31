@@ -16,8 +16,6 @@ A list with elements \code{spec_fn}, \code{description}, and \code{package}.
 Retrieves the registration entry for a given encoder family.
 }
 \examples{
-\dontrun{
 enc <- get_encoder("time_dct")
 spec <- enc$spec_fn(k = 5)
-}
 }

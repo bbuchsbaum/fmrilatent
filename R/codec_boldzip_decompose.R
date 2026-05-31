@@ -36,7 +36,7 @@
   a <- as.matrix(a)
   b <- as.matrix(b)
   if (!identical(dim(a), dim(b))) {
-    stop("paired matrices must have identical dimensions.", call. = FALSE)
+    .boldzip_cli_abort("paired matrices must have identical dimensions.")
   }
   a <- sweep(a, 1L, rowMeans(a), "-")
   b <- sweep(b, 1L, rowMeans(b), "-")
@@ -50,17 +50,19 @@
 .boldzip_materialize_temporal_spec <- function(spec, n_time) {
   validate_basis <- function(basis, label) {
     basis <- .boldzip_validate_basis_matrix(basis, label, n_time)
+    if (ncol(basis) > nrow(basis)) {
+      .boldzip_cli_abort(label, " columns must be orthonormal for BOLDZip-SR temporal coding; ",
+                         "got more columns than rows.")
+    }
     gram <- crossprod(basis)
     if (!isTRUE(all.equal(gram, diag(ncol(basis)), tolerance = 1e-8))) {
-      stop(label, " columns must be orthonormal for BOLDZip-SR temporal coding.",
-           call. = FALSE)
+      .boldzip_cli_abort(label, " columns must be orthonormal for BOLDZip-SR temporal coding.")
     }
     basis
   }
   if (inherits(spec, "SharedTemporalSpec")) {
     if (spec$n_time != n_time) {
-      stop("temporal_spec n_time must match the number of columns in X.",
-           call. = FALSE)
+      .boldzip_cli_abort("temporal_spec n_time must match the number of columns in X.")
     }
     basis <- validate_basis(materialize_shared_temporal_spec(spec), "temporal_spec")
     return(list(
@@ -84,8 +86,7 @@
   }
   if (inherits(spec, "spec_time_bspline")) {
     if (!isTRUE(spec$orthonormalize)) {
-      stop("spec_time_bspline temporal_spec must use orthonormalize = TRUE for BOLDZip-SR.",
-           call. = FALSE)
+      .boldzip_cli_abort("spec_time_bspline temporal_spec must use orthonormalize = TRUE for BOLDZip-SR.")
     }
     basis <- as.matrix(build_bspline_basis(
       n_time = n_time,
@@ -111,8 +112,10 @@
       label = "matrix"
     ))
   }
-  stop("temporal_spec must be NULL, a SharedTemporalSpec, a spec_time_dct, ",
-       "a spec_time_bspline, or a numeric matrix.", call. = FALSE)
+  .boldzip_cli_abort(
+    "temporal_spec must be NULL, a SharedTemporalSpec, a spec_time_dct, ",
+    "a spec_time_bspline, or a numeric matrix."
+  )
 }
 
 .boldzip_lag_signal <- function(signal, lag) {
@@ -209,7 +212,7 @@
     y_validate <- y_detail[idx, validate]
     y_norm <- sqrt(sum(y_train * y_train))
     if (!is.finite(y_norm) || y_norm <= .Machine$double.eps ||
-        stats::sd(y_validate) <= .Machine$double.eps) {
+        .boldzip_noise_scale(y_validate) <= .Machine$double.eps) {
       next
     }
 
@@ -314,10 +317,11 @@
     return(NA_integer_)
   }
   half <- floor(n_time / 2L)
-  if (t <= half && t + half <= n_time) {
+  paired_end <- 2L * half
+  if (t <= half) {
     return(t + half)
   }
-  if (t > half && t - half >= 1L) {
+  if (t <= paired_end) {
     return(t - half)
   }
   NA_integer_
@@ -346,7 +350,7 @@
     row <- residual[idx, ]
     scale <- stats::mad(row, center = stats::median(row), constant = 1.4826)
     if (!is.finite(scale) || scale <= .Machine$double.eps) {
-      scale <- stats::sd(row)
+      scale <- .boldzip_noise_scale(row)
     }
     if (!is.finite(scale) || scale <= .Machine$double.eps) {
       next
@@ -388,7 +392,7 @@
     amplitude[ord],
     reliability = reliability[ord],
     quantization = quantization,
-    noise_scale = .boldzip_noise_scale(amplitude)
+    noise_scale = .boldzip_noise_scale(amplitude[ord])
   )
 
   data.frame(

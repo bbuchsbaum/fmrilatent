@@ -9,6 +9,9 @@ is_hierarchical_template(x)
 \arguments{
 \item{x}{object to test}
 }
+\value{
+Logical scalar.
+}
 \description{
 Check whether an object is a HierarchicalBasisTemplate
 }

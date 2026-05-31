@@ -46,13 +46,14 @@ surface_basis_template <- function(geometry, loadings, support = NULL, roughness
     context = "surface_basis_template support"
   )
 
-  loadings <- Matrix::Matrix(as.matrix(loadings), sparse = FALSE)
-  if (nrow(loadings) != length(support)) {
+  loadings_nrow <- nrow(loadings)
+  if (is.null(loadings_nrow) || loadings_nrow != length(support)) {
     .encoder_cli_abort(
       paste0("loadings must have ", length(support),
              " rows to match the surface support cardinality."),
       class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
+  loadings <- Matrix::Matrix(as.matrix(loadings), sparse = FALSE)
 
   if (!is.null(measure)) {
     if (is.atomic(measure) && is.null(dim(measure))) {
@@ -74,13 +75,13 @@ surface_basis_template <- function(geometry, loadings, support = NULL, roughness
   }
 
   if (!is.null(roughness)) {
-    roughness <- Matrix::Matrix(as.matrix(roughness), sparse = FALSE)
     if (!identical(dim(roughness), c(ncol(loadings), ncol(loadings)))) {
       .encoder_cli_abort(
         paste0("roughness must be a ", ncol(loadings), "x", ncol(loadings),
                " matrix."),
         class = "fmrilatent_error_dim", call = rlang::caller_env())
     }
+    roughness <- Matrix::Matrix(roughness, sparse = FALSE)
   }
 
   G <- Matrix::crossprod(loadings)
@@ -114,6 +115,7 @@ surface_basis_template <- function(geometry, loadings, support = NULL, roughness
 #'
 #' @param x A \code{SurfaceBasisTemplate}.
 #' @param ... Ignored.
+#' @return The input `x`, invisibly.
 #' @export
 print.SurfaceBasisTemplate <- function(x, ...) {
   cat("SurfaceBasisTemplate\n")
@@ -243,7 +245,7 @@ setMethod("template_project", signature(x = "SurfaceBasisTemplate", data = "ANY"
 #' @export
 #' @rdname save_template
 setMethod("save_template", signature(template = "SurfaceBasisTemplate"),
-          function(template, file, compress = TRUE, ...) {
+          function(template, file, compress = "xz", ...) {
             saveRDS(template, file = file, compress = compress)
             invisible(file)
           })

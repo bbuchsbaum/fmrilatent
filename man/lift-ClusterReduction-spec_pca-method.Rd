@@ -20,7 +20,9 @@
 
 \item{basis_spec}{PCA basis specification (from `basis_pca()`).}
 
-\item{data}{Numeric matrix (time x voxels in mask order). Required.}
+\item{data}{Required numeric matrix (time x voxels in mask order). Unlike
+graph-only lift methods, PCA consumes `data` to estimate cluster-local
+components and aborts when it is `NULL`.}
 
 \item{center}{Logical; center voxels before PCA (default TRUE).}
 
@@ -41,4 +43,12 @@ A sparse Matrix (voxels x components) with attribute
 Computes PCA eigenvectors within each cluster and assembles a global
 block-sparse loadings matrix (voxels x components). This is typically used
 with `encode(..., spec_space_pca(...), reduction = ...)`.
+}
+\details{
+`lift(ClusterReduction, spec_pca)` always returns unwhitened spatial
+loadings. If `basis_spec$whiten` is `TRUE`, the method emits a classed
+warning because whitening requires the projected temporal scores and is
+therefore the caller's responsibility. The standard
+`encode(..., spec_space_pca(whiten = TRUE))` path handles this post-lift
+whitening using the `fmrilatent.singular_values` attribute attached here.
 }

@@ -11,7 +11,17 @@ plot_slepian_temporal <- function(basis, max_components = 6L) {
     basis <- basis_mat(basis)
   }
   if (!is.matrix(basis) && !inherits(basis, "Matrix")) {
-    stop("basis must be a matrix or BasisHandle (slepian_temporal).", call. = FALSE)
+    .encoder_cli_abort(
+      "basis must be a matrix or BasisHandle (slepian_temporal).",
+      class = "fmrilatent_error_invalid_type"
+    )
+  }
+  max_components <- .validate_positive_count(max_components, "max_components")
+  if (ncol(basis) < 1L) {
+    .encoder_cli_abort(
+      "basis must have at least one component column.",
+      class = "fmrilatent_error_dim"
+    )
   }
   k <- min(ncol(basis), max_components)
   B <- as.matrix(basis[, seq_len(k), drop = FALSE])
@@ -45,7 +55,16 @@ plot_basis_gram <- function(basis) {
     basis <- basis_mat(basis)
   }
   if (!is.matrix(basis) && !inherits(basis, "Matrix")) {
-    stop("basis must be a matrix or BasisHandle.", call. = FALSE)
+    .encoder_cli_abort(
+      "basis must be a matrix or BasisHandle.",
+      class = "fmrilatent_error_invalid_type"
+    )
+  }
+  if (ncol(basis) < 1L) {
+    .encoder_cli_abort(
+      "basis must have at least one component column.",
+      class = "fmrilatent_error_dim"
+    )
   }
   G <- crossprod(as.matrix(basis))
   if (!requireNamespace("ggplot2", quietly = TRUE)) {

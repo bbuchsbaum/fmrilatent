@@ -13,7 +13,8 @@ All R source code for the fmrilatent package. Contains S4 class definitions, gen
 
 | File | Description |
 |------|-------------|
-| `latent_handles.R` | `BasisHandle` / `LoadingsHandle` S4 classes and registry cache (loaded first) |
+| `latent_utils.R` | Package-wide zero-dependency helpers loaded before classes (`%||%`, mask/space utilities) |
+| `latent_handles.R` | `BasisHandle` / `LoadingsHandle` S4 classes and registry cache |
 | `all_class.R` | `LatentNeuroVec` S4 class definition with slots: basis, loadings, offset, map, meta |
 | `all_generic.R` | S4 generics: `basis`, `loadings`, `offset`, `map`, `mask`, `lift`, `encode` |
 | `latent_neurovector.R` | `LatentNeuroVec` constructor, `show()`, `series()`, `[`, `[[` methods |
@@ -87,7 +88,7 @@ All R source code for the fmrilatent package. Contains S4 class definitions, gen
 
 ### Working In This Directory
 
-- **Collation order matters**: `DESCRIPTION` specifies `Collate:` field. `latent_handles.R` must load before `all_class.R` (handles define class unions used in LatentNeuroVec slots). If adding a new file, add it to `Collate:` in `DESCRIPTION`.
+- **Collation order matters**: `DESCRIPTION` specifies `Collate:` field. `latent_utils.R` must load before common utility consumers, and `latent_handles.R` must load before `all_class.R` (handles define class unions used in LatentNeuroVec slots). If adding a new file, add it to `Collate:` in `DESCRIPTION`.
 - **roxygen2 `@include` tags**: Files use `@include` to declare source-level dependencies (e.g., `#' @include all_generic.R`). These must be consistent with the `Collate:` field.
 - Run `Rscript -e "devtools::document()"` after modifying roxygen2 comments.
 - Naming: snake_case for functions, `UpperCamelCase` for S4 classes.
@@ -102,7 +103,7 @@ All R source code for the fmrilatent package. Contains S4 class definitions, gen
 
 ### Common Patterns
 
-- **Null coalescing**: `%||%` defined locally in several files (not exported).
+- **Null coalescing**: `%||%` is defined once in `latent_utils.R` (not exported).
 - **Handle pattern**: Create `BasisHandle`/`LoadingsHandle` with unique `id` (digest hash); store materialized matrix in registry on first access.
 - **Spec + encode_spec**: Lightweight spec object -> `encode_spec.spec_*()` S3 method builds the actual basis/loadings.
 - **Rcpp toggle**: Functions like `use_haar_rcpp()` check `getOption("fmrilatent.haar.use_rcpp")` and fall back to pure R.

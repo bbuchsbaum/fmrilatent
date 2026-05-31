@@ -16,7 +16,9 @@ params:
   preset: homage
 
 vignette: |
-  %\VignetteIndexEntry{Compressing fMRI Matrices with BOLDZip-SR} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Compressing fMRI Matrices with BOLDZip-SR}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}

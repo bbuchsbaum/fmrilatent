@@ -141,6 +141,7 @@ parcel_basis_template <- function(parcellation,
 
   # Cache Gram factorization: G = L^T L
   G <- Matrix::crossprod(loadings)
+  analysis_transform <- .analysis_transform_from_metric(G, tol = ridge)
   gram_factor <- tryCatch(
     Matrix::Cholesky(G, perm = TRUE),
     error = function(e) {
@@ -171,6 +172,7 @@ parcel_basis_template <- function(parcellation,
         family = class(basis_spec)[[1L]],
         k = ncol(loadings),
         ridge = ridge,
+        analysis_transform = analysis_transform,
         label_map = reduction@info$label_map,
         cluster_map = reduction@info$cluster_map
       )
@@ -182,6 +184,7 @@ parcel_basis_template <- function(parcellation,
 #' Print method for ParcelBasisTemplate
 #' @param x A ParcelBasisTemplate object.
 #' @param ... Ignored.
+#' @return The input `x`, invisibly.
 #' @export
 print.ParcelBasisTemplate <- function(x, ...) {
   cat("ParcelBasisTemplate\n")
@@ -334,13 +337,22 @@ spec_space_parcel <- function(template) {
 #' @exportS3Method
 encode_spec.spec_space_parcel <- function(x, spec, mask, reduction, materialize, label, ...) {
   materialize <- .resolve_materialize(materialize, context = "encode_spec.spec_space_parcel")
+  if (!is.null(reduction)) {
+    .encoder_cli_warn(
+      paste0(
+        "encode_spec.spec_space_parcel ignores the 'reduction' argument; ",
+        "the template's own reduction defines the parcel basis."
+      ),
+      class = "fmrilatent_warning_unused_reduction"
+    )
+  }
   tmpl <- spec$template
   L <- template_loadings(tmpl)
   n_vox <- ncol(x)
-  template_mask <- template_mask(tmpl)
+  tmpl_mask <- template_mask(tmpl)
   .assert_template_mask_match(
     mask,
-    template_mask,
+    tmpl_mask,
     "encode_spec.spec_space_parcel"
   )
 
@@ -372,7 +384,7 @@ encode_spec.spec_space_parcel <- function(x, spec, mask, reduction, materialize,
 
   .make_latent_neurovector(
     x,
-    template_mask,
+    tmpl_mask,
     .loadings_for_materialize(
       proj$analysis_loadings,
       materialize,

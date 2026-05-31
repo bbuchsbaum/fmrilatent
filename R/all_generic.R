@@ -1,3 +1,4 @@
+#' @include all_class.R
 #' @importFrom methods setGeneric
 NULL
 
@@ -13,11 +14,19 @@ NULL
 #' @return The basis matrix (typically time x components)
 #'
 #' @examples
-#' \dontrun{
-#' # For LatentNeuroVec:
+#' mask <- neuroim2::LogicalNeuroVol(
+#'   array(TRUE, dim = c(2, 2, 1)),
+#'   neuroim2::NeuroSpace(c(2, 2, 1))
+#' )
+#' lvec <- LatentNeuroVec(
+#'   basis = matrix(1:6, nrow = 3),
+#'   loadings = matrix(seq_len(8) / 10, nrow = 4),
+#'   space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+#'   mask = mask,
+#'   expect_dense = TRUE
+#' )
 #' b_matrix <- basis(lvec)
-#' print(dim(b_matrix)) # nTime x nComponents
-#' }
+#' dim(b_matrix)
 #'
 #' @export
 #' @rdname basis-methods
@@ -36,11 +45,19 @@ setGeneric("basis", function(x, ...) standardGeneric("basis"))
 #' @return The loadings matrix (typically voxels x components)
 #'
 #' @examples
-#' \dontrun{
-#' # For LatentNeuroVec:
+#' mask <- neuroim2::LogicalNeuroVol(
+#'   array(TRUE, dim = c(2, 2, 1)),
+#'   neuroim2::NeuroSpace(c(2, 2, 1))
+#' )
+#' lvec <- LatentNeuroVec(
+#'   basis = matrix(1:6, nrow = 3),
+#'   loadings = matrix(seq_len(8) / 10, nrow = 4),
+#'   space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+#'   mask = mask,
+#'   expect_dense = TRUE
+#' )
 #' l_matrix <- loadings(lvec)
-#' print(dim(l_matrix)) # nVoxels x nComponents
-#' }
+#' dim(l_matrix)
 #'
 #' @export
 #' @rdname loadings-methods
@@ -54,26 +71,40 @@ setGeneric("loadings", function(x, ...) standardGeneric("loadings"))
 #' (mean or intercept) that is added after the basis x loadings reconstruction.
 #'
 #' @param object An object containing an offset (e.g., \code{LatentNeuroVec})
+#' @param ... Additional arguments for methods. The generic keeps the
+#'   \code{object} first argument used by \code{stats::offset()} and adds
+#'   \code{...} so offset accessors can follow the same extension pattern as
+#'   sibling accessors such as \code{basis()} and \code{loadings()}.
 #' @return The offset vector (length = number of voxels in mask)
 #'
 #' @examples
-#' \dontrun{
-#' # For LatentNeuroVec:
+#' mask <- neuroim2::LogicalNeuroVol(
+#'   array(TRUE, dim = c(2, 2, 1)),
+#'   neuroim2::NeuroSpace(c(2, 2, 1))
+#' )
+#' lvec <- LatentNeuroVec(
+#'   basis = matrix(1:6, nrow = 3),
+#'   loadings = matrix(seq_len(8) / 10, nrow = 4),
+#'   space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+#'   mask = mask,
+#'   expect_dense = TRUE
+#' )
 #' off_vector <- offset(lvec)
-#' print(length(off_vector)) # Should equal number of voxels in mask
-#' }
+#' length(off_vector)
 #'
 #' @export
 #' @rdname offset-methods
 #' @name offset
 NULL
 
-# Note: stats::offset exists with signature function(object).
-# Calling setGeneric("offset", ...) will create an S4 generic using that signature
-# (and will print a message); we then provide an S4 method for LatentNeuroVec.
+# Note: stats::offset exists with first argument `object`. We retain that first
+# argument for compatibility and add `...` for package accessor extensibility.
 if (!isGeneric("offset", where = topenv(parent.frame()))) {
-  setGeneric("offset", function(object) standardGeneric("offset"))
+  setGeneric("offset", function(object, ...) standardGeneric("offset"))
 }
+#' @export
+#' @rdname offset-methods
+setMethod("offset", "ANY", function(object, ...) stats::offset(object))
 
 #' Get the map object
 #'
@@ -230,7 +261,7 @@ setGeneric("coef_time", function(x, coordinates = c("analysis", "raw"), ...) {
 #'   contract in v1. Raw-coordinate metrics are returned when the
 #'   raw-to-analysis transform exposes a linear matrix representation.
 #' @export
-setGeneric("coef_metric", function(x, coordinates = c("raw", "analysis"), ...) {
+setGeneric("coef_metric", function(x, coordinates = c("analysis", "raw"), ...) {
   standardGeneric("coef_metric")
 })
 

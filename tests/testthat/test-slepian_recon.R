@@ -62,6 +62,7 @@ test_that("slepian_spatiotemporal_latent reconstructs exactly with full ranks", 
 
   recon <- predict(lv)
   expect_equal(recon, X, tolerance = 1e-8)
+  expect_s4_class(lv$coeff$L_s, "sparseMatrix")
 })
 
 test_that("slepian_temporal_latent partial linear_access matches full array", {

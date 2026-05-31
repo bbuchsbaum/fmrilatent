@@ -18,17 +18,14 @@ build_bspline_basis <- function(n_time,
                                 boundary_knots = NULL,
                                 include_intercept = FALSE,
                                 orthonormalize = TRUE) {
-  n_time <- as.integer(n_time)
-  k <- as.integer(k)
-  degree <- as.integer(degree)
+  n_time <- .validate_positive_count(n_time, "n_time")
+  k <- .validate_positive_count(k, "k")
+  degree <- .validate_positive_count(degree, "degree")
   if (k > n_time) {
     .encoder_cli_abort(
       paste0("k (", k, ") cannot exceed n_time (", n_time, ")."),
       class = "fmrilatent_error_invalid_count"
     )
-  }
-  if (degree < 1) {
-    .encoder_cli_abort("degree must be >= 1", class = "fmrilatent_error_invalid_argument")
   }
   if (k <= degree && !include_intercept) {
     .encoder_cli_abort(
@@ -44,28 +41,26 @@ build_bspline_basis <- function(n_time,
 
   # If user didn't supply interior knots, create evenly spaced ones when needed
   if (is.null(knots)) {
-    n_int <- max(0L, k - degree - (if (include_intercept) 0L else 1L))
+    n_int <- max(0L, k - degree - as.integer(include_intercept))
     if (n_int > 0L) {
       knots <- seq(boundary_knots[1], boundary_knots[2], length.out = n_int + 2L)[-c(1L, n_int + 2L)]
     }
   }
 
   t_scaled <- seq_len(n_time) / n_time
-  df_use <- if (include_intercept) k else k + 1L
   bs_mat <- splines::bs(
     t_scaled,
-    df = df_use,
+    df = k,
     degree = degree,
     knots = knots,
     Boundary.knots = boundary_knots,
     intercept = include_intercept
   )
-  # Align to requested column count k
-  if (ncol(bs_mat) > k) {
-    bs_mat <- bs_mat[, seq_len(k), drop = FALSE]
-  } else if (ncol(bs_mat) < k) {
-    extra <- matrix(0, nrow = nrow(bs_mat), ncol = k - ncol(bs_mat))
-    bs_mat <- cbind(bs_mat, extra)
+  if (ncol(bs_mat) != k) {
+    .encoder_cli_abort(
+      sprintf("B-spline basis produced %d columns; expected k = %d.", ncol(bs_mat), k),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
   }
 
   bs_mat <- as.matrix(bs_mat)
@@ -100,9 +95,15 @@ bspline_basis_handle <- function(n_time,
                                  orthonormalize = TRUE,
                                  id = NULL,
                                  label = NULL) {
-  n_time <- as.integer(n_time)
-  k <- as.integer(k)
-  degree <- as.integer(degree)
+  n_time <- .validate_positive_count(n_time, "n_time")
+  k <- .validate_positive_count(k, "k")
+  degree <- .validate_positive_count(degree, "degree")
+  if (k > n_time) {
+    .encoder_cli_abort(
+      paste0("k (", k, ") cannot exceed n_time (", n_time, ")."),
+      class = "fmrilatent_error_invalid_count"
+    )
+  }
 
   if (is.null(id)) {
     id <- paste0(

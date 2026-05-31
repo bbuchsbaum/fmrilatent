@@ -70,11 +70,11 @@ LatentNeuroSurfaceVector <- function(basis, loadings, geometry, support = NULL,
     .encoder_cli_abort("'offset' length must match number of rows in 'loadings'",
                        class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
-  if (is.matrix(basis) && !is(basis, "Matrix")) {
+  if (is.matrix(basis)) {
     density_basis <- sum(basis != 0) / length(basis)
     basis <- Matrix::Matrix(basis, sparse = !(density_basis > 0.5))
   }
-  if (is.matrix(loadings) && !is(loadings, "Matrix")) {
+  if (is.matrix(loadings)) {
     density_loadings <- sum(loadings != 0) / length(loadings)
     loadings <- Matrix::Matrix(loadings, sparse = !(density_loadings > 0.5))
   }
@@ -109,7 +109,7 @@ setMethod("loadings", "LatentNeuroSurfaceVector", function(x) loadings_mat(x))
 
 #' @export
 #' @rdname offset-methods
-setMethod("offset", "LatentNeuroSurfaceVector", function(object) object@offset)
+setMethod("offset", "LatentNeuroSurfaceVector", function(object, ...) object@offset)
 
 #' @export
 #' @rdname latent_meta
@@ -127,12 +127,14 @@ setMethod("latent_support", "LatentNeuroSurfaceVector", function(x, ...) x@suppo
 #' @rdname reconstruct_matrix
 setMethod("reconstruct_matrix", "LatentNeuroSurfaceVector",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
-            mat <- as.matrix(x)
-            if (!is.null(time_idx)) {
-              mat <- mat[as.integer(time_idx), , drop = FALSE]
+            B <- basis_mat(x, i = if (is.null(time_idx)) NULL else as.integer(time_idx))
+            L <- loadings_mat(x)
+            mat <- B %*% Matrix::t(L)
+            if (length(x@offset) > 0L) {
+              mat <- sweep(mat, 2, x@offset, "+")
             }
             .subset_reconstruction_by_support(
-              mat,
+              as.matrix(mat),
               support = x@support,
               roi_mask = roi_mask,
               domain = x@geometry,
@@ -199,7 +201,7 @@ setMethod("coef_time", "LatentNeuroSurfaceVector",
 #' @export
 #' @rdname coef_metric
 setMethod("coef_metric", "LatentNeuroSurfaceVector",
-          function(x, coordinates = c("raw", "analysis"), ...) {
+          function(x, coordinates = c("analysis", "raw"), ...) {
             .explicit_coef_metric(x, ncol(basis(x)), coordinates = coordinates)
           })
 

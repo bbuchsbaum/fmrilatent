@@ -4,22 +4,30 @@
 %   R/latent_neurovector.R
 \name{offset}
 \alias{offset}
+\alias{offset,ANY-method}
 \alias{offset,LatentNeuroSurfaceVector-method}
 \alias{offset,BilatLatentNeuroSurfaceVector-method}
 \alias{offset,BlockLatentNeuroVector-method}
 \alias{offset,LatentNeuroVec-method}
 \title{Get the offset vector}
 \usage{
-\S4method{offset}{LatentNeuroSurfaceVector}(object)
+\S4method{offset}{ANY}(object, ...)
 
-\S4method{offset}{BilatLatentNeuroSurfaceVector}(object)
+\S4method{offset}{LatentNeuroSurfaceVector}(object, ...)
 
-\S4method{offset}{BlockLatentNeuroVector}(object)
+\S4method{offset}{BilatLatentNeuroSurfaceVector}(object, ...)
 
-\S4method{offset}{LatentNeuroVec}(object)
+\S4method{offset}{BlockLatentNeuroVector}(object, ...)
+
+\S4method{offset}{LatentNeuroVec}(object, ...)
 }
 \arguments{
 \item{object}{An object containing an offset (e.g., \code{LatentNeuroVec})}
+
+\item{...}{Additional arguments for methods. The generic keeps the
+\code{object} first argument used by \code{stats::offset()} and adds
+\code{...} so offset accessors can follow the same extension pattern as
+sibling accessors such as \code{basis()} and \code{loadings()}.}
 }
 \value{
 The offset vector (length = number of voxels in mask)
@@ -30,10 +38,18 @@ Extract the offset vector from a latent space representation. For
 (mean or intercept) that is added after the basis x loadings reconstruction.
 }
 \examples{
-\dontrun{
-# For LatentNeuroVec:
+mask <- neuroim2::LogicalNeuroVol(
+  array(TRUE, dim = c(2, 2, 1)),
+  neuroim2::NeuroSpace(c(2, 2, 1))
+)
+lvec <- LatentNeuroVec(
+  basis = matrix(1:6, nrow = 3),
+  loadings = matrix(seq_len(8) / 10, nrow = 4),
+  space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+  mask = mask,
+  expect_dense = TRUE
+)
 off_vector <- offset(lvec)
-print(length(off_vector)) # Should equal number of voxels in mask
-}
+length(off_vector)
 
 }

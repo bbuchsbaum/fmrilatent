@@ -79,6 +79,27 @@ test_that("build_hierarchical_template rejects mismatched k_per_level length", {
   )
 })
 
+test_that("build_hierarchical_template rejects non-positive scalar parameters", {
+  skip_if_not_installed("neuroim2")
+
+  mask <- array(TRUE, dim = c(2, 2, 2))
+  n_vox <- sum(mask)
+  parcellations <- list(rep(1L, n_vox), rep(c(1L, 2L), each = n_vox / 2))
+
+  expect_error(
+    build_hierarchical_template(mask, parcellations, c(0L, 2L)),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    build_hierarchical_template(mask, parcellations, c(2L, 2L), k_neighbors = 0L),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    build_hierarchical_template(mask, parcellations, c(2L, 2L), ridge = NA_real_),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+})
+
 test_that("build_hierarchical_template rejects parcellation with wrong voxel count", {
   skip_if_not_installed("neuroim2")
 
@@ -92,9 +113,69 @@ test_that("build_hierarchical_template rejects parcellation with wrong voxel cou
   )
 })
 
+test_that("build_hierarchical_template uses base eigen when rank equals parcel size", {
+  skip_if_not_installed("rgsp")
+
+  mask <- array(TRUE, dim = c(2, 2, 1))
+  parcellations <- list(rep(1L, sum(mask)))
+  template <- build_hierarchical_template(mask, parcellations, k_per_level = sum(mask),
+                                          k_neighbors = 2L)
+  expect_s4_class(template, "HierarchicalBasisTemplate")
+  expect_equal(dim(template_loadings(template)), c(sum(mask), sum(mask)))
+})
+
+test_that("build_hierarchical_template warns with classed condition on Cholesky fallback", {
+  skip_if_not_installed("rgsp")
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+
+  local_mocked_bindings(
+    Cholesky = function(...) stop("forced Cholesky failure"),
+    .package = "Matrix"
+  )
+
+  mask <- array(TRUE, dim = c(2, 2, 1))
+  parcellations <- list(rep(1L, sum(mask)))
+
+  expect_warning(
+    template <- build_hierarchical_template(
+      mask,
+      parcellations,
+      k_per_level = sum(mask),
+      k_neighbors = 2L,
+      solver = "chol"
+    ),
+    class = "fmrilatent_warning_cholesky_fallback"
+  )
+  expect_s4_class(template, "HierarchicalBasisTemplate")
+})
+
 # -----------------------------------------------------------------------------
 # Tests for build_hierarchical_template - successful construction
 # -----------------------------------------------------------------------------
+
+test_that("hierarchical Laplacian eigensolver returns finite low modes", {
+  skip_if_not_installed("RSpectra")
+
+  L <- Matrix::Matrix(
+    matrix(
+      c(1, -1, 0, 0,
+        -1, 2, -1, 0,
+        0, -1, 2, -1,
+        0, 0, -1, 1),
+      nrow = 4L,
+      byrow = TRUE
+    ),
+    sparse = TRUE
+  )
+
+  eig <- fmrilatent:::.hierarchical_laplacian_eigs(L, k = 2L)
+
+  expect_equal(dim(eig$vectors), c(4L, 2L))
+  expect_true(all(is.finite(eig$values)))
+  expect_equal(eig$values, sort(eig$values), tolerance = 1e-8)
+  expect_lt(abs(eig$values[[1L]]), 1e-6)
+})
 
 test_that("build_hierarchical_template creates valid template with single level", {
     skip_if_not_installed("neuroim2")
@@ -115,6 +196,51 @@ test_that("build_hierarchical_template creates valid template with single level"
   expect_s4_class(template, "HierarchicalBasisTemplate")
 })
 
+test_that("HierarchicalBasisTemplate validity enforces cross-slot dimensions", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  loadings <- Matrix::Matrix(
+    matrix(
+      c(1, 0,
+        0, 1,
+        1, 1,
+        0, 1),
+      nrow = 4,
+      byrow = TRUE
+    ),
+    sparse = FALSE
+  )
+  gram_factor <- Matrix::Cholesky(Matrix::crossprod(loadings), perm = TRUE, LDL = TRUE)
+
+  expect_error(
+    new("HierarchicalBasisTemplate",
+      mask = mask_vol,
+      space = neuroim2::NeuroSpace(c(2, 2, 1, 1)),
+      levels = list(rep(1L, 4)),
+      parents = list(integer(0)),
+      loadings = loadings,
+      gram_factor = gram_factor,
+      atoms = data.frame(col_id = 1L, level = 1L, parcel_id = 1L),
+      meta = list(family = "hierarchical_laplacian")
+    ),
+    "@atoms rows must match"
+  )
+
+  expect_error(
+    new("HierarchicalBasisTemplate",
+      mask = mask_vol,
+      space = neuroim2::NeuroSpace(c(2, 2, 1, 1)),
+      levels = list(rep(1L, 3)),
+      parents = list(integer(0)),
+      loadings = loadings,
+      gram_factor = gram_factor,
+      atoms = data.frame(col_id = 1:2, level = 1L, parcel_id = 1L),
+      meta = list(family = "hierarchical_laplacian")
+    ),
+    "@levels\\[\\[1\\]\\] length must match"
+  )
+})
+
 test_that("build_hierarchical_template creates valid template with two levels", {
     skip_if_not_installed("neuroim2")
   skip_if_not_installed("rgsp")
@@ -133,6 +259,22 @@ test_that("build_hierarchical_template creates valid template with two levels", 
 
   expect_true(is_hierarchical_template(template))
   expect_length(template@levels, 2)
+})
+
+test_that("build_hierarchical_template clamps k_neighbors for two-voxel parcels", {
+  skip_if_not_installed("neuroim2")
+  skip_if_not_installed("rgsp")
+
+  mask <- array(TRUE, dim = c(2, 1, 1))
+  template <- build_hierarchical_template(
+    mask = mask,
+    parcellations = list(c(1L, 1L)),
+    k_per_level = 1L,
+    k_neighbors = 6L
+  )
+
+  expect_true(is_hierarchical_template(template))
+  expect_equal(nrow(template_loadings(template)), 2L)
 })
 
 # -----------------------------------------------------------------------------
@@ -225,7 +367,7 @@ test_that("project_hierarchical rejects non-template input", {
 })
 
 test_that("project_hierarchical returns coefficient matrix", {
-    skip_if_not_installed("neuroim2")
+  skip_if_not_installed("neuroim2")
   skip_if_not_installed("rgsp")
   skip_if_not_installed("RSpectra")
 
@@ -246,6 +388,54 @@ test_that("project_hierarchical returns coefficient matrix", {
 
   expect_s4_class(coeff, "Matrix")
   expect_equal(nrow(coeff), n_time)
+})
+
+test_that("project_hierarchical returns coefficients compatible with stored analysis loadings", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  loadings <- Matrix::Matrix(
+    matrix(
+      c(1, 0,
+        1, 1,
+        0, 1,
+        1, 0),
+      nrow = 4,
+      byrow = TRUE
+    ),
+    sparse = FALSE
+  )
+  template <- new("HierarchicalBasisTemplate",
+    mask = mask_vol,
+    space = neuroim2::NeuroSpace(c(2, 2, 1, 1)),
+    levels = list(rep(1L, 4)),
+    parents = list(integer(0)),
+    loadings = loadings,
+    gram_factor = Matrix::Cholesky(Matrix::crossprod(loadings), perm = TRUE, LDL = TRUE),
+    atoms = data.frame(
+      col_id = 1:2,
+      level = 1L,
+      parcel_id = 1L,
+      parent_id = NA_integer_,
+      mode = 1:2
+    ),
+    meta = list(family = "hierarchical_laplacian")
+  )
+  X <- matrix(
+    c(1, 2, 3, 4,
+      2, 3, 4, 5),
+    nrow = 2,
+    byrow = TRUE
+  )
+
+  coeff <- project_hierarchical(template, X)
+  encoded <- encode_hierarchical(X, template, materialize = "matrix")
+
+  expect_equal(as.matrix(coeff), as.matrix(basis(encoded)), tolerance = 1e-8)
+  expect_equal(
+    as.matrix(coeff) %*% t(as.matrix(loadings(encoded))),
+    as.matrix(encoded),
+    tolerance = 1e-8
+  )
 })
 
 # -----------------------------------------------------------------------------

@@ -88,41 +88,38 @@ validate_same_dims <- function(x, y, dims_to_compare = NULL, msg = "Dimension mi
 #' }
 #'
 #' @examples
-#' \dontrun{
-#' library(Matrix)
-#' library(neuroim2)
-#'
 #' # Example data
-#' n_timepoints <- 100
-#' n_components <- 10
-#' n_voxels <- 1000
+#' n_timepoints <- 4
+#' n_components <- 2
+#' mask_array <- array(TRUE, dim = c(2, 2, 1))
+#' n_voxels <- sum(mask_array)
 #'
 #' # Create basis & loadings
-#' basis <- Matrix(rnorm(n_timepoints * n_components),
+#' basis <- Matrix::Matrix(seq_len(n_timepoints * n_components),
 #'   nrow = n_timepoints,
 #'   ncol = n_components
 #' )
-#' loadings <- Matrix(rnorm(n_voxels * n_components),
+#' loadings <- Matrix::Matrix(seq_len(n_voxels * n_components) / 10,
 #'   nrow = n_voxels,
 #'   ncol = n_components,
 #'   sparse = TRUE
 #' )
 #'
-#' # Create space (10x10x10 volume, 100 timepoints)
-#' spc <- NeuroSpace(c(10, 10, 10, n_timepoints))
+#' # Create space (2x2x1 volume, 4 timepoints)
+#' spc <- neuroim2::NeuroSpace(c(2, 2, 1, n_timepoints))
 #'
 #' # Create mask
-#' mask_array <- array(TRUE, dim = c(10, 10, 10))
-#' mask_vol <- LogicalNeuroVol(mask_array, NeuroSpace(c(10, 10, 10)))
+#' mask_vol <- neuroim2::LogicalNeuroVol(mask_array, neuroim2::NeuroSpace(c(2, 2, 1)))
 #'
 #' # Construct LatentNeuroVec
 #' lvec <- LatentNeuroVec(
 #'   basis = basis,
 #'   loadings = loadings,
 #'   space = spc,
-#'   mask = mask_vol
+#'   mask = mask_vol,
+#'   expect_dense = TRUE
 #' )
-#' }
+#' dim(lvec)
 #'
 #' @param meta Optional list of metadata (e.g., HRBF params or centres).
 #' @param expect_dense Logical; if `TRUE`, suppress the informational
@@ -210,11 +207,11 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
   }
 
   # Ensure all numeric inputs are finite
-  if ((is.matrix(basis) || is(basis, "Matrix")) && !all(is.finite(basis))) {
+  if ((is.matrix(basis) || is(basis, "Matrix")) && !.matrix_like_all_finite(basis)) {
     .encoder_cli_abort("'basis' must contain only finite values",
                        class = "fmrilatent_error_value", call = rlang::caller_env())
   }
-  if ((is.matrix(loadings) || is(loadings, "Matrix")) && !all(is.finite(loadings))) {
+  if ((is.matrix(loadings) || is(loadings, "Matrix")) && !.matrix_like_all_finite(loadings)) {
     .encoder_cli_abort("'loadings' must contain only finite values",
                        class = "fmrilatent_error_value", call = rlang::caller_env())
   }
@@ -228,7 +225,11 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
     density_basis <- sum(basis != 0) / length(basis)
     if (density_basis > 0.5) {
       if (!isTRUE(expect_dense)) {
-        message("Input 'basis' is dense (", round(density_basis * 100), "% non-zero); storing as dense dgeMatrix.")
+        .encoder_cli_warn(
+          paste0("Input 'basis' is dense (", round(density_basis * 100),
+                 "% non-zero); storing as dense dgeMatrix."),
+          class = "fmrilatent_warning_dense_storage"
+        )
       }
       basis <- Matrix::Matrix(basis, sparse = FALSE)
     } else {
@@ -240,7 +241,11 @@ LatentNeuroVec <- function(basis, loadings, space, mask, offset = NULL, label = 
     density_loadings <- sum(loadings != 0) / length(loadings)
     if (density_loadings > 0.5) {
       if (!isTRUE(expect_dense)) {
-        message("Input 'loadings' is dense (", round(density_loadings * 100), "% non-zero); storing as dense dgeMatrix.")
+        .encoder_cli_warn(
+          paste0("Input 'loadings' is dense (", round(density_loadings * 100),
+                 "% non-zero); storing as dense dgeMatrix."),
+          class = "fmrilatent_warning_dense_storage"
+        )
       }
       loadings <- Matrix::Matrix(loadings, sparse = FALSE)
     } else {
@@ -303,7 +308,7 @@ setMethod("loadings", "LatentNeuroVec", function(x) loadings_mat(x))
 
 #' @export
 #' @rdname offset-methods
-setMethod("offset", "LatentNeuroVec", function(object) object@offset)
+setMethod("offset", "LatentNeuroVec", function(object, ...) object@offset)
 
 #' @export
 #' @rdname mask-methods
@@ -327,83 +332,95 @@ setMethod("map", "LatentNeuroVec", function(x) x@map)
 .validate_LatentNeuroVec <- function(object) {
   errors <- character()
 
-  if (!inherits(object@basis, c("Matrix", "matrix", "BasisHandle"))) {
+  basis_ok <- inherits(object@basis, c("Matrix", "matrix", "BasisHandle"))
+  loadings_ok <- inherits(object@loadings, c("Matrix", "matrix", "LoadingsHandle"))
+  offset_ok <- is.numeric(object@offset)
+  mask_ok <- inherits(object@mask, "LogicalNeuroVol")
+  map_ok <- inherits(object@map, "IndexLookupVol")
+  label_ok <- is.character(object@label) && length(object@label) == 1
+  space_ok <- inherits(object@space, "NeuroSpace")
+
+  if (!basis_ok) {
     errors <- c(errors, "Slot @basis must be Matrix, matrix, or BasisHandle.")
   }
-  if (!inherits(object@loadings, c("Matrix", "matrix", "LoadingsHandle"))) {
+  if (!loadings_ok) {
     errors <- c(errors, "Slot @loadings must be Matrix, matrix, or LoadingsHandle.")
   }
-  if (!is.numeric(object@offset)) {
+  if (!offset_ok) {
     errors <- c(errors, "Slot @offset must be numeric.")
   }
-  if (!inherits(object@mask, "LogicalNeuroVol")) {
+  if (!mask_ok) {
     errors <- c(errors, "Slot @mask must be a LogicalNeuroVol object.")
   }
-  if (!inherits(object@map, "IndexLookupVol")) {
+  if (!map_ok) {
     errors <- c(errors, "Slot @map must be an IndexLookupVol object.")
   }
-  if (!is.character(object@label) || length(object@label) != 1) {
+  if (!label_ok) {
     errors <- c(errors, "Slot @label must be a single character string.")
   }
-  if (!inherits(object@space, "NeuroSpace")) {
+  if (!space_ok) {
     errors <- c(errors, "Slot @space must be a NeuroSpace object.")
     return(errors)
   }
 
-  if (length(errors) == 0) {
-    s_dims <- dim(object@space)
-    if (length(s_dims) != 4) {
-      errors <- c(errors, "Slot @space must have 4 dimensions.")
-    } else {
-      b_dim <- .latent_basis_dim(object@basis)
-      l_dim <- .latent_loadings_dim(object@loadings)
+  s_dims <- dim(object@space)
+  space_dim_ok <- length(s_dims) == 4
+  if (!space_dim_ok) {
+    errors <- c(errors, "Slot @space must have 4 dimensions.")
+  }
 
-      if (b_dim[2L] != l_dim[2L]) {
-        errors <- c(errors, paste0(
-          "Component mismatch: k_b = ", b_dim[2L],
-          " != k_l = ", l_dim[2L]
-        ))
-      }
+  b_dim <- if (basis_ok) .latent_basis_dim(object@basis) else NULL
+  l_dim <- if (loadings_ok) .latent_loadings_dim(object@loadings) else NULL
 
-      if (b_dim[1L] != s_dims[4]) {
-        errors <- c(errors, paste0(
-          "Time mismatch: n_time(basis) = ", b_dim[1L],
-          " != dim(@space)[4] = ", s_dims[4]
-        ))
-      }
+  if (basis_ok && loadings_ok && b_dim[2L] != l_dim[2L]) {
+    errors <- c(errors, paste0(
+      "Component mismatch: k_b = ", b_dim[2L],
+      " != k_l = ", l_dim[2L]
+    ))
+  }
 
-      dim_check_result <- validate_same_dims(
-        object@mask,
-        object@space,
-        dims_to_compare = 1:3,
-        msg = "[.validate_LatentNeuroVec] Mask/Space dim mismatch:"
-      )
-      if (!is.null(dim_check_result)) {
-        errors <- c(errors, dim_check_result)
-      }
+  if (basis_ok && space_dim_ok && b_dim[1L] != s_dims[4]) {
+    errors <- c(errors, paste0(
+      "Time mismatch: n_time(basis) = ", b_dim[1L],
+      " != dim(@space)[4] = ", s_dims[4]
+    ))
+  }
 
-      nVox_mask <- sum(object@mask)
-      if (l_dim[1L] != nVox_mask) {
-        errors <- c(errors, paste0(
-          "Loadings rows (", l_dim[1L],
-          ") mismatch non-zero count in mask (", nVox_mask, ")"
-        ))
-      }
-
-      if (length(object@offset) > 0 && length(object@offset) != l_dim[1L]) {
-        errors <- c(errors, paste0(
-          "Offset length (", length(object@offset),
-          ") mismatch number of rows in loadings (", l_dim[1L], ")"
-        ))
-      }
-
-      if (length(object@map@indices) != nVox_mask) {
-        errors <- c(errors, paste0(
-          "Map indices length (", length(object@map@indices),
-          ") mismatch non-zero count in mask (", nVox_mask, ")"
-        ))
-      }
+  nVox_mask <- NULL
+  if (mask_ok && space_dim_ok) {
+    dim_check_result <- validate_same_dims(
+      object@mask,
+      object@space,
+      dims_to_compare = 1:3,
+      msg = "[.validate_LatentNeuroVec] Mask/Space dim mismatch:"
+    )
+    if (!is.null(dim_check_result)) {
+      errors <- c(errors, dim_check_result)
     }
+
+    nVox_mask <- sum(object@mask)
+  }
+
+  if (loadings_ok && !is.null(nVox_mask) && l_dim[1L] != nVox_mask) {
+    errors <- c(errors, paste0(
+      "Loadings rows (", l_dim[1L],
+      ") mismatch non-zero count in mask (", nVox_mask, ")"
+    ))
+  }
+
+  if (offset_ok && loadings_ok &&
+      length(object@offset) > 0 && length(object@offset) != l_dim[1L]) {
+    errors <- c(errors, paste0(
+      "Offset length (", length(object@offset),
+      ") mismatch number of rows in loadings (", l_dim[1L], ")"
+    ))
+  }
+
+  if (map_ok && !is.null(nVox_mask) && length(object@map@indices) != nVox_mask) {
+    errors <- c(errors, paste0(
+      "Map indices length (", length(object@map@indices),
+      ") mismatch non-zero count in mask (", nVox_mask, ")"
+    ))
   }
 
   if (length(errors) == 0) TRUE else errors

@@ -4,24 +4,41 @@
 \alias{spec_space_hrbf}
 \title{Spatial HRBF spec}
 \usage{
-spec_space_hrbf(params = list())
+spec_space_hrbf(
+  params = list(),
+  sigma0 = NULL,
+  levels = NULL,
+  radius_factor = NULL,
+  num_extra_fine_levels = NULL,
+  kernel_type = NULL,
+  kernel_type_fine_levels = NULL,
+  seed = NULL,
+  ...
+)
 }
 \arguments{
-\item{params}{Named list of HRBF parameters. Any keys not supplied fall
-back to package defaults. Recognized keys:
-\describe{
-  \item{`sigma0`}{Base kernel width (numeric, default `6`). Controls
-    the spatial extent of the coarsest HRBF atoms.}
-  \item{`levels`}{Number of dyadic resolution levels (integer, default
-    `3L`). Each level halves the kernel width.}
-  \item{`radius_factor`}{Atom support radius as a multiple of the
-    level width (numeric, default `2.5`).}
-  \item{`kernel_type`}{Radial kernel family (character, default
-    `"gaussian"`).}
-  \item{`seed`}{Random seed (integer, default `1L`) used when atom
-    centres are placed stochastically, so encodings are reproducible.}
-}
-Validated by `.validate_hrbf_params()`.}
+\item{params}{Optional named list for advanced or compatibility HRBF
+parameters. Explicit formals override entries with the same names.}
+
+\item{sigma0}{Base kernel width. `NULL` uses the HRBF default (`6`).}
+
+\item{levels}{Number of dyadic resolution levels. `NULL` uses the HRBF
+default (`3L`).}
+
+\item{radius_factor}{Atom support radius as a multiple of level width.
+`NULL` uses the HRBF default (`2.5`).}
+
+\item{num_extra_fine_levels}{Optional extra fine levels. `NULL` uses the
+HRBF default (`0L`).}
+
+\item{kernel_type}{Radial kernel family. `NULL` uses `"gaussian"`.}
+
+\item{kernel_type_fine_levels}{Kernel family for extra fine levels. `NULL`
+uses the HRBF default.}
+
+\item{seed}{Random seed. `NULL` uses the HRBF default (`1L`).}
+
+\item{...}{Additional named HRBF parameters for advanced use.}
 }
 \value{
 A `spec_space_hrbf` object.

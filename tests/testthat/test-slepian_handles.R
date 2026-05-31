@@ -134,6 +134,21 @@ test_that("slepian_temporal_handle converts k to integer", {
   expect_equal(handle@spec$k, 3L)
 })
 
+test_that("slepian_temporal_handle rejects invalid scalar parameters", {
+  expect_error(
+    slepian_temporal_handle(n_time = NA_integer_, tr = 2.0, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    slepian_temporal_handle(n_time = 20L, tr = NA_real_, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+  expect_error(
+    slepian_temporal_handle(n_time = 20L, tr = 2.0, bandwidth = Inf),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+})
+
 test_that("slepian_temporal_handle label contains parameters", {
   n_time <- 30L
   bandwidth <- 0.05

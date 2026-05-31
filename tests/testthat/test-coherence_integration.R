@@ -73,12 +73,12 @@ test_that("handle-backed explicit spatial encoders support common interface", {
   roi <- array(FALSE, dim = dim(td$mask_arr))
   roi[1:2, , ] <- TRUE
 
-  lv_heat <- encode(
+  lv_heat <- without_dense_basis_warning(encode(
     td$X,
     spec_space_heat(scales = c(1, 2), order = 10, k_neighbors = 3),
     mask = td$mask_vol,
     materialize = "handle"
-  )
+  ))
 
   expect_true(is_explicit_latent(lv_heat))
   expect_true(inherits(lv_heat@loadings, "LoadingsHandle"))
@@ -98,18 +98,18 @@ test_that("handle-backed spatial encoders preserve k_neighbors on rematerializat
   options(fmrilatent.registry.enabled = FALSE)
   on.exit(options(fmrilatent.registry.enabled = old_opt), add = TRUE)
 
-  lv_heat_handle <- encode(
+  lv_heat_handle <- without_dense_basis_warning(encode(
     td$X,
     spec_space_heat(scales = c(1, 2), order = 10, k_neighbors = 3),
     mask = td$mask_vol,
     materialize = "handle"
-  )
-  lv_heat_matrix <- encode(
+  ))
+  lv_heat_matrix <- without_dense_basis_warning(encode(
     td$X,
     spec_space_heat(scales = c(1, 2), order = 10, k_neighbors = 3),
     mask = td$mask_vol,
     materialize = "matrix"
-  )
+  ))
 
   expect_equal(as.matrix(loadings(lv_heat_handle)), as.matrix(loadings(lv_heat_matrix)))
 })

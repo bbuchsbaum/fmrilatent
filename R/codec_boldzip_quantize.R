@@ -22,14 +22,20 @@
 #
 # `.boldzip_noise_scale()` is the single canonical definition of how that
 # global scale is derived from a set of values: the sample standard deviation
-# of the supplied values. Every call site (texture fit residuals, event
+# of the supplied values when at least two values are available, and zero for
+# degenerate length-0/1 inputs. Every call site (texture fit residuals, event
 # amplitudes, carrier coefficients) and the default inside
 # `.boldzip_quantize_values()` route through this helper so the policy lives in
 # exactly one place. Non-finite or non-positive scales are treated downstream
 # in `.boldzip_quantize_values()` (replaced with 1).
 # ---------------------------------------------------------------------------
 .boldzip_noise_scale <- function(values) {
-  stats::sd(as.numeric(values))
+  values <- as.numeric(values)
+  if (length(values) < 2L) {
+    return(0)
+  }
+  scale <- stats::sd(values)
+  if (!is.finite(scale)) 0 else scale
 }
 
 

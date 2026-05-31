@@ -15,46 +15,70 @@ NULL
   blocks
 }
 
-.validate_block_latent_blocks <- function(blocks, context = "BlockLatentNeuroVector") {
+.validate_block_latent_blocks <- function(blocks, context = "BlockLatentNeuroVector",
+                                          compare_values = TRUE) {
   blocks <- .normalize_block_latent_blocks(blocks, context = context)
   errs <- character()
 
-  # First pass: ensure each block is an explicit latent that exposes a
-  # materializable basis() matrix. Collect the bases (with labels) for the
-  # shared-basis comparison below.
+  # First pass: ensure each block is an explicit latent. Constructors compare
+  # materialized basis values once; S4 validity only compares dimensions so
+  # validObject() does not trigger expensive handle materialization.
   bases <- list()
+  basis_dims <- list()
   labels <- character()
   for (nm in names(blocks)) {
     block <- blocks[[nm]]
     ok_explicit <- FALSE
-    explicit_try <- try(is_explicit_latent(block), silent = TRUE)
-    if (!inherits(explicit_try, "try-error")) {
+    explicit_try <- tryCatch(
+      is_explicit_latent(block),
+      error = function(e) e
+    )
+    if (!inherits(explicit_try, "error")) {
       ok_explicit <- isTRUE(explicit_try)
     }
     if (!ok_explicit) {
-      errs <- c(errs, paste0("Block '", nm, "' must be an explicit latent object."))
+      dispatch_msg <- if (inherits(explicit_try, "error")) {
+        paste0(" is_explicit_latent() dispatch failed: ", conditionMessage(explicit_try))
+      } else {
+        ""
+      }
+      errs <- c(errs, paste0("Block '", nm, "' must be an explicit latent object.", dispatch_msg))
       next
     }
 
-    block_basis <- try(as.matrix(basis(block)), silent = TRUE)
-    if (inherits(block_basis, "try-error")) {
-      errs <- c(errs, paste0("Block '", nm, "' does not expose a basis() matrix."))
-      next
+    if (isTRUE(compare_values)) {
+      block_basis <- try(as.matrix(basis(block)), silent = TRUE)
+      if (inherits(block_basis, "try-error")) {
+        errs <- c(errs, paste0("Block '", nm, "' does not expose a basis() matrix."))
+        next
+      }
+      bases[[length(bases) + 1L]] <- block_basis
+    } else {
+      block_dim <- try(.explicit_latent_basis_dim(block), silent = TRUE)
+      if (inherits(block_dim, "try-error")) {
+        errs <- c(errs, paste0("Block '", nm, "' does not expose basis dimensions."))
+        next
+      }
+      basis_dims[[length(basis_dims) + 1L]] <- block_dim
     }
-
-    bases[[length(bases) + 1L]] <- block_basis
     labels <- c(labels, nm)
   }
 
-  # Second pass: every usable basis must match the first (reference) block in
-  # both dimension and value. Message wording is preserved for back-compat.
-  basis_errs <- .validate_shared_basis(
-    bases,
-    labels = labels,
-    tolerance = 1e-8,
-    dim_msg = "Block '%s' basis dimensions do not match the reference block.",
-    value_msg = "Block '%s' basis matrix must match the shared block basis."
-  )
+  basis_errs <- if (isTRUE(compare_values)) {
+    .validate_shared_basis(
+      bases,
+      labels = labels,
+      tolerance = 1e-8,
+      dim_msg = "Block '%s' basis dimensions do not match the reference block.",
+      value_msg = "Block '%s' basis matrix must match the shared block basis."
+    )
+  } else {
+    .validate_shared_basis_dims(
+      basis_dims,
+      labels = labels,
+      dim_msg = "Block '%s' basis dimensions do not match the reference block."
+    )
+  }
   if (!isTRUE(basis_errs)) {
     errs <- c(errs, basis_errs)
   }
@@ -161,22 +185,49 @@ setMethod("basis", "BlockLatentNeuroVector", function(x) basis(x@blocks[[1L]]))
 #' @rdname loadings-methods
 setMethod("loadings", "BlockLatentNeuroVector",
           function(x) {
-            Matrix::Matrix(
-              do.call(rbind, lapply(x@blocks, function(block) as.matrix(loadings(block)))),
-              sparse = FALSE
-            )
+            do.call(rbind, lapply(x@blocks, loadings))
           })
 
 #' @export
 #' @rdname offset-methods
 setMethod("offset", "BlockLatentNeuroVector",
-          function(object) unlist(lapply(object@blocks, offset), use.names = FALSE))
+          function(object, ...) unlist(lapply(object@blocks, offset), use.names = FALSE))
 
 #' @export
 #' @rdname reconstruct_matrix
 setMethod("reconstruct_matrix", "BlockLatentNeuroVector",
           function(x, time_idx = NULL, roi_mask = NULL, ...) {
-            roi_list <- if (is.list(roi_mask)) roi_mask else list()
+            block_names <- names(x@blocks)
+            if (is.null(roi_mask)) {
+              roi_list <- stats::setNames(vector("list", length(x@blocks)), block_names)
+            } else if (is.list(roi_mask)) {
+              roi_list <- roi_mask
+              roi_names <- names(roi_list)
+              if (is.null(roi_names) || any(!nzchar(roi_names))) {
+                if (length(roi_list) != length(x@blocks)) {
+                  .encoder_cli_abort(
+                    "roi_mask list must be named by block or have one entry per block.",
+                    class = "fmrilatent_error_invalid_argument"
+                  )
+                }
+                names(roi_list) <- block_names
+              }
+              unknown <- setdiff(names(roi_list), block_names)
+              if (length(unknown) > 0L) {
+                .encoder_cli_abort(
+                  paste0("roi_mask contains unknown block names: ",
+                         paste(unknown, collapse = ", ")),
+                  class = "fmrilatent_error_invalid_argument"
+                )
+              }
+            } else if (length(x@blocks) == 1L) {
+              roi_list <- stats::setNames(list(roi_mask), block_names)
+            } else {
+              .encoder_cli_abort(
+                "roi_mask must be a named list for multi-block latent vectors.",
+                class = "fmrilatent_error_invalid_argument"
+              )
+            }
             pieces <- Map(
               function(block, nm) {
                 reconstruct_matrix(block,
@@ -247,7 +298,7 @@ setMethod("coef_time", "BlockLatentNeuroVector",
 #' @export
 #' @rdname coef_metric
 setMethod("coef_metric", "BlockLatentNeuroVector",
-          function(x, coordinates = c("raw", "analysis"), ...) diag(ncol(basis(x))))
+          function(x, coordinates = c("analysis", "raw"), ...) diag(ncol(basis(x))))
 
 #' @export
 #' @rdname analysis_transform
@@ -317,7 +368,7 @@ setMethod("project_vcov", "BlockLatentNeuroVector",
           })
 
 .validate_BlockLatentNeuroVector <- function(object) {
-  .validate_block_latent_blocks(object@blocks)
+  .validate_block_latent_blocks(object@blocks, compare_values = FALSE)
 }
 
 setValidity("BlockLatentNeuroVector", .validate_BlockLatentNeuroVector)

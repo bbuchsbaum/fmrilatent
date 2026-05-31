@@ -2,7 +2,7 @@
 #' @importFrom neuroim2 NeuroVec IndexLookupVol LogicalNeuroVol NeuroSpace
 #' @importFrom Matrix Matrix
 #' @importClassesFrom Matrix Matrix dgCMatrix dgeMatrix
-#' @importFrom methods setClass setOldClass
+#' @importFrom methods setClass setOldClass setClassUnion
 NULL
 
 #' Virtual ExplicitLatent S4 marker
@@ -35,6 +35,21 @@ setOldClass("ParcelBasisTemplate")
 setOldClass("AWPTBasisTemplate")
 setOldClass("SurfaceBasisTemplate")
 setOldClass("SurfaceAWPTBasisTemplate")
+
+#' Latent object class union
+#'
+#' A common S4 dispatch target spanning the package's two latent branches:
+#' explicit S4 latent objects that inherit from \code{ExplicitLatent}, and
+#' decoder-backed S3 objects registered through \code{ImplicitLatent}
+#' (including \code{TransportLatent}). This union is intentionally broader
+#' than \code{ExplicitLatent}: use \code{is_explicit_latent()} when the caller
+#' specifically requires stored basis/loadings, and use the \code{Latent}
+#' union for cross-cutting S4 methods that can operate on either explicit or
+#' decoder-backed latent objects.
+#'
+#' @name Latent-class
+#' @keywords internal
+setClassUnion("Latent", c("ExplicitLatent", "ImplicitLatent"))
 
 #' LatentNeuroVec Class
 #'
@@ -85,41 +100,35 @@ setOldClass("SurfaceAWPTBasisTemplate")
 #' \code{\link{LatentNeuroVec}} constructor function.
 #'
 #' @examples
-#' \dontrun{
-#' library(Matrix)
-#' library(neuroim2)
-#'
-#' # Example dimensions
-#' n_timepoints <- 100
-#' n_components <- 10
-#' n_voxels <- 1000
+#' n_timepoints <- 4
+#' n_components <- 2
+#' mask_array <- array(TRUE, dim = c(2, 2, 1))
+#' n_voxels <- sum(mask_array)
 #'
 #' # Create basis (temporal) & loadings (spatial)
-#' basis <- Matrix(rnorm(n_timepoints * n_components),
+#' basis <- Matrix::Matrix(seq_len(n_timepoints * n_components),
 #'   nrow = n_timepoints, ncol = n_components
 #' )
-#' loadings <- Matrix(rnorm(n_voxels * n_components),
+#' loadings <- Matrix::Matrix(seq_len(n_voxels * n_components) / 10,
 #'   nrow = n_voxels, ncol = n_components, sparse = TRUE
 #' )
 #'
-#' # Create space (10x10x10 volume, 100 timepoints)
-#' spc <- NeuroSpace(c(10, 10, 10, n_timepoints))
+#' # Create space (2x2x1 volume, 4 timepoints)
+#' spc <- neuroim2::NeuroSpace(c(2, 2, 1, n_timepoints))
 #'
 #' # Create mask
-#' mask_array <- array(TRUE, dim = c(10, 10, 10))
-#' mask_vol <- LogicalNeuroVol(mask_array, NeuroSpace(c(10, 10, 10)))
+#' mask_vol <- neuroim2::LogicalNeuroVol(mask_array, neuroim2::NeuroSpace(c(2, 2, 1)))
 #'
 #' # Construct LatentNeuroVec
 #' lvec <- LatentNeuroVec(
 #'   basis = basis,
 #'   loadings = loadings,
 #'   space = spc,
-#'   mask = mask_vol
+#'   mask = mask_vol,
+#'   expect_dense = TRUE
 #' )
 #'
-#' print(lvec)
-#' print(dim(lvec))
-#' }
+#' dim(lvec)
 #'
 #' @export
 #' @rdname LatentNeuroVec-class
@@ -236,3 +245,40 @@ setClass("HierarchicalBasisTemplate",
     meta = "list"
   )
 )
+
+setValidity("HierarchicalBasisTemplate", function(object) {
+  errors <- character()
+  mask_n <- sum(as.array(object@mask))
+  load_dim <- dim(object@loadings)
+
+  if (length(load_dim) != 2L) {
+    errors <- c(errors, "@loadings must be matrix-like with two dimensions.")
+  } else {
+    if (load_dim[1L] != mask_n) {
+      errors <- c(errors, "@loadings rows must match the number of TRUE mask voxels.")
+    }
+    if (nrow(object@atoms) != load_dim[2L]) {
+      errors <- c(errors, "@atoms rows must match the number of loading columns.")
+    }
+  }
+
+  if (length(object@levels) < 1L) {
+    errors <- c(errors, "@levels must contain at least one integer vector.")
+  } else {
+    for (idx in seq_along(object@levels)) {
+      level <- object@levels[[idx]]
+      if (!is.integer(level)) {
+        errors <- c(errors, sprintf("@levels[[%d]] must be an integer vector.", idx))
+      }
+      if (length(level) != mask_n) {
+        errors <- c(errors, sprintf("@levels[[%d]] length must match the number of TRUE mask voxels.", idx))
+      }
+    }
+  }
+
+  if (is.null(object@gram_factor)) {
+    errors <- c(errors, "@gram_factor must not be NULL.")
+  }
+
+  if (length(errors) > 0L) errors else TRUE
+})

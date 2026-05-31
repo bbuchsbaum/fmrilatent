@@ -70,7 +70,7 @@ boldzip_events <- function(max_events = 256L, threshold_sd = 3,
 #' @export
 boldzip_sr_payload_summary <- function(object) {
   if (!inherits(object, "BoldZipSR")) {
-    stop("object must be a BoldZipSR object.", call. = FALSE)
+    .boldzip_cli_abort("object must be a BoldZipSR object.")
   }
   n_load <- nrow(object$texture$loadings)
   n_events <- nrow(object$events)
@@ -129,17 +129,26 @@ evaluate_boldzip_sr <- function(X, object, reliability_weights = NULL) {
     .boldzip_validate_matrix(object, "object")
   }
   if (!identical(dim(X), dim(X_hat))) {
-    stop("X and reconstruction must have identical dimensions.", call. = FALSE)
+    .boldzip_cli_abort("X and reconstruction must have identical dimensions.")
   }
   err <- X - X_hat
   mse <- mean(err * err)
   weighted_mse <- NA_real_
   if (!is.null(reliability_weights)) {
-    w <- as.numeric(reliability_weights)
-    w <- rep(w, length.out = length(err))
+    if (is.null(dim(reliability_weights))) {
+      w <- as.numeric(reliability_weights)
+      if (length(w) != nrow(X)) {
+        .boldzip_cli_abort("reliability_weights vector length must match nrow(X).")
+      }
+      w <- matrix(rep(w, times = ncol(X)), nrow = nrow(X), ncol = ncol(X))
+    } else {
+      w <- as.matrix(reliability_weights)
+      if (!identical(dim(w), dim(X))) {
+        .boldzip_cli_abort("reliability_weights matrix dimensions must match X.")
+      }
+    }
     if (any(!is.finite(w)) || any(w < 0) || sum(w) <= 0) {
-      stop("reliability_weights must be finite non-negative weights with positive sum.",
-           call. = FALSE)
+      .boldzip_cli_abort("reliability_weights must be finite non-negative weights with positive sum.")
     }
     weighted_mse <- sum(w * as.numeric(err)^2) / sum(w)
   }
@@ -149,8 +158,8 @@ evaluate_boldzip_sr <- function(X, object, reliability_weights = NULL) {
     correlation = .boldzip_corr(X, X_hat),
     reliability_weighted_mse = weighted_mse,
     payload_scalars = if (is_boldzip) {
-      summary <- boldzip_sr_payload_summary(object)
-      summary$scalar_count[summary$component == "total_object"]
+      psum <- boldzip_sr_payload_summary(object)
+      psum$scalar_count[psum$component == "total_object"]
     } else {
       NA_real_
     }
@@ -179,6 +188,7 @@ boldzip_sr_simulate <- function(n_voxels = 40L, n_time = 80L,
   n_events <- .boldzip_check_scalar_integer(n_events, "n_events", min = 0L)
   noise_sd <- .boldzip_check_scalar_number(noise_sd, "noise_sd", min = 0)
   if (!is.null(seed)) {
+    seed <- .boldzip_check_scalar_integer(seed, "seed", min = 0L)
     set.seed(seed)
   }
 
@@ -250,7 +260,7 @@ boldzip_sr_simulate <- function(n_voxels = 40L, n_time = 80L,
 boldzip_parcel_reconstruct <- function(X, parcels) {
   X <- .boldzip_validate_matrix(X, "X")
   if (length(parcels) != nrow(X)) {
-    stop("parcels must have one label per row of X.", call. = FALSE)
+    .boldzip_cli_abort("parcels must have one label per row of X.")
   }
   parcels <- as.factor(parcels)
   out <- matrix(0, nrow = nrow(X), ncol = ncol(X))
@@ -293,7 +303,7 @@ boldzip_svd_reconstruct <- function(X, rank, center = TRUE) {
 compare_boldzip_sr <- function(X, fit, parcels = NULL, svd_ranks = NULL) {
   X <- .boldzip_validate_matrix(X, "X")
   if (!inherits(fit, "BoldZipSR")) {
-    stop("fit must be a BoldZipSR object.", call. = FALSE)
+    .boldzip_cli_abort("fit must be a BoldZipSR object.")
   }
 
   rows <- list()

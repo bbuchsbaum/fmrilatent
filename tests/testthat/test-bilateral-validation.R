@@ -2,11 +2,7 @@ library(testthat)
 library(Matrix)
 
 .skip_if_no_neurosurf_bval <- function() {
-  skip_if(
-    any(commandArgs() == "-f"),
-    "neurosurf surface examples abort under this local R/BATCH setup"
-  )
-  skip_if_not_installed("neurosurf")
+  skip_if_no_neurosurf_surface_examples()
 }
 
 .make_surface_bval <- function(hemi = c("left", "right"), basis = NULL) {

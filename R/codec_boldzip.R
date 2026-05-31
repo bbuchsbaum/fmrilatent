@@ -77,16 +77,18 @@ boldzip_sr_encode <- function(X,
   X <- .boldzip_validate_matrix(X, "X")
   n_voxels <- nrow(X)
   n_time <- ncol(X)
+  if (n_time < 2L) {
+    .boldzip_cli_abort("X must contain at least two time points for BOLDZip-SR encoding.")
+  }
   k_carriers <- .boldzip_check_scalar_integer(k_carriers, "k_carriers")
   q_texture <- .boldzip_check_scalar_integer(q_texture, "q_texture")
   texture_lags <- sort(unique(as.integer(texture_lags)))
   if (length(texture_lags) == 0L || anyNA(texture_lags)) {
-    stop("texture_lags must be a non-empty integer vector.", call. = FALSE)
+    .boldzip_cli_abort("texture_lags must be a non-empty integer vector.")
   }
   texture_lags <- texture_lags[abs(texture_lags) < n_time]
   if (length(texture_lags) == 0L) {
-    stop("texture_lags must contain at least one lag with abs(lag) < n_time.",
-         call. = FALSE)
+    .boldzip_cli_abort("texture_lags must contain at least one lag with abs(lag) < n_time.")
   }
   if (is.null(temporal_k)) {
     temporal_k <- max(1L, ceiling(n_time / 4))
@@ -152,7 +154,7 @@ boldzip_sr_encode <- function(X,
     as.numeric(theta),
     reliability = as.numeric(theta_reliability),
     quantization = quantization,
-    noise_scale = .boldzip_noise_scale(z_raw)
+    noise_scale = .boldzip_noise_scale(theta)
   )
   z_hat <- theta %*% t(temporal_basis)
 
@@ -245,7 +247,7 @@ boldzip_sr_encode <- function(X,
 #' @export
 boldzip_sr_decode <- function(object, time_idx = NULL, roi = NULL) {
   if (!inherits(object, "BoldZipSR")) {
-    stop("object must be a BoldZipSR object.", call. = FALSE)
+    .boldzip_cli_abort("object must be a BoldZipSR object.")
   }
   n_voxels <- object$dimensions[["voxels"]]
   n_time <- object$dimensions[["time"]]
@@ -271,25 +273,22 @@ boldzip_sr_decode <- function(object, time_idx = NULL, roi = NULL) {
     if (!is.numeric(time_idx) || anyNA(time_idx) ||
         any(time_idx != as.integer(time_idx)) ||
         any(time_idx < 1L | time_idx > n_time)) {
-      stop("time_idx must contain valid positive integer time indices.",
-           call. = FALSE)
+      .boldzip_cli_abort("time_idx must contain valid positive integer time indices.")
     }
     recon <- recon[, time_idx, drop = FALSE]
   }
   if (!is.null(roi)) {
     if (!is.numeric(roi) && !is.logical(roi)) {
-      stop("roi must be integer or logical.", call. = FALSE)
+      .boldzip_cli_abort("roi must be integer or logical.")
     }
     if (is.logical(roi)) {
       if (length(roi) != n_voxels || anyNA(roi)) {
-        stop("logical roi must have one non-missing value per row.",
-             call. = FALSE)
+        .boldzip_cli_abort("logical roi must have one non-missing value per row.")
       }
     } else if (anyNA(roi) ||
                any(roi != as.integer(roi)) ||
                any(roi < 1L | roi > n_voxels)) {
-      stop("roi must contain valid positive integer row indices.",
-           call. = FALSE)
+      .boldzip_cli_abort("roi must contain valid positive integer row indices.")
     }
     recon <- recon[roi, , drop = FALSE]
   }
@@ -311,8 +310,7 @@ as.matrix.BoldZipSR <- function(x, ...) {
     return(roi_mask)
   }
   if (!is.logical(roi_mask) || anyNA(roi_mask)) {
-    stop(context, " roi_mask must be numeric indices or a non-missing logical mask.",
-         call. = FALSE)
+    .boldzip_cli_abort(context, " roi_mask must be numeric indices or a non-missing logical mask.")
   }
   if (length(roi_mask) == n_voxels && is.null(dim(roi_mask))) {
     return(roi_mask)
@@ -320,8 +318,7 @@ as.matrix.BoldZipSR <- function(x, ...) {
   if (!is.null(mask)) {
     mask_arr <- as.logical(as.array(mask))
     if (!identical(dim(roi_mask), dim(mask_arr))) {
-      stop(context, " roi_mask dimensions must match mask dimensions.",
-           call. = FALSE)
+      .boldzip_cli_abort(context, " roi_mask dimensions must match mask dimensions.")
     }
     global_idx <- which(mask_arr)
     roi_global <- which(as.logical(roi_mask))
@@ -330,8 +327,7 @@ as.matrix.BoldZipSR <- function(x, ...) {
   if (!is.null(support) && length(roi_mask) == length(support)) {
     return(roi_mask)
   }
-  stop(context, " roi_mask must have one logical value per decoded row.",
-       call. = FALSE)
+  .boldzip_cli_abort(context, " roi_mask must have one logical value per decoded row.")
 }
 
 #' Predict from a BOLDZip-SR codec payload

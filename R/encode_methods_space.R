@@ -8,12 +8,14 @@ encode_spec.spec_space_slepian <- function(x, spec, mask, reduction, materialize
   materialize <- .resolve_materialize(materialize, context = "encode_spec.spec_space_slepian")
   mask_arr <- .extract_mask_array(mask, "encode_spec.spec_space_slepian")
   if (is.null(reduction)) reduction <- make_cluster_reduction(mask, seq_len(sum(mask_arr)))
+  k_use <- spec$k %||% 3L
+  k_use <- .validate_positive_count(k_use, "spec_space_slepian$k")
   if (materialize == "matrix") {
-    loadings <- lift(reduction, basis_slepian(k = spec$k), k_neighbors = spec$k_neighbors)
+    loadings <- lift(reduction, basis_slepian(k = k_use), k_neighbors = spec$k_neighbors)
   } else {
     loadings <- slepian_spatial_loadings_handle(
       reduction,
-      basis_spec = basis_slepian(k = spec$k),
+      basis_spec = basis_slepian(k = k_use),
       data = NULL,
       k_neighbors = spec$k_neighbors,
       label = "slepian-spatial"
@@ -25,7 +27,7 @@ encode_spec.spec_space_slepian <- function(x, spec, mask, reduction, materialize
   spc <- .space_with_time_from_mask(mask, nrow(x), "encode_spec.spec_space_slepian")
   meta <- list(
     family = "space_slepian",
-    k = spec$k,
+    k = k_use,
     k_neighbors = spec$k_neighbors
   )
   LatentNeuroVec(basis = basis, loadings = loadings, space = spc, mask = mask,
@@ -57,6 +59,7 @@ encode_spec.spec_space_heat <- function(x, spec, mask, reduction, materialize, l
     family = "space_heat",
     scales = spec$scales,
     order = spec$order,
+    sparsify_eps = spec$sparsify_eps %||% spec$threshold,
     threshold = spec$threshold,
     k_neighbors = spec$k_neighbors
   )
@@ -67,11 +70,11 @@ encode_spec.spec_space_heat <- function(x, spec, mask, reduction, materialize, l
 #' @exportS3Method
 encode_spec.spec_space_hrbf <- function(x, spec, mask, reduction, materialize, label, ...) {
   materialize <- .resolve_materialize(materialize, context = "encode_spec.spec_space_hrbf")
-  mask_arr <- .extract_mask_array(mask, "encode_spec.spec_space_hrbf")
+  .extract_mask_array(mask, "encode_spec.spec_space_hrbf")
   params <- spec$params %||% list()
   B_atoms <- hrbf_generate_basis(params, mask) # atoms x vox
   loadings_mat_hrbf <- Matrix::t(Matrix::Matrix(B_atoms, sparse = TRUE)) # vox x atoms
-  coeff <- .atom_coefficients(x, B_atoms, context = "encode_spec.spec_space_hrbf")
+  coeff <- as.matrix(Matrix::tcrossprod(as.matrix(x), B_atoms))
   basis <- Matrix::Matrix(coeff, sparse = FALSE) # time x atoms
   loadings <- .loadings_for_materialize(
     loadings_mat_hrbf,
@@ -98,15 +101,18 @@ encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, la
   if (is.null(reduction)) {
     reduction <- make_cluster_reduction(mask, rep.int(1L, n_vox))
   }
+  k_use <- spec$k %||% 3L
+  k_use <- .validate_positive_count(k_use, "spec_space_pca$k")
 
   offset <- .encode_center(x, center = isTRUE(spec$center),
                            context = "encode_spec.spec_space_pca")$offset
 
   loadings <- lift(
     reduction,
-    basis_pca(k = spec$k, whiten = isTRUE(spec$whiten)),
+    basis_pca(k = k_use, whiten = FALSE),
     data = x,
     center = isTRUE(spec$center),
+    scale = isTRUE(spec$scale),
     offset = if (length(offset) > 0) offset else NULL,
     backend = spec$backend %||% "auto",
     ...
@@ -151,8 +157,9 @@ encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, la
   spc <- .space_with_time_from_mask(mask, n_time, "encode_spec.spec_space_pca")
   meta <- list(
     family = "pca_spatial",
-    k = spec$k,
+    k = k_use,
     center = isTRUE(spec$center),
+    scale = isTRUE(spec$scale),
     whiten = isTRUE(spec$whiten),
     backend = spec$backend %||% "auto"
   )
@@ -172,11 +179,10 @@ encode_spec.spec_space_pca <- function(x, spec, mask, reduction, materialize, la
 encode_spec.spec_space_wavelet_active <- function(x, spec, mask, reduction, materialize, label, ...) {
   materialize <- .resolve_materialize(
     materialize,
-    supported = c("matrix", "handle"),
+    supported = "matrix",
     default = "matrix",
     context = "encode_spec.spec_space_wavelet_active"
   )
-  mask_arr <- .extract_mask_array(mask, "encode_spec.spec_space_wavelet_active")
   result <- wavelet_active_latent(
     X = x,
     mask = mask,

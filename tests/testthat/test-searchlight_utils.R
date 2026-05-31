@@ -45,6 +45,19 @@ test_that("compute_local_gram returns list of Gram matrices with simplify=FALSE"
   expect_equal(as.matrix(result[[1]]), as.matrix(expected_gram), tolerance = 1e-10)
 })
 
+test_that("compute_local_gram validates neighborhood bounds", {
+  L <- make_matrix(5, 2, seed = 1001)
+
+  expect_error(
+    compute_local_gram(L, list(c(1, 6))),
+    class = "fmrilatent_error_invalid_index"
+  )
+  expect_error(
+    compute_local_gram(L, list(c(1, NA_real_))),
+    class = "fmrilatent_error_invalid_index"
+  )
+})
+
 test_that("compute_local_gram with simplify=TRUE returns array when all neighborhoods same size", {
   set.seed(123)
   n_vox <- 15
@@ -266,6 +279,20 @@ test_that("latent_searchlight applies function over neighborhoods", {
     expect_equal(result[[i]]$idx_len, 5)
     expect_equal(result[[i]]$idx_vals, neighborhoods[[i]])
   }
+})
+
+test_that("latent_searchlight validates component count and function", {
+  B <- make_matrix(4, 2, seed = 1201)
+  L <- make_matrix(5, 3, seed = 1202)
+
+  expect_error(
+    latent_searchlight(B, L, list(1:2), function(...) NULL),
+    class = "fmrilatent_error_dimension_mismatch"
+  )
+  expect_error(
+    latent_searchlight(B, make_matrix(5, 2, seed = 1203), list(1:2), "not-a-function"),
+    class = "fmrilatent_error_invalid_argument"
+  )
 })
 
 test_that("latent_searchlight passes extra arguments to function", {

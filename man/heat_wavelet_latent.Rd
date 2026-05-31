@@ -26,6 +26,9 @@ heat_wavelet_latent(
 
 \item{label}{Optional label}
 }
+\value{
+A `LatentNeuroVec` object.
+}
 \description{
 Heat wavelet latent constructor (explicit basis)
 }

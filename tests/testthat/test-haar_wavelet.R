@@ -12,6 +12,82 @@ make_mask_cube <- function(nx = 2, ny = 2, nz = 2, fill = TRUE) {
   }
 }
 
+make_mask_from_block_counts <- function(block_counts) {
+  block_dims <- dim(block_counts)
+  mask <- array(FALSE, dim = block_dims * 2L)
+  for (i in seq_len(block_dims[1L])) {
+    for (j in seq_len(block_dims[2L])) {
+      for (k in seq_len(block_dims[3L])) {
+        count <- block_counts[i, j, k]
+        if (count == 0L) next
+        cells <- expand.grid(
+          x = (2L * i - 1L):(2L * i),
+          y = (2L * j - 1L):(2L * j),
+          z = (2L * k - 1L):(2L * k)
+        )
+        mask[as.matrix(cells[seq_len(count), , drop = FALSE])] <- TRUE
+      }
+    }
+  }
+  mask
+}
+
+morton_code_test <- function(x, y, z, bits) {
+  code <- 0L
+  for (b in seq_len(bits)) {
+    shift <- b - 1L
+    code <- bitwOr(code, bitwShiftL(bitwAnd(bitwShiftR(x, shift), 1L), 3L * shift))
+    code <- bitwOr(code, bitwShiftL(bitwAnd(bitwShiftR(y, shift), 1L), 3L * shift + 1L))
+    code <- bitwOr(code, bitwShiftL(bitwAnd(bitwShiftR(z, shift), 1L), 3L * shift + 2L))
+  }
+  code
+}
+
+expected_morton_block_counts <- function(mask, levels) {
+  current <- mask
+  counts_by_level <- vector("list", levels)
+  for (lvl in seq_len(levels)) {
+    dims <- dim(current)
+    x_seq <- seq(1L, dims[1L], by = 2L)
+    y_seq <- seq(1L, dims[2L], by = 2L)
+    z_seq <- seq(1L, dims[3L], by = 2L)
+    block_dims <- c(length(x_seq), length(y_seq), length(z_seq))
+    coords <- expand.grid(
+      i = seq_len(block_dims[1L]),
+      j = seq_len(block_dims[2L]),
+      k = seq_len(block_dims[3L])
+    )
+    bits <- ceiling(log2(max(block_dims)))
+    codes <- mapply(
+      morton_code_test,
+      coords$i - 1L,
+      coords$j - 1L,
+      coords$k - 1L,
+      MoreArgs = list(bits = bits)
+    )
+    coords <- coords[order(codes, coords$i, coords$j, coords$k), , drop = FALSE]
+    counts <- integer(nrow(coords))
+    next_occ <- array(FALSE, dim = block_dims)
+    for (idx in seq_len(nrow(coords))) {
+      i <- coords$i[idx]
+      j <- coords$j[idx]
+      k <- coords$k[idx]
+      block <- current[
+        x_seq[i]:min(x_seq[i] + 1L, dims[1L]),
+        y_seq[j]:min(y_seq[j] + 1L, dims[2L]),
+        z_seq[k]:min(z_seq[k] + 1L, dims[3L])
+      ]
+      counts[idx] <- sum(block)
+      if (counts[idx] > 0L) {
+        next_occ[i, j, k] <- TRUE
+      }
+    }
+    counts_by_level[[lvl]] <- counts
+    current <- next_occ
+  }
+  counts_by_level
+}
+
 test_that("precompute_haar_scalings counts voxels", {
   mask_full <- make_mask_cube(2, 2, 2, TRUE)
   s_full <- fmrilatent:::precompute_haar_scalings(mask_full, 1)
@@ -21,6 +97,29 @@ test_that("precompute_haar_scalings counts voxels", {
   mask_single <- make_mask_cube(2, 2, 2, FALSE)
   s_single <- fmrilatent:::precompute_haar_scalings(mask_single, 1)
   expect_equal(sum(round(s_single[[1]]$sqrt_nvalid^2)), 1)
+})
+
+test_that("precompute_haar_scalings uses Morton block order at every level", {
+  block_counts <- array((seq_len(64L) * 5L) %% 9L, dim = c(4L, 4L, 4L))
+  mask <- make_mask_from_block_counts(block_counts)
+  expected <- expected_morton_block_counts(mask, levels = 2L)
+
+  old <- options(fmrilatent.haar.use_rcpp = FALSE)
+  on.exit(options(old), add = TRUE)
+  scalings_r <- fmrilatent:::precompute_haar_scalings(mask, 2L)
+  expect_equal(
+    lapply(scalings_r, function(sc) as.integer(round(sc$sqrt_nvalid^2))),
+    expected
+  )
+
+  if (exists("precompute_haar_scalings_rcpp", mode = "function")) {
+    options(fmrilatent.haar.use_rcpp = TRUE)
+    scalings_cpp <- fmrilatent:::precompute_haar_scalings(mask, 2L)
+    expect_equal(
+      lapply(scalings_cpp, function(sc) as.integer(round(sc$sqrt_nvalid^2))),
+      expected
+    )
+  }
 })
 
 test_that("single-level Haar roundtrip works (R path)", {
@@ -412,6 +511,32 @@ test_that("haar_wavelet_forward handles various inputs", {
   expect_true(length(result$meta$valid_finest_blocks) > 0)
 })
 
+test_that("relative Haar threshold uses root variability only", {
+  mask <- array(TRUE, dim = c(2, 2, 2))
+  X <- matrix(c(1, rep(0, 7)), nrow = 1)
+
+  raw <- haar_wavelet_forward(X, mask, levels = 1, z_seed = 42L)
+  rel <- haar_wavelet_forward(
+    X, mask, levels = 1, z_seed = 42L,
+    threshold = list(type = "relative_to_root_std", value = 100)
+  )
+
+  expect_equal(rel$coeff$detail, raw$coeff$detail, tolerance = 1e-12)
+})
+
+test_that("perform_haar_lift_synthesis preserves multi-block roots", {
+  mask <- array(TRUE, dim = c(4, 1, 1))
+  coeff <- list(
+    root = matrix(c(10, 20), nrow = 1),
+    detail = list(matrix(0, nrow = 1, ncol = 4))
+  )
+
+  reco <- fmrilatent:::perform_haar_lift_synthesis(coeff, mask, levels = 1L)
+
+  expect_equal(reco[1, 1:2], rep(10 / sqrt(2), 2), tolerance = 1e-8)
+  expect_equal(reco[1, 3:4], rep(20 / sqrt(2), 2), tolerance = 1e-8)
+})
+
 test_that("haar_wavelet_inverse handles roi_mask and time_idx", {
   mask <- array(TRUE, dim = c(3, 3, 3))
   X <- matrix(rnorm(5 * 27), nrow = 5, ncol = 27)
@@ -700,6 +825,39 @@ test_that("lna_inverse_lift_matrix uses R fallback and roundtrips", {
     compat_profile = NULL
   )
 
+  expect_equal(reco, X, tolerance = 1e-7)
+})
+
+test_that("lna_inverse_lift_matrix Rcpp path preserves multi-block root coefficients", {
+  skip_if_not(exists("inverse_lift_rcpp", mode = "function"),
+              "inverse_lift_rcpp unavailable")
+  opts <- options(
+    fmrilatent.haar.use_rcpp = TRUE,
+    fmrilatent.haar.use_rcpp_batch = FALSE
+  )
+  on.exit(options(opts), add = TRUE)
+
+  mask <- array(TRUE, dim = c(4, 2, 2))
+  mask_logical <- fmrilatent:::as_logical_mask(mask)
+  full_order <- fmrilatent:::get_morton_ordered_indices(
+    array(TRUE, dim(mask_logical)), 42L
+  )
+  mask_flat_morton <- as.vector(mask_logical)[full_order]
+  scalings <- fmrilatent:::precompute_haar_scalings(mask_logical, 1L)
+  set.seed(811)
+  X <- matrix(rnorm(3 * sum(mask_logical)), nrow = 3)
+
+  fw <- fmrilatent:::lna_forward_lift_matrix(
+    X, mask_flat_morton, dim(mask_logical), 1L, scalings,
+    compat_profile = NULL
+  )
+  reco <- fmrilatent:::lna_inverse_lift_matrix(
+    fw$root_coeff, fw$detail_coeffs_by_level,
+    mask_flat_morton, dim(mask_logical), 1L, scalings,
+    compat_profile = NULL
+  )
+
+  expect_gt(ncol(fw$root_coeff), 1L)
   expect_equal(reco, X, tolerance = 1e-7)
 })
 

@@ -4,14 +4,22 @@
 \alias{spec_space_wavelet_active}
 \title{Spatial wavelet (active pencil) spec}
 \usage{
-spec_space_wavelet_active(levels_space = 2L, levels_time = 0L, threshold = 0)
+spec_space_wavelet_active(
+  levels_space = 2L,
+  levels_time = 0L,
+  select_threshold = NULL,
+  threshold = NULL
+)
 }
 \arguments{
 \item{levels_space}{Spatial lifting levels.}
 
 \item{levels_time}{Optional time lifting levels.}
 
-\item{threshold}{Threshold after space transform.}
+\item{select_threshold}{Non-negative active-set coefficient threshold after
+the spatial transform. This is stored as `threshold` for compatibility.}
+
+\item{threshold}{Deprecated alias for `select_threshold`.}
 }
 \value{
 A `spec_space_wavelet_active` object.

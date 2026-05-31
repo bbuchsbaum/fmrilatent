@@ -44,22 +44,109 @@ setClass("CoarsenedReduction",
   )
 )
 
-#' Basis specifications (lightweight descriptors)
-#' @param k Number of components.
-#' @param type Basis flavor (implementation-dependent).
-#' @param whiten Whether to whiten PCA scores.
+setValidity("CoarsenedReduction", function(object) {
+  errors <- character()
+  n_active <- sum(as.logical(as.array(object@mask)))
+  if (nrow(object@P_matrix) != n_active) {
+    errors <- c(
+      errors,
+      sprintf("P_matrix must have one row per active mask voxel (%d); got %d.",
+              n_active, nrow(object@P_matrix))
+    )
+  }
+  if (ncol(object@P_matrix) < 1L) {
+    errors <- c(errors, "P_matrix must have at least one coarse column.")
+  }
+  n_coarse <- ncol(object@P_matrix)
+  if (nrow(object@coarse_adj) != n_coarse || ncol(object@coarse_adj) != n_coarse) {
+    errors <- c(
+      errors,
+      sprintf("coarse_adj must be square with dimensions matching ncol(P_matrix) (%d).",
+              n_coarse)
+    )
+  }
+  if (length(errors)) errors else TRUE
+})
+
+#' Create a coarsened graph reduction
+#'
+#' @param mask `LogicalNeuroVol` or array-like mask defining the fine domain.
+#' @param P_matrix Fine-by-coarse sparse prolongation matrix.
+#' @param coarse_adj Optional coarse-by-coarse sparse adjacency matrix.
+#' @param info Optional metadata list.
+#' @return A valid `CoarsenedReduction`.
+#' @export
+make_coarsened_reduction <- function(mask, P_matrix, coarse_adj = NULL, info = list()) {
+  mask_arr <- .extract_mask_array(mask, "make_coarsened_reduction")
+  mask_vol <- .mask_volume_from_array(mask, mask_arr, "make_coarsened_reduction")
+  P <- Matrix::Matrix(P_matrix, sparse = TRUE)
+  if (!inherits(P, "dgCMatrix")) {
+    P <- methods::as(P, "dgCMatrix")
+  }
+  coarse <- if (is.null(coarse_adj)) {
+    Matrix::sparseMatrix(
+      i = integer(),
+      j = integer(),
+      x = numeric(),
+      dims = c(ncol(P), ncol(P))
+    )
+  } else {
+    Matrix::Matrix(coarse_adj, sparse = TRUE)
+  }
+  if (!inherits(coarse, "dgCMatrix")) {
+    coarse <- methods::as(coarse, "dgCMatrix")
+  }
+  new("CoarsenedReduction",
+      mask = mask_vol,
+      info = info,
+      P_matrix = P,
+      coarse_adj = coarse)
+}
+
+#' Create a Slepian basis specification
+#'
+#' `basis_slepian()` creates a lightweight descriptor for graph/Slepian basis
+#' construction during `lift()` or spatial encoding. It records the requested
+#' component count and Slepian flavor; the actual basis is computed later by a
+#' `lift()` method for the supplied reduction.
+#'
+#' @param k Positive integer number of Slepian components.
+#' @param type Character scalar naming the Slepian basis flavor. The built-in
+#'   spatial methods use `"laplacian"`.
+#' @return A list with class `spec_slepian` containing `k` and `type`.
 #' @export
 basis_slepian <- function(k = 3, type = "laplacian") {
+  k <- .validate_positive_count(k, "k")
   structure(list(k = k, type = type), class = "spec_slepian")
 }
 
-#' @rdname basis_slepian
+#' Create a PCA basis specification
+#'
+#' `basis_pca()` creates a lightweight descriptor for parcel- or
+#' cluster-local PCA bases. The descriptor is consumed by
+#' `lift(ClusterReduction, spec_pca, data = ...)`, where `data` supplies the
+#' time-by-voxel matrix used to estimate the components.
+#'
+#' @param k Positive integer number of PCA components.
+#' @param whiten Logical scalar. `basis_pca()` records this request, but
+#'   `lift(ClusterReduction, spec_pca)` returns unwhitened loadings and emits a
+#'   warning when `whiten = TRUE`; the higher-level `encode(spec_space_pca())`
+#'   path applies whitening after projection.
+#' @return A list with class `spec_pca` containing `k` and `whiten`.
 #' @export
 basis_pca <- function(k = 3, whiten = FALSE) {
+  k <- .validate_positive_count(k, "k")
+  whiten <- .validate_flag_scalar(whiten, "whiten")
   structure(list(k = k, whiten = whiten), class = "spec_pca")
 }
 
-#' @rdname basis_slepian
+#' Create a flat basis specification
+#'
+#' `basis_flat()` creates a descriptor for methods that should lift a reduction
+#' without estimating local components, typically as a simple parcel/cluster
+#' indicator basis.
+#'
+#' @return An empty list with class `spec_flat`.
 #' @export
 basis_flat <- function() {
   structure(list(), class = "spec_flat")
@@ -88,6 +175,7 @@ setGeneric("lift", function(reduction, basis_spec, data = NULL, ...) {
 #' @param basis_spec A basis specification object.
 #' @param data Optional data for data-driven bases.
 #' @param ... Additional arguments (unused in default method).
+#' @return This method does not return; it aborts with a classed unsupported-operation error.
 #' @export
 setMethod("lift", signature(reduction = "GraphReduction", basis_spec = "ANY"),
   function(reduction, basis_spec, data = NULL, ...) {
@@ -99,6 +187,16 @@ setMethod("lift", signature(reduction = "GraphReduction", basis_spec = "ANY"),
 )
 
 # --- ClusterReduction constructors -------------------------------------------
+
+.abort_na_cluster_map <- function(map, context) {
+  if (anyNA(map)) {
+    .encoder_cli_abort(
+      paste0(context, " must not contain NA cluster ids."),
+      class = "fmrilatent_error_invalid_cluster_map",
+      call = rlang::caller_env()
+    )
+  }
+}
 
 #' Create a ClusterReduction from a mask and voxel-to-cluster map
 #'
@@ -120,9 +218,11 @@ make_cluster_reduction <- function(mask, map) {
       class = "fmrilatent_error_dim", call = rlang::caller_env()
     )
   }
+  map <- as.integer(map)
+  .abort_na_cluster_map(map, "map")
   new("ClusterReduction",
       mask = mask_vol,
-      map = as.integer(map),
+      map = map,
       cluster_ids = as.integer(sort(unique(map))),
       info = list())
 }
@@ -138,7 +238,8 @@ make_cluster_reduction <- function(mask, map) {
 as_cluster_reduction <- function(cvol) {
   stopifnot(inherits(cvol, "ClusteredNeuroVol"))
   mask_vol <- neuroim2::mask(cvol)
-  clusters <- cvol@clusters
+  clusters <- as.integer(cvol@clusters)
+  .abort_na_cluster_map(clusters, "ClusteredNeuroVol clusters")
   info <- list()
   if (!is.null(cvol@label_map) && length(cvol@label_map) > 0L) {
     info$label_map <- cvol@label_map
@@ -148,7 +249,7 @@ as_cluster_reduction <- function(cvol) {
   }
   new("ClusterReduction",
       mask = mask_vol,
-      map = as.integer(clusters),
+      map = clusters,
       cluster_ids = as.integer(sort(unique(clusters))),
       info = info)
 }

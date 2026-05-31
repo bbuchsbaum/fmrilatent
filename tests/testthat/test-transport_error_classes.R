@@ -17,6 +17,10 @@ test_that("validate_portable_linear_map flags missing contract fields (via re-ra
     validate_portable_linear_map(list(forward = function(x) x)),
     "missing required fields"
   )
+  expect_error(
+    validate_portable_linear_map(list()),
+    "missing required fields: forward, adjoint_apply, n_source, n_target"
+  )
   # error = FALSE still returns FALSE rather than signalling.
   expect_false(
     validate_portable_linear_map(list(forward = function(x) x), error = FALSE)

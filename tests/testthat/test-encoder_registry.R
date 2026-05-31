@@ -29,7 +29,7 @@ test_that("built-in encoders are registered after loading", {
 
   expected <- c("time_slepian", "time_dct", "time_bspline",
                 "space_slepian", "space_pca", "space_heat", "space_hrbf",
-                "space_wavelet_active", "st", "hierarchical")
+                "space_wavelet_active", "space_parcel", "st", "hierarchical")
   for (fam in expected) {
     expect_true(fam %in% tbl$family, info = paste("Missing:", fam))
   }
@@ -37,12 +37,46 @@ test_that("built-in encoders are registered after loading", {
   expect_true(all(nzchar(tbl$description[tbl$family %in% expected])))
 })
 
+test_that("registry family names are accepted by latent_factory where applicable", {
+  td <- fmrilatent_test_data(n_time = 6, dims = c(3, 3, 1))
+
+  hrbf <- latent_factory(
+    "space_hrbf",
+    x = td$X,
+    mask = td$mask,
+    sigma0 = 2,
+    levels = 1,
+    seed = 42,
+    materialize = "matrix"
+  )
+  expect_s4_class(hrbf, "LatentNeuroVec")
+
+  st <- latent_factory(
+    "st",
+    x = td$X,
+    mask = td$mask,
+    time = spec_time_dct(k = 3),
+    space = spec_space_hrbf(sigma0 = 2, levels = 1, seed = 42),
+    materialize = "matrix"
+  )
+  expect_true(is_implicit_latent(st))
+})
+
 test_that("duplicate registration warns and overwrites", {
   register_encoder("__dup_test__", identity, "first", "pkg1")
+  caught_warning <- NULL
   expect_warning(
     register_encoder("__dup_test__", sum, "second", "pkg2"),
     "already registered"
   )
+  withCallingHandlers(
+    register_encoder("__dup_test__", sum, "second", "pkg2"),
+    warning = function(w) {
+      caught_warning <<- w
+      invokeRestart("muffleWarning")
+    }
+  )
+  expect_equal(anyDuplicated(class(caught_warning)), 0L)
   enc <- get_encoder("__dup_test__")
   expect_identical(enc$spec_fn, sum)
   expect_equal(enc$description, "second")
@@ -51,7 +85,7 @@ test_that("duplicate registration warns and overwrites", {
 })
 
 test_that("get_encoder errors on nonexistent family", {
-  expect_error(get_encoder("__nonexistent__"), "not registered")
+  expect_error(get_encoder("__nonexistent__"), "No encoder registered")
 })
 
 test_that("list_encoders returns empty data.frame when registry is empty", {
@@ -89,6 +123,21 @@ test_that("fmrilatent_test_data respects custom dims", {
   expect_equal(dim(td$X), c(12L, 48L))
   expect_equal(dim(td$mask), c(4L, 4L, 3L))
   expect_equal(td$n_time, 12L)
+})
+
+test_that("fmrilatent_test_data validates dims and n_time early", {
+  expect_error(
+    fmrilatent_test_data(dims = c(3L, 3L), n_time = 8L),
+    class = "fmrilatent_error_dim"
+  )
+  expect_error(
+    fmrilatent_test_data(dims = c(3L, 0L, 2L), n_time = 8L),
+    class = "fmrilatent_error_dim"
+  )
+  expect_error(
+    fmrilatent_test_data(dims = c(3L, 3L, 2L), n_time = 0L),
+    class = "fmrilatent_error_invalid_count"
+  )
 })
 
 # --- mask_to_array export -----------------------------------------------------
@@ -141,7 +190,16 @@ test_that("implicit_latent rejects decoder missing required formals", {
   expect_error(
     implicit_latent(list(), bad_decoder, list(family = "f"),
                     array(TRUE, c(2, 2, 1))),
-    "Missing.*time_idx.*roi_mask"
+    "Missing.*time_idx.*roi_mask.*levels_keep"
+  )
+})
+
+test_that("implicit_latent rejects decoder missing levels_keep without dots", {
+  bad_decoder <- function(time_idx = NULL, roi_mask = NULL) NULL
+  expect_error(
+    implicit_latent(list(), bad_decoder, list(family = "f"),
+                    array(TRUE, c(2, 2, 1))),
+    "Missing.*levels_keep"
   )
 })
 
@@ -153,7 +211,7 @@ test_that("implicit_latent accepts decoder with ... formals", {
 })
 
 test_that("implicit_latent accepts decoder with named formals", {
-  ok_decoder <- function(time_idx = NULL, roi_mask = NULL) NULL
+  ok_decoder <- function(time_idx = NULL, roi_mask = NULL, levels_keep = NULL) NULL
   il <- implicit_latent(list(), ok_decoder, list(family = "f"),
                         array(TRUE, c(2, 2, 1)))
   expect_s3_class(il, "ImplicitLatent")

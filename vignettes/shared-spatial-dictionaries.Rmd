@@ -16,7 +16,9 @@ params:
   preset: homage
 
 vignette: |
-  %\VignetteIndexEntry{Shared Spatial Dictionaries Across Subjects} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Shared Spatial Dictionaries Across Subjects}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}

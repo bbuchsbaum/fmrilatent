@@ -36,7 +36,7 @@
                        class = "fmrilatent_error_invalid_type")
   }
   x <- Matrix::Matrix(x, sparse = inherits(x, "sparseMatrix"))
-  if (any(!is.finite(as.matrix(x)))) {
+  if (!.matrix_like_all_finite(x)) {
     .encoder_cli_abort(paste0(name, " must contain only finite values."),
                        class = "fmrilatent_error_invalid_value")
   }
@@ -533,6 +533,15 @@ materialize_shared_temporal_spec <- function(spec) {
       orthonormalize = spec$params$orthonormalize %||% TRUE
     )))
   }
+  if (identical(spec$kind, "slepian")) {
+    return(as.matrix(dpss_time_basis(
+      n_time = spec$n_time,
+      tr = spec$params$tr %||% 1,
+      bandwidth = spec$params$bandwidth %||% 0.1,
+      k = spec$rank,
+      backend = spec$params$backend %||% "tridiag"
+    )))
+  }
   .encoder_cli_abort(
     paste0("Shared temporal spec kind '", spec$kind,
            "' is a descriptor only and cannot be materialized without a custom basis."),
@@ -607,10 +616,11 @@ render_shared_events <- function(dictionary, events, n_atoms, n_time = NULL) {
     )
   }
   shape_id <- events$shape_id %||% rep.int(names(dictionary$shapes)[[1L]], nrow(events))
-  rows <- integer()
-  cols <- integer()
-  values <- numeric()
-  for (idx in seq_len(nrow(events))) {
+  n_events <- nrow(events)
+  row_chunks <- vector("list", n_events)
+  col_chunks <- vector("list", n_events)
+  value_chunks <- vector("list", n_events)
+  for (idx in seq_len(n_events)) {
     shape <- dictionary$shapes[[as.character(shape_id[[idx]])]]
     if (is.null(shape)) {
       # shape_id is user-supplied free-form text; escape glue braces so a stray
@@ -630,10 +640,14 @@ render_shared_events <- function(dictionary, events, n_atoms, n_time = NULL) {
     }
     cols_i <- seq.int(start, length.out = length(shape))
     keep <- cols_i <= n_time
-    rows <- c(rows, rep.int(atom, sum(keep)))
-    cols <- c(cols, cols_i[keep])
-    values <- c(values, amp * shape[keep])
+    n_keep <- sum(keep)
+    row_chunks[[idx]] <- rep.int(atom, n_keep)
+    col_chunks[[idx]] <- cols_i[keep]
+    value_chunks[[idx]] <- amp * shape[keep]
   }
+  rows <- unlist(row_chunks, use.names = FALSE)
+  cols <- unlist(col_chunks, use.names = FALSE)
+  values <- unlist(value_chunks, use.names = FALSE)
   Matrix::sparseMatrix(i = rows, j = cols, x = values,
                        dims = c(n_atoms, n_time))
 }
@@ -661,8 +675,8 @@ neuroarchive_handoff_contract <- function(representation = NULL,
   components <- .shared_check_list(components, "components")
   templates <- .shared_check_list(templates, "templates")
   references <- .shared_check_list(references, "references")
-  invisible(lapply(components, validate_shared_component_contract))
-  invisible(lapply(templates, validate_template_protocol))
+  components <- lapply(components, validate_shared_component_contract)
+  template_manifests <- lapply(templates, validate_template_protocol)
   if (!all(vapply(references, is_shared_reference, logical(1)))) {
     .encoder_cli_abort("references must contain only SharedReference objects.",
                        class = "fmrilatent_error_invalid_type")
@@ -688,7 +702,8 @@ neuroarchive_handoff_contract <- function(representation = NULL,
         "lazy archive readers"
       ),
       components = components,
-      templates = lapply(templates, function(template) validate_template_protocol(template)),
+      templates = templates,
+      template_manifests = template_manifests,
       references = lapply(references, shared_reference_info),
       persistent = FALSE,
       archive_locator = NULL,

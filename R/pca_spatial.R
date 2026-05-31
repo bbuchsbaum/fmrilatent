@@ -54,7 +54,17 @@ NULL
 #'
 #' @param reduction ClusterReduction describing voxel-to-cluster map.
 #' @param basis_spec PCA basis specification (from `basis_pca()`).
-#' @param data Numeric matrix (time x voxels in mask order). Required.
+#' @param data Required numeric matrix (time x voxels in mask order). Unlike
+#'   graph-only lift methods, PCA consumes `data` to estimate cluster-local
+#'   components and aborts when it is `NULL`.
+#' @details
+#' `lift(ClusterReduction, spec_pca)` always returns unwhitened spatial
+#' loadings. If `basis_spec$whiten` is `TRUE`, the method emits a classed
+#' warning because whitening requires the projected temporal scores and is
+#' therefore the caller's responsibility. The standard
+#' `encode(..., spec_space_pca(whiten = TRUE))` path handles this post-lift
+#' whitening using the `fmrilatent.singular_values` attribute attached here.
+#'
 #' @param center Logical; center voxels before PCA (default TRUE).
 #' @param scale Logical; scale voxels before PCA (default FALSE).
 #' @param offset Optional numeric vector of voxel means (length n_vox). If provided
@@ -75,8 +85,18 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
         class = "fmrilatent_error_missing_argument"
       )
     }
+    if (isTRUE(basis_spec$whiten)) {
+      .encoder_cli_warn(
+        paste0(
+          "lift(ClusterReduction, spec_pca) returns unwhitened loadings; ",
+          "use encode(..., spec_space_pca(whiten = TRUE)) or whiten the ",
+          "projected scores with the fmrilatent.singular_values attribute."
+        ),
+        class = "fmrilatent_warning_pca_whiten_ignored"
+      )
+    }
 
-    X <- as.matrix(data)
+    X <- if (is.matrix(data)) data else as.matrix(data)
     map <- reduction@map
     ids <- reduction@cluster_ids
     n_vox <- length(map)
@@ -87,7 +107,7 @@ setMethod("lift", signature(reduction = "ClusterReduction", basis_spec = "spec_p
       )
     }
 
-    k_per_cluster <- as.integer(basis_spec$k %||% 3L)
+    k_per_cluster <- .validate_positive_count(basis_spec$k %||% 3L, "basis_spec$k")
 
     mu <- NULL
     if (isTRUE(center)) {

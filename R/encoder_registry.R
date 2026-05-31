@@ -31,6 +31,13 @@
 #' \code{encode_spec.spec_*} method, \code{encode()} will fall through to
 #' \code{encode_spec.default} and raise an error.
 #'
+#' Transport-backed AWPT is an intentional parallel API, not a registry-dispatch
+#' family. \code{basis_awpt_wavelet()} describes a shared template basis, while
+#' subject fitting also needs a template/basis asset plus subject field or
+#' observation operators. Use \code{\link{encode_awpt}} or
+#' \code{\link{encode_operator}} for those fits; do not expect
+#' \code{register_encoder()} or \code{encode()} to route AWPT subject encoding.
+#'
 #' @details
 #' External packages typically register their encoders in their \code{.onLoad}
 #' hook so the registry is populated when the package is loaded:
@@ -59,8 +66,20 @@
 #' list_encoders()
 #' get_encoder("test_enc")
 register_encoder <- function(family, spec_fn, description = "", package = "") {
-  stopifnot(is.character(family), length(family) == 1L, nzchar(family))
-  stopifnot(is.function(spec_fn))
+  if (!is.character(family) || length(family) != 1L || is.na(family) || !nzchar(family)) {
+    .encoder_cli_abort(
+      "register_encoder() requires a non-empty character `family`.",
+      class = "fmrilatent_error_type",
+      call = rlang::caller_env()
+    )
+  }
+  if (!is.function(spec_fn)) {
+    .encoder_cli_abort(
+      "register_encoder() requires `spec_fn` to be a function.",
+      class = "fmrilatent_error_type",
+      call = rlang::caller_env()
+    )
+  }
   if (exists(family, envir = .encoder_registry_env, inherits = FALSE)) {
     .encoder_cli_warn(
       paste0("Encoder '", family, "' is already registered; overwriting."),
@@ -102,15 +121,19 @@ list_encoders <- function() {
 #' @return A list with elements \code{spec_fn}, \code{description}, and \code{package}.
 #' @export
 #' @examples
-#' \dontrun{
 #' enc <- get_encoder("time_dct")
 #' spec <- enc$spec_fn(k = 5)
-#' }
 get_encoder <- function(family) {
-  stopifnot(is.character(family), length(family) == 1L)
+  if (!is.character(family) || length(family) != 1L || is.na(family) || !nzchar(family)) {
+    .encoder_cli_abort(
+      "get_encoder() requires a non-empty character `family`.",
+      class = "fmrilatent_error_type",
+      call = rlang::caller_env()
+    )
+  }
   if (!exists(family, envir = .encoder_registry_env, inherits = FALSE)) {
     available <- ls(.encoder_registry_env)
-    msg <- paste0("Encoder '", family, "' is not registered.")
+    msg <- paste0("No encoder registered for family '", family, "'.")
     if (length(available) > 0L) {
       msg <- paste0(msg, " Available encoders: ",
                     paste(available, collapse = ", "))
@@ -142,6 +165,20 @@ get_encoder <- function(family) {
 fmrilatent_test_data <- function(dims = c(3L, 3L, 2L), n_time = 8L) {
   dims <- as.integer(dims)
   n_time <- as.integer(n_time)
+  if (length(dims) != 3L || anyNA(dims) || any(dims < 1L)) {
+    .encoder_cli_abort(
+      "fmrilatent_test_data() requires `dims` to be a length-3 positive integer vector.",
+      class = "fmrilatent_error_dim",
+      call = rlang::caller_env()
+    )
+  }
+  if (length(n_time) != 1L || is.na(n_time) || n_time < 1L) {
+    .encoder_cli_abort(
+      "fmrilatent_test_data() requires `n_time` to be a positive integer.",
+      class = "fmrilatent_error_invalid_count",
+      call = rlang::caller_env()
+    )
+  }
   n_vox <- prod(dims)
   X <- matrix(stats::rnorm(n_time * n_vox), nrow = n_time, ncol = n_vox)
   mask <- array(TRUE, dim = dims)

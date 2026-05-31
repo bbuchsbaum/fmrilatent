@@ -80,6 +80,20 @@ make_shared_structure_hierarchical_template <- function() {
   )
 }
 
+test_that("matrix-like finite checks preserve sparse representation", {
+  sparse_ok <- Matrix::sparseMatrix(i = 1L, j = 1L, x = 1, dims = c(100L, 100L))
+  sparse_bad <- sparse_ok
+  sparse_bad@x[1L] <- Inf
+
+  expect_true(fmrilatent:::.matrix_like_all_finite(sparse_ok))
+  expect_false(fmrilatent:::.matrix_like_all_finite(sparse_bad))
+  expect_s4_class(fmrilatent:::.shared_matrix_like(sparse_ok, "sparse_ok"), "sparseMatrix")
+  expect_error(
+    fmrilatent:::.shared_matrix_like(sparse_bad, "sparse_bad"),
+    class = "fmrilatent_error_invalid_value"
+  )
+})
+
 test_that("shared component contracts validate dimensions, support, and measures", {
   loadings <- Matrix(matrix(c(1, 0, 0, 1, 1, 1), nrow = 3, byrow = TRUE), sparse = FALSE)
   contract <- shared_component_contract(
@@ -206,6 +220,16 @@ test_that("shared temporal specs and event dictionaries are executable descripto
   expect_equal(dim(B), c(8L, 3L))
   expect_equal(crossprod(B), diag(3), tolerance = 1e-10)
 
+  slepian <- shared_temporal_spec(
+    "slepian",
+    n_time = 8L,
+    rank = 2L,
+    params = list(tr = 1, bandwidth = 0.2)
+  )
+  B_slepian <- materialize_shared_temporal_spec(slepian)
+  expect_equal(dim(B_slepian), c(8L, 2L))
+  expect_equal(crossprod(B_slepian), diag(2), tolerance = 1e-10)
+
   custom_basis <- matrix(c(1, 0, 0, 1, 1, 1), nrow = 3, byrow = TRUE)
   custom <- shared_temporal_spec("custom", basis = custom_basis)
   expect_equal(materialize_shared_temporal_spec(custom), custom_basis)
@@ -249,6 +273,31 @@ test_that("shared event rendering is additive under event decomposition", {
   )
 })
 
+test_that("shared event rendering handles many events without changing values", {
+  dictionary <- shared_event_dictionary(
+    shapes = list(impulse = 1, box3 = c(1, 1, 1)),
+    n_time = 30L
+  )
+  events <- data.frame(
+    atom = rep(1:3, length.out = 120L),
+    time = rep(1:30, length.out = 120L),
+    amplitude = seq_len(120L) / 10,
+    shape_id = rep(c("impulse", "box3"), length.out = 120L)
+  )
+
+  rendered <- render_shared_events(dictionary, events, n_atoms = 3L)
+  expected <- matrix(0, nrow = 3L, ncol = 30L)
+  for (idx in seq_len(nrow(events))) {
+    shape <- dictionary$shapes[[events$shape_id[[idx]]]]
+    cols <- seq.int(events$time[[idx]], length.out = length(shape))
+    keep <- cols <= ncol(expected)
+    expected[events$atom[[idx]], cols[keep]] <-
+      expected[events$atom[[idx]], cols[keep]] + events$amplitude[[idx]] * shape[keep]
+  }
+
+  expect_equal(as.matrix(rendered), expected)
+})
+
 test_that("template protocol and neuroarchive handoff enforce the ownership boundary", {
   tmpl <- make_shared_structure_template()
   manifest <- validate_template_protocol(tmpl)
@@ -267,6 +316,10 @@ test_that("template protocol and neuroarchive handoff enforce the ownership boun
   expect_true("HDF5 artifacts" %in% handoff$neuroarchive_owns)
   expect_false(handoff$persistent)
   expect_null(handoff$archive_locator)
+  expect_identical(handoff$components[[1]], contract)
+  expect_s3_class(handoff$templates[[1]], "ParcelBasisTemplate")
+  expect_equal(template_loadings(handoff$templates[[1]]), template_loadings(tmpl))
+  expect_equal(handoff$template_manifests[[1]]$rank, manifest$rank)
   expect_identical(validate_neuroarchive_handoff_contract(handoff), handoff)
 
   bad_handoff <- handoff
@@ -311,5 +364,12 @@ test_that("template and handoff validators reject wrong-contract objects", {
   expect_error(
     neuroarchive_handoff_contract(references = list(list(id = "not-shared"))),
     "SharedReference"
+  )
+
+  bad_component <- shared_component_contract(template_loadings(tmpl), support = template_support(tmpl))
+  bad_component$contract_version <- 2L
+  expect_error(
+    neuroarchive_handoff_contract(components = list(bad_component)),
+    "unsupported shared component contract_version"
   )
 })

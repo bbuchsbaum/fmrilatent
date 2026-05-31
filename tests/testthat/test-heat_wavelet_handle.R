@@ -26,6 +26,16 @@ test_that("heat_wavelet_loadings_handle returns a LoadingsHandle object", {
   expect_s4_class(handle, "LoadingsHandle")
 })
 
+test_that("heat_wavelet_loadings_handle defaults to heat wavelet basis spec", {
+  reduction <- create_test_reduction()
+
+  handle <- heat_wavelet_loadings_handle(reduction)
+
+  expect_s4_class(handle, "LoadingsHandle")
+  expect_s3_class(handle@spec$basis_spec, "spec_heat_wavelet")
+  expect_identical(handle@spec$basis_spec, basis_heat_wavelet())
+})
+
 test_that("heat_wavelet_loadings_handle stores correct dimensions", {
   mask_dim <- c(2, 2, 2)
   n_vox <- prod(mask_dim)

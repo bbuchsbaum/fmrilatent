@@ -6,6 +6,28 @@
 
 // [[Rcpp::depends(RcppEigen)]]
 
+namespace {
+
+const int kMaxDpssDenseN = 4096;
+
+double checked_dpss_bandwidth(const int n, const double NW, int k,
+                              const char* context) {
+  if (n <= 0) Rcpp::stop("n must be positive");
+  if (n > kMaxDpssDenseN) {
+    Rcpp::stop("%s n exceeds dense-allocation safety limit (%d)",
+               context, kMaxDpssDenseN);
+  }
+  if (!std::isfinite(NW) || NW <= 0.0) Rcpp::stop("NW must be positive");
+  if (k <= 0) Rcpp::stop("k must be positive");
+  double W = NW / static_cast<double>(n);
+  if (W <= 0.0 || W >= 0.5) {
+    Rcpp::stop("normalized half-bandwidth W must be in (0, 0.5)");
+  }
+  return W;
+}
+
+}  // namespace
+
 //' Generate DPSS (Slepian) basis via dense prolate matrix eigen-decomposition
 //'
 //' @param n Integer length of the time series.
@@ -23,11 +45,7 @@
 //' @keywords internal
 // [[Rcpp::export]]
 Eigen::MatrixXd generate_dpss_basis_rcpp(const int n, const double NW, int k) {
-  if (n <= 0) Rcpp::stop("n must be positive");
-  if (NW <= 0.0) Rcpp::stop("NW must be positive");
-  if (k <= 0) Rcpp::stop("k must be positive");
-  double W = NW / static_cast<double>(n);
-  if (W <= 0.0 || W >= 0.5) Rcpp::stop("normalized half-bandwidth W must be in (0, 0.5)");
+  double W = checked_dpss_bandwidth(n, NW, k, "generate_dpss_basis_rcpp");
   if (k > n) k = n;
 
   Eigen::MatrixXd A(n, n);
@@ -77,11 +95,7 @@ Eigen::MatrixXd generate_dpss_basis_rcpp(const int n, const double NW, int k) {
 //' @keywords internal
 // [[Rcpp::export]]
 Eigen::MatrixXd generate_dpss_tridiag_rcpp(const int n, const double NW, int k) {
-  if (n <= 0) Rcpp::stop("n must be positive");
-  if (NW <= 0.0) Rcpp::stop("NW must be positive");
-  if (k <= 0) Rcpp::stop("k must be positive");
-  double W = NW / static_cast<double>(n);
-  if (W <= 0.0 || W >= 0.5) Rcpp::stop("normalized half-bandwidth W must be in (0, 0.5)");
+  double W = checked_dpss_bandwidth(n, NW, k, "generate_dpss_tridiag_rcpp");
   if (k > n) k = n;
 
   // Tridiagonal coefficients

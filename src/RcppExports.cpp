@@ -78,12 +78,12 @@ BEGIN_RCPP
 END_RCPP
 }
 // inverse_lift_rcpp
-NumericVector inverse_lift_rcpp(double root_coeff, List detail_vecs, LogicalVector mask_flat_morton, IntegerVector mask_dims, int levels, List scalings);
+NumericVector inverse_lift_rcpp(NumericVector root_coeff, List detail_vecs, LogicalVector mask_flat_morton, IntegerVector mask_dims, int levels, List scalings);
 RcppExport SEXP _fmrilatent_inverse_lift_rcpp(SEXP root_coeffSEXP, SEXP detail_vecsSEXP, SEXP mask_flat_mortonSEXP, SEXP mask_dimsSEXP, SEXP levelsSEXP, SEXP scalingsSEXP) {
 BEGIN_RCPP
     Rcpp::RObject rcpp_result_gen;
     Rcpp::RNGScope rcpp_rngScope_gen;
-    Rcpp::traits::input_parameter< double >::type root_coeff(root_coeffSEXP);
+    Rcpp::traits::input_parameter< NumericVector >::type root_coeff(root_coeffSEXP);
     Rcpp::traits::input_parameter< List >::type detail_vecs(detail_vecsSEXP);
     Rcpp::traits::input_parameter< LogicalVector >::type mask_flat_morton(mask_flat_mortonSEXP);
     Rcpp::traits::input_parameter< IntegerVector >::type mask_dims(mask_dimsSEXP);

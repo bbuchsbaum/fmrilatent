@@ -9,7 +9,7 @@ encode(
   spec,
   mask,
   reduction = NULL,
-  materialize = c("handle", "auto", "matrix"),
+  materialize = c("auto", "handle", "matrix"),
   label = "",
   ...
 )
@@ -17,7 +17,11 @@ encode(
 \arguments{
 \item{x}{Matrix (time x voxels in mask order).}
 
-\item{spec}{Spec object created by `spec_time_*`, `spec_space_*`, or `spec_st`.}
+\item{spec}{Standard encode spec object created by `spec_time_*`,
+`spec_space_*`, or `spec_st`. AWPT specs created by
+[basis_awpt_wavelet()] describe shared templates and are intentionally not
+accepted by `encode()`; use [encode_awpt()] or [encode_operator()] for
+transport-backed AWPT fits.}
 
 \item{mask}{LogicalNeuroVol or logical array (required for spatial pieces).}
 
@@ -55,6 +59,17 @@ The return class depends on the spec family:
 \description{
 Encode data into a latent representation using a spec
 }
+\section{Dispatch model}{
+
+  For standard in-mask matrix encoders, `encode()` routes to the S3 generic
+  [encode_spec()], which dispatches on the spec class and builds the latent
+  object directly. Transport-backed AWPT is the explicit exception: an
+  AWPT basis spec is used to build a shared template, while the subject fit
+  also requires a `basis_asset` and `field_operator`. Those assets are not
+  part of the standard `encode_spec()` signature, so AWPT enters through
+  [encode_awpt()] or [encode_operator()] instead of [encode()].
+}
+
 \section{Offset and centering contract}{
 
   A [LatentNeuroVec] reconstructs its data as

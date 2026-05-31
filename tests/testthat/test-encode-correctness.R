@@ -77,6 +77,7 @@ test_that("slepian_temporal_latent centers before storing offset", {
     tr = 1,
     bandwidth = 0.49,
     k = n_time,
+    denoise = FALSE,
     backend = "tridiag"
   )
 

@@ -34,10 +34,18 @@ Extract the basis matrix from a latent space representation. For
 with dimensions (nTime x k) where k is the number of components.
 }
 \examples{
-\dontrun{
-# For LatentNeuroVec:
+mask <- neuroim2::LogicalNeuroVol(
+  array(TRUE, dim = c(2, 2, 1)),
+  neuroim2::NeuroSpace(c(2, 2, 1))
+)
+lvec <- LatentNeuroVec(
+  basis = matrix(1:6, nrow = 3),
+  loadings = matrix(seq_len(8) / 10, nrow = 4),
+  space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+  mask = mask,
+  expect_dense = TRUE
+)
 b_matrix <- basis(lvec)
-print(dim(b_matrix)) # nTime x nComponents
-}
+dim(b_matrix)
 
 }

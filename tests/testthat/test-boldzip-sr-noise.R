@@ -8,6 +8,9 @@ test_that(".boldzip_noise_scale is the canonical scale (sd of values)", {
   # Coerces to numeric and matches sd on the coerced vector.
   iv <- as.integer(c(1L, 5L, 9L, 2L))
   expect_equal(fmrilatent:::.boldzip_noise_scale(iv), stats::sd(as.numeric(iv)))
+  expect_equal(fmrilatent:::.boldzip_noise_scale(7), 0)
+  expect_equal(fmrilatent:::.boldzip_noise_scale(numeric()), 0)
+  expect_true(is.na(fmrilatent:::.boldzip_corr(1, 1)))
 })
 
 test_that("quantization step follows the reliability-shaped formula", {
@@ -50,6 +53,31 @@ test_that("default noise_scale routes through .boldzip_noise_scale", {
   expect_identical(default_out, explicit_out)
 })
 
+test_that("event quantization noise scale uses the trimmed event amplitudes", {
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+  recorded_noise_scale <- NULL
+  local_mocked_bindings(
+    .boldzip_quantize_values = function(values, reliability, quantization, noise_scale = NULL) {
+      recorded_noise_scale <<- noise_scale
+      values
+    },
+    .package = "fmrilatent"
+  )
+
+  residual <- matrix(c(100, 100, 1, 1), nrow = 1L)
+  events <- fmrilatent:::.boldzip_encode_events(
+    residual = residual,
+    pairs = NULL,
+    split_method = "odd_even",
+    events = boldzip_events(max_events = 1L, threshold_sd = 0, paired_fraction = 0),
+    quantization = boldzip_quantization(base_step = 0.25)
+  )
+
+  expect_equal(nrow(events), 1L)
+  expect_equal(recorded_noise_scale, 0)
+})
+
 test_that("disabled quantization (base_step <= 0) returns values unchanged", {
   quant <- boldzip_quantization(base_step = 0)
   values <- c(1.5, -2.7, 0.33)
@@ -71,6 +99,17 @@ test_that("non-finite / non-positive noise_scale is treated as 1", {
     values, reliability = reliability, quantization = quant, noise_scale = 1
   )
   expect_equal(out_bad, out_one)
+})
+
+test_that("boldzip_sr_simulate validates seed before set.seed", {
+  expect_error(
+    boldzip_sr_simulate(seed = c(1L, 2L)),
+    class = "fmrilatent_error_boldzip"
+  )
+  expect_error(
+    boldzip_sr_simulate(seed = -1L),
+    class = "fmrilatent_error_boldzip"
+  )
 })
 
 test_that("decode is consistent with reliability-driven carrier suppression", {

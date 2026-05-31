@@ -46,6 +46,23 @@ test_that("retrieval refreshes LRU recency so touched entries survive", {
   fmrilatent_registry_clear()
 })
 
+test_that("LRU metadata is stored on the registry environment", {
+  fmrilatent_registry_clear()
+  reg_register("a", matrix(1, 2, 2), type = "basis")
+  reg_register("b", matrix(2, 2, 2), type = "basis")
+
+  env <- fmrilatent:::.latent_get_registry_env("basis")
+  expect_identical(attr(env, "fmrilatent.lru_order", exact = TRUE), c("a", "b"))
+  expect_false("fmrilatent.lru_order" %in% ls(env, all.names = TRUE))
+  expect_equal(fmrilatent_registry_stats("basis")$basis$count, 2L)
+
+  expect_false(is.null(reg_get("a", "basis")))
+  expect_identical(attr(env, "fmrilatent.lru_order", exact = TRUE), c("b", "a"))
+  expect_setequal(unname(fmrilatent_registry_list("basis")), c("a", "b"))
+
+  fmrilatent_registry_clear()
+})
+
 test_that("max_entries = Inf restores an unbounded cache", {
   fmrilatent_registry_clear()
   old <- getOption("fmrilatent.registry.max_entries")

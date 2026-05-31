@@ -166,6 +166,19 @@ test_that("voxel_subset_to_gsp works with two voxels (minimum for rgsp)", {
   expect_s3_class(result, "gsp_graph")
 })
 
+test_that("voxel_subset_to_gsp clamps k_neighbors on small voxel subsets", {
+  skip_if_not_installed("rgsp")
+  skip_if_not_installed("neuroim2")
+
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  spc <- neuroim2::NeuroSpace(dim(mask_arr))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, spc)
+
+  result <- voxel_subset_to_gsp(mask_vol, 1:2, k_neighbors = 6L)
+
+  expect_s3_class(result, "gsp_graph")
+})
+
 test_that("voxel_subset_to_gsp works with non-contiguous voxel indices", {
   skip_if_not_installed("rgsp")
   skip_if_not_installed("neuroim2")
@@ -203,17 +216,20 @@ test_that("voxel_subset_to_gsp works with large partial mask", {
 # -----------------------------------------------------------------------------
 
 test_that("voxel_subset_to_gsp errors when rgsp not available", {
-  # Mock the situation where rgsp is not installed
-  # We can't truly test this if rgsp is installed, so we skip if it is
-  skip_if(requireNamespace("rgsp", quietly = TRUE),
-          "rgsp is installed, cannot test missing package error")
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+  local_mocked_bindings(
+    .encoder_has_namespace = function(package) FALSE,
+    .package = "fmrilatent"
+  )
 
   mask <- array(TRUE, dim = c(2, 2, 2))
   voxel_indices <- 1:4
 
   expect_error(
     voxel_subset_to_gsp(mask, voxel_indices),
-    "rgsp not installed"
+    "rgsp not installed",
+    class = "fmrilatent_error_missing_dependency"
   )
 })
 

@@ -11,7 +11,8 @@
 
 \item{basis_spec}{Slepian basis specification (from `basis_slepian()`).}
 
-\item{data}{Optional (unused) for API symmetry.}
+\item{data}{Ignored for this graph-only spatial dictionary; accepted only
+for the shared `lift()` method signature.}
 
 \item{k_neighbors}{k for local graph building.}
 

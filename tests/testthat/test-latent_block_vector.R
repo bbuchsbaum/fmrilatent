@@ -3,11 +3,7 @@ library(Matrix)
 library(neuroim2)
 
 .skip_if_no_neurosurf_block <- function() {
-  skip_if(
-    any(commandArgs() == "-f"),
-    "neurosurf surface examples abort under this local R/BATCH setup"
-  )
-  skip_if_not_installed("neurosurf")
+  skip_if_no_neurosurf_surface_examples()
 }
 
 .make_shared_basis_block <- function() {
@@ -97,6 +93,7 @@ test_that("BlockLatentNeuroVector supports decoder pushforward and block ROI spl
   Sigma <- matrix(c(2, 0.25,
                     0.25, 1), nrow = 2, byrow = TRUE)
 
+  expect_equal(coef_metric(hybrid), diag(2))
   expect_equal(
     decode_coefficients(hybrid, gamma, space = "native"),
     as.vector(L %*% matrix(gamma, ncol = 1)),
@@ -118,6 +115,54 @@ test_that("BlockLatentNeuroVector supports decoder pushforward and block ROI spl
     reconstruct_matrix(hybrid, roi_mask = roi),
     cbind(cortex_mat, subcortex_mat),
     tolerance = 1e-8
+  )
+})
+
+test_that("BlockLatentNeuroVector preserves sparse loadings when stacking blocks", {
+  basis_mat <- Matrix(diag(2), sparse = FALSE)
+  make_block <- function(values) {
+    mask_arr <- array(TRUE, dim = c(3, 1, 1))
+    mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(3, 1, 1)))
+    LatentNeuroVec(
+      basis = basis_mat,
+      loadings = Matrix(values, sparse = TRUE),
+      space = NeuroSpace(c(3, 1, 1, 2)),
+      mask = mask_vol,
+      offset = numeric(3)
+    )
+  }
+  load_a <- matrix(c(1, 0,
+                     0, 0,
+                     0, 2), nrow = 3, byrow = TRUE)
+  load_b <- matrix(c(0, 0,
+                     3, 0,
+                     0, 4), nrow = 3, byrow = TRUE)
+  block <- BlockLatentNeuroVector(list(a = make_block(load_a), b = make_block(load_b)))
+
+  stacked <- loadings(block)
+
+  expect_true(inherits(stacked, "sparseMatrix"))
+  expect_equal(as.matrix(stacked), rbind(load_a, load_b))
+})
+
+test_that("BlockLatentNeuroVector rejects non-list ROI for multiple blocks", {
+  basis_mat <- Matrix(diag(2), sparse = FALSE)
+  mask_arr <- array(TRUE, dim = c(2, 1, 1))
+  mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(2, 1, 1)))
+  make_block <- function(label) {
+    LatentNeuroVec(
+      basis = basis_mat,
+      loadings = Matrix(diag(2), sparse = FALSE),
+      space = NeuroSpace(c(2, 1, 1, 2)),
+      mask = mask_vol,
+      label = label
+    )
+  }
+  blocks <- BlockLatentNeuroVector(list(a = make_block("a"), b = make_block("b")))
+
+  expect_error(
+    reconstruct_matrix(blocks, roi_mask = mask_arr),
+    class = "fmrilatent_error_invalid_argument"
   )
 })
 
@@ -146,5 +191,53 @@ test_that("BlockLatentNeuroVector rejects blocks with mismatched shared bases", 
       subcortex = bad_volume
     )),
     "basis matrix must match the shared block basis"
+  )
+})
+
+test_that("BlockLatentNeuroVector validity compares basis dimensions without materializing", {
+  kind <- "test_block_validity_no_materialize_basis"
+  register_handle_kind(kind, function(handle) {
+    stop("basis should not be materialized by BlockLatentNeuroVector validity", call. = FALSE)
+  }, type = "basis")
+
+  mask_arr <- array(TRUE, dim = c(2, 1, 1))
+  mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(2, 1, 1)))
+  basis_handle <- new("BasisHandle",
+    id = "block-validity-no-materialize-basis",
+    dim = as.integer(c(2L, 2L)),
+    kind = kind,
+    spec = list(token = "same"),
+    label = "no-materialize"
+  )
+  make_block <- function(label) {
+    LatentNeuroVec(
+      basis = basis_handle,
+      loadings = Matrix(diag(2), sparse = FALSE),
+      space = NeuroSpace(c(2, 1, 1, 2)),
+      mask = mask_vol,
+      label = label
+    )
+  }
+
+  block <- new("BlockLatentNeuroVector",
+    blocks = list(a = make_block("a"), b = make_block("b")),
+    label = "",
+    meta = list()
+  )
+
+  expect_s4_class(block, "BlockLatentNeuroVector")
+  expect_true(validObject(block))
+})
+
+test_that("BlockLatentNeuroVector reports is_explicit_latent dispatch failures", {
+  foreign_block <- structure(list(), class = "ForeignLatentBlock")
+
+  expect_error(
+    BlockLatentNeuroVector(list(foreign = foreign_block)),
+    "is_explicit_latent\\(\\) dispatch failed"
+  )
+  expect_error(
+    BlockLatentNeuroVector(list(foreign = foreign_block)),
+    "ForeignLatentBlock"
   )
 })

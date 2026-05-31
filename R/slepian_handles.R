@@ -27,10 +27,22 @@ slepian_temporal_handle <- function(n_time,
       class = "fmrilatent_error_unsupported_dpss_backend"
     )
   }
-  n_time <- as.integer(n_time)
+  if (missing(n_time)) {
+    .encoder_cli_abort("n_time must be a positive integer.",
+                       class = "fmrilatent_error_invalid_count")
+  }
+  if (missing(tr)) {
+    .encoder_cli_abort("tr must be a positive finite number.",
+                       class = "fmrilatent_error_invalid_scalar")
+  }
+  n_time <- .validate_positive_count(n_time, "n_time")
+  tr <- .validate_positive_scalar(tr, "tr")
+  bandwidth <- .validate_positive_scalar(bandwidth, "bandwidth")
   if (is.null(k)) {
     NW <- n_time * bandwidth * tr
     k <- floor(2 * NW) - 1L
+  } else {
+    k <- .validate_nonnegative_count(k, "k")
   }
   k <- max(1L, min(as.integer(k), n_time))
   if (is.null(id)) {
@@ -100,6 +112,21 @@ slepian_spatial_loadings_handle <- function(reduction,
   if (is.null(id)) {
     id <- .latent_handle_id("slepian-spatial", spec_payload)
   }
+  cached <- .latent_get_matrix(id, type = "loadings")
+  if (!is.null(cached)) {
+    handle <- new("LoadingsHandle",
+      id    = id,
+      dim   = as.integer(dim(cached)),
+      kind  = "slepian_spatial",
+      spec  = spec_payload,
+      label = label)
+    .latent_get_matrix(
+      id, type = "loadings",
+      fingerprint = .latent_handle_fingerprint(handle)
+    )
+    return(handle)
+  }
+
   L <- lift(reduction, basis_spec, data = data, k_neighbors = k_neighbors)
   handle <- new("LoadingsHandle",
       id    = id,

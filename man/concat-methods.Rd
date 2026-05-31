@@ -21,9 +21,18 @@ A new \code{LatentNeuroVec} if all objects are compatible, otherwise
 Concatenates two or more \code{LatentNeuroVec} objects along the temporal dimension.
 }
 \examples{
-\dontrun{
-combined <- concat(lvec1, lvec2, lvec3)
+mask <- neuroim2::LogicalNeuroVol(
+  array(TRUE, dim = c(2, 2, 1)),
+  neuroim2::NeuroSpace(c(2, 2, 1))
+)
+lvec <- LatentNeuroVec(
+  basis = matrix(1:6, nrow = 3),
+  loadings = matrix(seq_len(8) / 10, nrow = 4),
+  space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+  mask = mask,
+  expect_dense = TRUE
+)
+combined <- concat(lvec, lvec)
 dim(combined)
-}
 
 }

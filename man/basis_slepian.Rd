@@ -2,23 +2,22 @@
 % Please edit documentation in R/reduction.R
 \name{basis_slepian}
 \alias{basis_slepian}
-\alias{basis_pca}
-\alias{basis_flat}
-\title{Basis specifications (lightweight descriptors)}
+\title{Create a Slepian basis specification}
 \usage{
 basis_slepian(k = 3, type = "laplacian")
-
-basis_pca(k = 3, whiten = FALSE)
-
-basis_flat()
 }
 \arguments{
-\item{k}{Number of components.}
+\item{k}{Positive integer number of Slepian components.}
 
-\item{type}{Basis flavor (implementation-dependent).}
-
-\item{whiten}{Whether to whiten PCA scores.}
+\item{type}{Character scalar naming the Slepian basis flavor. The built-in
+spatial methods use `"laplacian"`.}
+}
+\value{
+A list with class `spec_slepian` containing `k` and `type`.
 }
 \description{
-Basis specifications (lightweight descriptors)
+`basis_slepian()` creates a lightweight descriptor for graph/Slepian basis
+construction during `lift()` or spatial encoding. It records the requested
+component count and Slepian flavor; the actual basis is computed later by a
+`lift()` method for the supplied reduction.
 }

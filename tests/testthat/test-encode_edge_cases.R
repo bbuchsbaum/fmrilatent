@@ -31,9 +31,11 @@ test_that("encode() rejects an all-FALSE mask cleanly", {
 test_that("encode() with an empty (zero-dimensional) mask errors", {
   skip_if_no_neuroim2()
 
-  expect_error(
-    encode(matrix(0, 4L, 0L), spec_time_dct(k = 2L), mask = array(logical(0), dim = c(0L, 0L, 0L))),
-    regexp = ".+"
+  without_dct_fallback_warnings(
+    expect_error(
+      encode(matrix(0, 4L, 0L), spec_time_dct(k = 2L), mask = array(logical(0), dim = c(0L, 0L, 0L))),
+      regexp = ".+"
+    )
   )
 })
 

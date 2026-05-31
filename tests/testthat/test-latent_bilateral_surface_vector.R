@@ -2,11 +2,7 @@ library(testthat)
 library(Matrix)
 
 .skip_if_no_neurosurf_blsv <- function() {
-  skip_if(
-    any(commandArgs() == "-f"),
-    "neurosurf surface examples abort under this local R/BATCH setup"
-  )
-  skip_if_not_installed("neurosurf")
+  skip_if_no_neurosurf_surface_examples()
 }
 
 .make_unilateral_blsv <- function(hemi = c("left", "right")) {
@@ -49,6 +45,10 @@ test_that("BilatLatentNeuroSurfaceVector reconstructs bilateral outputs", {
   wrapped <- wrap_decoded(bilat, mat)
   expect_s4_class(wrapped, "BilatNeuroSurfaceVector")
   expect_equal(as.matrix(as.matrix(wrapped)), t(mat), tolerance = 1e-8)
+
+  wrapped_one <- wrap_decoded(bilat, mat[1, ])
+  expect_s4_class(wrapped_one, "BilatNeuroSurfaceVector")
+  expect_equal(as.matrix(as.matrix(wrapped_one)), matrix(mat[1, ], ncol = 1), tolerance = 1e-8)
 })
 
 test_that("BilatLatentNeuroSurfaceVector supports decode and ROI splitting", {
@@ -78,4 +78,55 @@ test_that("BilatLatentNeuroSurfaceVector supports decode and ROI splitting", {
     cbind(mat[, c(1, 3), drop = FALSE], mat[, 5, drop = FALSE]),
     tolerance = 1e-8
   )
+})
+
+test_that("BilatLatentNeuroSurfaceVector preserves sparse loadings", {
+  left <- .make_unilateral_blsv("left")
+  right <- .make_unilateral_blsv("right")
+  left@loadings <- Matrix::Matrix(left@loadings, sparse = TRUE)
+  right@loadings <- Matrix::Matrix(right@loadings, sparse = TRUE)
+  bilat <- BilatLatentNeuroSurfaceVector(left, right)
+
+  expect_s4_class(loadings(bilat), "sparseMatrix")
+})
+
+test_that("BilatLatentNeuroSurfaceVector validity compares basis dimensions without materializing", {
+  .skip_if_no_neurosurf_blsv()
+  kind <- "test_bilat_validity_no_materialize_basis"
+  register_handle_kind(kind, function(handle) {
+    stop("basis should not be materialized by BilatLatentNeuroSurfaceVector validity", call. = FALSE)
+  }, type = "basis")
+
+  geom <- neurosurf::example_surface_geometry()
+  basis_handle <- new("BasisHandle",
+    id = "bilat-validity-no-materialize-basis",
+    dim = as.integer(c(3L, 2L)),
+    kind = kind,
+    spec = list(token = "same"),
+    label = "no-materialize"
+  )
+  make_side <- function(hemi) {
+    geom_side <- geom
+    geom_side@hemi <- hemi
+    LatentNeuroSurfaceVector(
+      basis = basis_handle,
+      loadings = Matrix(matrix(c(
+        1, 0,
+        0, 1,
+        1, 1
+      ), nrow = 3, byrow = TRUE), sparse = FALSE),
+      geometry = geom_side,
+      support = 1:3
+    )
+  }
+
+  bilat <- new("BilatLatentNeuroSurfaceVector",
+    left = make_side("left"),
+    right = make_side("right"),
+    label = "",
+    meta = list()
+  )
+
+  expect_s4_class(bilat, "BilatLatentNeuroSurfaceVector")
+  expect_true(validObject(bilat))
 })

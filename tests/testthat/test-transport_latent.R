@@ -424,6 +424,26 @@ test_that("decode_covariance diag_only path does not materialize the decoder", {
   )
 })
 
+test_that("decode_covariance full path warns before large dense pushforward", {
+  tmpl <- make_transport_template()
+  op <- make_transport_operator()
+  tl <- transport_latent(
+    coeff_raw = matrix(0, nrow = 2L, ncol = 2L),
+    basis_asset = tmpl,
+    field_operator = op,
+    mask = make_transport_mask()
+  )
+  Sigma <- diag(2)
+  old <- options(fmrilatent.decode_covariance.full_warning_entries = 3)
+  on.exit(options(old), add = TRUE)
+
+  expect_warning(
+    got <- decode_covariance(tl, Sigma, space = "native", diag_only = FALSE),
+    class = "fmrilatent_warning_dense_covariance"
+  )
+  expect_equal(dim(got), c(4L, 4L))
+})
+
 test_that("transport latent respects raw versus analysis coordinate decoding", {
   tmpl <- make_transport_template()
   op <- make_transport_operator()
@@ -457,6 +477,7 @@ test_that("transport latent respects raw versus analysis coordinate decoding", {
 
   expect_equal(coef_time(tl, "raw"), matrix(gamma_raw, nrow = 1))
   expect_equal(coef_time(tl, "analysis"), matrix(gamma_analysis, nrow = 1))
+  expect_equal(coef_metric(tl), diag(2))
   expect_equal(coef_metric(tl, "analysis"), diag(2))
   expect_equal(coef_metric(tl, "raw"), crossprod(M))
 

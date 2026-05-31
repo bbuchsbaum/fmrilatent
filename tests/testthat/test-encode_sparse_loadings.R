@@ -17,7 +17,9 @@ encode_space_sparse_check <- function(spec, mask_dim = c(3, 3, 2), n_time = 6L, 
   set.seed(seed)
   X <- matrix(rnorm(n_time * nv), nrow = n_time)
 
-  lv <- encode(X, spec, mask = mask, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(X, spec, mask = mask, materialize = "matrix")
+  )
 
   # The loadings dictionary must actually be sparse, otherwise this test would
   # silently stop guarding the sparse-aware multiply.

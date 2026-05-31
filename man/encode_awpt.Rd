@@ -69,3 +69,8 @@ A \code{TransportLatent} object with AWPT metadata.
 \description{
 Encode data using the AWPT model
 }
+\details{
+AWPT does not expose a separate ridge penalty. The returned metadata records
+\code{lambda = 0}; the anatomical roughness penalty is recorded separately as
+\code{spatial_lambda}.
+}

@@ -15,6 +15,9 @@
 
 \item{...}{Additional arguments (unused in default method).}
 }
+\value{
+This method does not return; it aborts with a classed unsupported-operation error.
+}
 \description{
 This method exists to provide a clear error when no concrete lift is
 registered. External packages should implement methods for specific

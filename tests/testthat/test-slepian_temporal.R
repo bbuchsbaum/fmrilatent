@@ -223,6 +223,25 @@ test_that("slepian_temporal_latent with very small bandwidth", {
   expect_true(ncol(B) >= 1)
 })
 
+test_that("slepian_temporal_latent denoise caps explicit k to Shannon rank", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  n_time <- 20L
+  X <- matrix(rnorm(n_time * sum(mask_arr)), nrow = n_time)
+
+  lv_denoise <- slepian_temporal_latent(
+    X, mask_vol, tr = 1, bandwidth = 0.1, k = 10L, denoise = TRUE
+  )
+  lv_full <- slepian_temporal_latent(
+    X, mask_vol, tr = 1, bandwidth = 0.1, k = 10L, denoise = FALSE
+  )
+
+  expect_equal(ncol(basis(lv_denoise)), 3L)
+  expect_equal(lv_denoise@meta$k, 3L)
+  expect_equal(ncol(basis(lv_full)), 10L)
+  expect_equal(lv_full@meta$k, 10L)
+})
+
 test_that("slepian_temporal_latent reconstruction quality", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
@@ -262,8 +281,14 @@ test_that("dpss_time_basis validates missing n_time", {
 })
 
 test_that("dpss_time_basis validates n_time < 1", {
-  expect_error(dpss_time_basis(n_time = 0, tr = 2, bandwidth = 0.1), "n_time must be positive")
-  expect_error(dpss_time_basis(n_time = -5, tr = 2, bandwidth = 0.1), "n_time must be positive")
+  expect_error(
+    dpss_time_basis(n_time = 0, tr = 2, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    dpss_time_basis(n_time = -5, tr = 2, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_count"
+  )
 })
 
 test_that("dpss_time_basis validates missing tr", {
@@ -271,8 +296,14 @@ test_that("dpss_time_basis validates missing tr", {
 })
 
 test_that("dpss_time_basis validates tr <= 0", {
-  expect_error(dpss_time_basis(n_time = 10, tr = 0, bandwidth = 0.1), "tr must be positive")
-  expect_error(dpss_time_basis(n_time = 10, tr = -1, bandwidth = 0.1), "tr must be positive")
+  expect_error(
+    dpss_time_basis(n_time = 10, tr = 0, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+  expect_error(
+    dpss_time_basis(n_time = 10, tr = -1, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_scalar"
+  )
 })
 
 test_that("dpss_time_basis validates missing bandwidth", {
@@ -280,8 +311,40 @@ test_that("dpss_time_basis validates missing bandwidth", {
 })
 
 test_that("dpss_time_basis validates bandwidth <= 0", {
-  expect_error(dpss_time_basis(n_time = 10, tr = 2, bandwidth = 0), "bandwidth must be positive")
-  expect_error(dpss_time_basis(n_time = 10, tr = 2, bandwidth = -0.05), "bandwidth must be positive")
+  expect_error(
+    dpss_time_basis(n_time = 10, tr = 2, bandwidth = 0),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+  expect_error(
+    dpss_time_basis(n_time = 10, tr = 2, bandwidth = -0.05),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+})
+
+test_that("dpss_time_basis rejects NA and non-finite scalars before C++", {
+  expect_error(
+    dpss_time_basis(n_time = NA_integer_, tr = 2, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    dpss_time_basis(n_time = 10, tr = Inf, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+  expect_error(
+    dpss_time_basis(n_time = 10, tr = 2, bandwidth = NA_real_),
+    class = "fmrilatent_error_invalid_scalar"
+  )
+})
+
+test_that("slepian_temporal_latent rejects invalid tr before deriving NW", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_vol <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  X <- matrix(rnorm(8L * sum(mask_arr)), nrow = 8L)
+
+  expect_error(
+    slepian_temporal_latent(X, mask_vol, tr = NA_real_, bandwidth = 0.1),
+    class = "fmrilatent_error_invalid_scalar"
+  )
 })
 
 test_that("dpss_time_basis with n_time = 1 returns a single-row matrix", {

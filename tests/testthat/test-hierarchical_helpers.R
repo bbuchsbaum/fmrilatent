@@ -390,6 +390,22 @@ test_that("spectral_ward_hclust rejects non-square matrix", {
   expect_error(spectral_ward_hclust(W), "must be square")
 })
 
+test_that("spectral_ward_hclust validates scalar and tiny-matrix inputs", {
+  expect_error(
+    spectral_ward_hclust(matrix(1, nrow = 1, ncol = 1)),
+    class = "fmrilatent_error_dimension_mismatch"
+  )
+  expect_error(
+    spectral_ward_hclust(diag(2), k_embed = 0L),
+    class = "fmrilatent_error_invalid_count"
+  )
+
+  W <- matrix(c(0, 1, 1, 0), nrow = 2)
+  hc <- spectral_ward_hclust(W, k_embed = 3L)
+  expect_s3_class(hc, "hclust")
+  expect_equal(nrow(hc$merge), 1L)
+})
+
 test_that("spectral_ward_hclust respects network constraint", {
   skip_if_not_installed("RSpectra")
 
@@ -957,6 +973,24 @@ test_that("cut_hclust_nested handles k_levels with length 1", {
 # =============================================================================
 # Additional spectral_ward_hclust tests
 # =============================================================================
+
+test_that("normalized Laplacian scales rows and columns symmetrically", {
+  W <- matrix(c(
+    0.0, 2.0, 0.5, 0.0,
+    2.0, 0.0, 1.5, 0.2,
+    0.5, 1.5, 0.0, 3.0,
+    0.0, 0.2, 3.0, 0.0
+  ), nrow = 4L, byrow = TRUE)
+  d_inv_sqrt <- 1 / sqrt(rowSums(W))
+
+  L <- fmrilatent:::.normalized_laplacian(W)
+  expected <- diag(4L) - outer(d_inv_sqrt, d_inv_sqrt) * W
+  row_scaled_twice <- diag(4L) - (d_inv_sqrt * W) * d_inv_sqrt
+
+  expect_equal(L, expected, tolerance = 1e-12)
+  expect_equal(L, t(L), tolerance = 1e-12)
+  expect_gt(max(abs(row_scaled_twice - t(row_scaled_twice))), 1e-4)
+})
 
 test_that("spectral_ward_hclust handles sparse similarity matrix", {
   skip_if_not_installed("RSpectra")

@@ -38,19 +38,49 @@ test_that("hrbf_latent roundtrip on tiny mask", {
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 3, 3)))
   X <- matrix(rnorm(5 * 27), nrow = 5)
   params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
-  latent <- hrbf_latent(X, mask, params)
+  latent <- without_dense_basis_warning(hrbf_latent(X, mask, params))
   expect_s4_class(latent, "LatentNeuroVec")
   Xhat <- hrbf_reconstruct_matrix(latent@basis, mask, params)
   expect_equal(dim(Xhat), dim(X))
   expect_equal(Xhat, X, tolerance = 1e-6)
 })
 
-test_that("wendland alias works", {
-  mask_arr <- array(TRUE, dim = c(2, 2, 2))
-  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
-  params <- list(sigma0 = 2, levels = 1L, radius_factor = 2.0, kernel_type = "wendland_c4", seed = 7L)
-  B <- hrbf_generate_basis(params, mask)
-  expect_equal(ncol(B), sum(mask_arr))
+test_that("hrbf_latent reuses the generated basis for projection", {
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+  calls <- 0L
+  local_mocked_bindings(
+    hrbf_generate_basis = function(params, mask) {
+      calls <<- calls + 1L
+      Matrix::Matrix(matrix(c(
+        1, 0, 0, 0,
+        0, 1, 1, 0
+      ), nrow = 2L, byrow = TRUE), sparse = TRUE)
+    },
+    .package = "fmrilatent"
+  )
+
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  X <- matrix(seq_len(12), nrow = 3L)
+  latent <- without_dense_basis_warning(hrbf_latent(X, mask, params = list()))
+
+  expect_equal(calls, 1L)
+  expect_equal(dim(latent@basis), c(3L, 2L))
+})
+
+test_that("wendland_c4 kernel works without aliasing to c6", {
+  mask_arr <- array(TRUE, dim = c(5, 5, 3))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(5, 5, 3)))
+  params_c4 <- list(sigma0 = 2, levels = 1L, radius_factor = 2.0, kernel_type = "wendland_c4", seed = 7L)
+  params_c6 <- params_c4
+  params_c6$kernel_type <- "wendland_c6"
+
+  B_c4 <- hrbf_generate_basis(params_c4, mask)
+  B_c6 <- hrbf_generate_basis(params_c6, mask)
+
+  expect_equal(ncol(B_c4), sum(mask_arr))
+  expect_false(isTRUE(all.equal(as.matrix(B_c4), as.matrix(B_c6), tolerance = 1e-10)))
 })
 
 test_that("hrbf basis works with R-only backend", {
@@ -88,12 +118,42 @@ test_that("hrbf partial reconstruction matches full for selected voxels/time", {
   expect_equal(part, full[time_idx, vox_idx, drop = FALSE], tolerance = 1e-6)
 })
 
+test_that("hrbf partial reconstruction maps full-grid active voxel indices", {
+  mask_arr <- array(FALSE, dim = c(4, 4, 2))
+  mask_arr[cbind(
+    c(1L, 3L, 4L, 2L),
+    c(1L, 4L, 2L, 3L),
+    c(1L, 1L, 2L, 2L)
+  )] <- TRUE
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(4, 4, 2)))
+  X <- matrix(seq_len(5L * sum(mask_arr)) / 10, nrow = 5L)
+  params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 3L)
+  coeff <- hrbf_project_matrix(X, mask, params)
+  full <- hrbf_reconstruct_matrix(coeff, mask, params)
+  active_idx <- which(mask_arr)
+  keep <- c(2L, 4L)
+
+  part <- hrbf_reconstruct_partial(
+    coeff,
+    mask,
+    params,
+    voxel_idx = active_idx[keep],
+    time_idx = c(1L, 5L)
+  )
+
+  expect_equal(part, full[c(1L, 5L), keep, drop = FALSE], tolerance = 1e-8)
+  expect_error(
+    hrbf_reconstruct_partial(coeff, mask, params, voxel_idx = setdiff(seq_along(mask_arr), active_idx)[[1L]]),
+    class = "fmrilatent_error_invalid_index"
+  )
+})
+
 test_that("hrbf_latent carries HRBF metadata", {
   mask_arr <- array(TRUE, dim = c(2, 2, 2))
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
   X <- matrix(rnorm(3 * 8), nrow = 3)
   params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 9L)
-  lvec <- hrbf_latent(X, mask, params)
+  lvec <- without_dense_basis_warning(hrbf_latent(X, mask, params))
   m <- hrbf_meta(lvec)
   expect_true(is_hrbf_latent(lvec))
   expect_equal(m$family, "hrbf")
@@ -129,7 +189,7 @@ test_that("hrbf_latent roundtrip on simulated fMRI (tiny mask)", {
   }
 
   params <- list(sigma0 = 2, levels = 1L, radius_factor = 2.5, kernel_type = "gaussian", seed = 99L)
-  lvec <- hrbf_latent(X, mask, params)
+  lvec <- without_dense_basis_warning(hrbf_latent(X, mask, params))
   recon <- as.matrix(lvec)
 
   expect_equal(recon, X, tolerance = 1e-6)
@@ -227,6 +287,23 @@ test_that("hrbf_atoms_rcpp wendland kernel produces expected values", {
   expect_equal(result_dense[1, 5], 0.0, tolerance = 1e-10)
 })
 
+test_that("hrbf_atoms_rcpp wendland_c4 kernel produces expected values", {
+  mask_xyz <- matrix(c(
+    0, 0, 0,
+    0.5, 0, 0
+  ), ncol = 3, byrow = TRUE)
+  centres <- matrix(c(0, 0, 0), ncol = 3, byrow = TRUE)
+  sigma_vec <- 1.0
+
+  result <- hrbf_atoms_rcpp_internal(mask_xyz, centres, sigma_vec, "wendland_c4", 1e-12)
+  result_dense <- as.matrix(result)
+
+  r <- 0.5
+  expected_05 <- (1 - r)^6 * (35 * r^2 + 18 * r + 3) / 3
+  expect_equal(result_dense[1, 1], 1.0, tolerance = 1e-10)
+  expect_equal(result_dense[1, 2], expected_05, tolerance = 1e-10)
+})
+
 test_that("hrbf_atoms_rcpp wendland kernel has compact support", {
   # Create points at increasing distances
   # Use 0.9 instead of 0.99 to avoid floating point edge cases
@@ -282,6 +359,24 @@ test_that("hrbf_atoms_rcpp respects value_threshold for gaussian", {
 
   # exp(-50) approx 1.9e-22, with threshold 1e-6 should be filtered
   expect_equal(result_high_dense[1, 3], 0.0)
+})
+
+test_that("hrbf_atoms_rcpp gaussian threshold cutoff preserves strict boundary", {
+  threshold <- exp(-0.5)
+  mask_xyz <- matrix(c(
+    sqrt(0.99), 0, 0,
+    1, 0, 0,
+    sqrt(1.01), 0, 0
+  ), ncol = 3, byrow = TRUE)
+  centres <- matrix(c(0, 0, 0), ncol = 3, byrow = TRUE)
+  sigma_vec <- 1.0
+
+  result <- hrbf_atoms_rcpp_internal(mask_xyz, centres, sigma_vec, "gaussian", threshold)
+  result_dense <- as.matrix(result)
+
+  expect_gt(result_dense[1, 1], threshold)
+  expect_equal(result_dense[1, 2], 0.0)
+  expect_equal(result_dense[1, 3], 0.0)
 })
 
 test_that("hrbf_atoms_rcpp handles multiple centres", {
@@ -846,7 +941,7 @@ test_that("hrbf_latent with custom label", {
   X <- matrix(rnorm(3 * 8), nrow = 3)
   params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
 
-  lvec <- hrbf_latent(X, mask, params, label = "test_label")
+  lvec <- without_dense_basis_warning(hrbf_latent(X, mask, params, label = "test_label"))
   expect_s4_class(lvec, "LatentNeuroVec")
   expect_equal(lvec@label, "test_label")
 })
@@ -857,7 +952,7 @@ test_that("as_hrbf_latent attaches metadata correctly", {
   X <- matrix(rnorm(3 * 8), nrow = 3)
   params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 1L)
 
-  lvec <- hrbf_latent(X, mask, params)
+  lvec <- without_dense_basis_warning(hrbf_latent(X, mask, params))
   centres_test <- matrix(c(0, 0, 0), ncol = 3)
   sigmas_test <- c(1.0)
 
@@ -889,12 +984,12 @@ test_that("hrbf_meta returns NULL for LatentNeuroVec without meta", {
   spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
 
   # Create LatentNeuroVec without HRBF metadata
-  lvec <- LatentNeuroVec(
+  lvec <- without_dense_basis_warning(LatentNeuroVec(
     basis = matrix(rnorm(3 * 8), nrow = 3),
     loadings = Matrix::Matrix(rnorm(8 * 8), nrow = 8),
     space = spc,
     mask = mask
-  )
+  ))
 
   expect_null(hrbf_meta(lvec))
 })
@@ -904,13 +999,13 @@ test_that("hrbf_meta returns NULL for wrong family", {
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
   spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
 
-  lvec <- LatentNeuroVec(
+  lvec <- without_dense_basis_warning(LatentNeuroVec(
     basis = matrix(rnorm(3 * 8), nrow = 3),
     loadings = Matrix::Matrix(rnorm(8 * 8), nrow = 8),
     space = spc,
     mask = mask,
     meta = list(family = "other")
-  )
+  ))
 
   expect_null(hrbf_meta(lvec))
 })
@@ -971,6 +1066,16 @@ test_that("poisson_disk_sample_neuroim2 handles very small mask", {
 
   expect_gte(nrow(centres), 1)
   expect_equal(ncol(centres), 3)
+})
+
+test_that("poisson_disk_sample_neuroim2 seed changes native sample order", {
+  mask_arr <- array(TRUE, dim = c(5, 5, 1))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(5, 5, 1)))
+
+  centres_1 <- fmrilatent:::poisson_disk_sample_neuroim2(mask, radius_mm = 1.25, seed = 1L)
+  centres_2 <- fmrilatent:::poisson_disk_sample_neuroim2(mask, radius_mm = 1.25, seed = 2L)
+
+  expect_false(identical(centres_1, centres_2))
 })
 
 test_that("poisson_disk_sample_neuroim2_compat handles multi-component mask", {
@@ -1065,7 +1170,7 @@ test_that("generate_hrbf_atom wendland kernel", {
   expect_gt(atom$values[2], 0)
 })
 
-test_that("generate_hrbf_atom wendland_c4 alias", {
+test_that("generate_hrbf_atom uses the Wendland C4 polynomial", {
   old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
   on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
   options(fmrilatent.hrbf.use_rcpp = FALSE)
@@ -1074,11 +1179,14 @@ test_that("generate_hrbf_atom wendland_c4 alias", {
   params <- list(kernel_type = "wendland_c4")
 
   atom <- fmrilatent:::generate_hrbf_atom(
-    mask_coords_world, 1:2, c(0, 0, 0), 1.0, 0L, 1L, params
+    mask_coords_world, 1:2, c(0, 0, 0), 1.0, 0L, 1L, params,
+    normalize_over_mask = FALSE
   )
 
   expect_equal(length(atom$values), 2)
-  expect_gt(atom$values[1], 0)
+  expect_equal(atom$values[1], 1.0, tolerance = 1e-10)
+  expect_equal(atom$values[2], (1 - 0.5)^6 * (35 * 0.5^2 + 18 * 0.5 + 3) / 3,
+               tolerance = 1e-10)
 })
 
 test_that("lna_hrbf_centres_from_params with explicit centres and sigmas", {
@@ -1183,6 +1291,40 @@ test_that("lna_hrbf_basis_from_params with full_grid FALSE", {
   expect_equal(ncol(B), sum(mask_arr))  # Active voxels only
 })
 
+test_that("lna_hrbf_basis_from_params keeps square KxN Rcpp output orientation", {
+  skip_if_not(exists("hrbf_atoms_rcpp", mode = "function"), "hrbf_atoms_rcpp unavailable")
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = TRUE)
+
+  mask_arr <- array(FALSE, dim = c(3, 1, 1))
+  mask_arr[c(1L, 3L), 1, 1] <- TRUE
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(3, 1, 1)))
+  coords <- matrix(c(0, 0, 0,
+                     2, 0, 0), ncol = 3, byrow = TRUE)
+  params <- list(kernel_type = "gaussian")
+
+  B <- lna_hrbf_basis_from_params(
+    params,
+    mask,
+    centres = coords,
+    sigmas = c(1, 3),
+    full_grid = FALSE,
+    mask_world_coords = coords,
+    mask_arr = mask_arr,
+    mask_linear_indices = which(mask_arr)
+  )
+
+  expected <- matrix(
+    c(1, exp(-2),
+      exp(-4 / 18), 1),
+    nrow = 2L,
+    byrow = TRUE
+  )
+  expected <- expected / sqrt(rowSums(expected^2))
+  expect_equal(as.matrix(B), expected, tolerance = 1e-8)
+})
+
 test_that("lna_hrbf_basis_from_params error: centres without sigmas", {
   mask_arr <- array(TRUE, dim = c(2, 2, 2))
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
@@ -1209,6 +1351,22 @@ test_that("hrbf_basis_from_params with R backend and wendland kernel", {
   expect_s4_class(B, "dgCMatrix")
   expect_equal(ncol(B), sum(mask_arr))
   expect_gt(nrow(B), 0)
+})
+
+test_that("hrbf_basis_from_params R backend uses active columns for non-contiguous masks", {
+  old_opt <- getOption("fmrilatent.hrbf.use_rcpp")
+  on.exit(options(fmrilatent.hrbf.use_rcpp = old_opt), add = TRUE)
+  options(fmrilatent.hrbf.use_rcpp = FALSE)
+
+  mask_arr <- array(FALSE, dim = c(6, 6, 4))
+  mask_arr[seq_along(mask_arr) %% 2L == 0L] <- TRUE
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(6, 6, 4)))
+  params <- list(sigma0 = 2, levels = 0L, radius_factor = 2.5, kernel_type = "gaussian", seed = 11L)
+
+  B <- fmrilatent:::hrbf_basis_from_params(params, mask)
+
+  expect_s4_class(B, "dgCMatrix")
+  expect_equal(ncol(B), sum(mask_arr))
 })
 
 test_that("compute_hrbf_coefficients square invertible case", {
@@ -1277,12 +1435,12 @@ test_that("is_hrbf_latent returns FALSE for non-HRBF latent", {
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
   spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
 
-  lvec <- LatentNeuroVec(
+  lvec <- without_dense_basis_warning(LatentNeuroVec(
     basis = matrix(rnorm(3 * 8), nrow = 3),
     loadings = Matrix::Matrix(rnorm(8 * 8), nrow = 8),
     space = spc,
     mask = mask
-  )
+  ))
 
   expect_false(is_hrbf_latent(lvec))
 })
@@ -1389,7 +1547,7 @@ test_that("hrbf_meta returns metadata for valid hrbf-tagged LatentNeuroVec", {
   X <- matrix(rnorm(3 * 8), nrow = 3)
   params <- list(sigma0 = 1, levels = 0L, radius_factor = 2.5,
                  kernel_type = "gaussian", seed = 1L)
-  lvec <- hrbf_latent(X, mask, params)
+  lvec <- without_dense_basis_warning(hrbf_latent(X, mask, params))
   m <- hrbf_meta(lvec)
   expect_true(is.list(m))
   expect_equal(m$family, "hrbf")
@@ -1400,11 +1558,11 @@ test_that("hrbf_meta returns NULL when meta slot is NULL", {
   mask_arr <- array(TRUE, dim = c(2, 2, 2))
   mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 2)))
   spc <- neuroim2::NeuroSpace(c(2, 2, 2, 3))
-  lvec <- LatentNeuroVec(
+  lvec <- without_dense_basis_warning(LatentNeuroVec(
     basis = matrix(rnorm(3 * 2), nrow = 3),
     loadings = Matrix::Matrix(rnorm(8 * 2), nrow = 8),
     space = spc, mask = mask
-  )
+  ))
   # meta defaults to list() which is not NULL but has no $family
   expect_null(hrbf_meta(lvec))
 })
@@ -1480,6 +1638,22 @@ test_that("poisson_disk_sample_neuroim2 small component uses centroid fallback",
   expect_equal(ncol(centres), 3)
 })
 
+test_that("poisson_disk_sample_neuroim2 preserves successful small-component samples", {
+  mask_arr <- array(FALSE, dim = c(5, 2, 1))
+  mask_arr[1:2, 1:2, 1] <- TRUE
+  mask_arr[4:5, 1:2, 1] <- TRUE
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(5, 2, 1)))
+
+  centres <- fmrilatent:::poisson_disk_sample_neuroim2(
+    mask,
+    radius_mm = 0.5,
+    seed = 1L
+  )
+
+  expect_equal(nrow(centres), sum(mask_arr))
+  expect_equal(ncol(centres), 3)
+})
+
 # --- generate_hrbf_atom: normalization and no-normalization ---
 
 test_that("generate_hrbf_atom with normalize_over_mask = FALSE", {
@@ -1533,8 +1707,9 @@ test_that("generate_hrbf_atom with fine level alt kernel switching", {
     current_level_j = 2L, total_levels = 2L, params,
     normalize_over_mask = FALSE
   )
-  # wendland_c4 alias should be resolved to wendland_c6
-  # at distance 1.5, r = 1.5 >= 1, so value = 0
+  expect_equal(atom$values[2], (1 - 0.5)^6 * (35 * 0.5^2 + 18 * 0.5 + 3) / 3,
+               tolerance = 1e-10)
+  # At distance 1.5, r = 1.5 >= 1, so value = 0.
   expect_equal(atom$values[3], 0)
 })
 

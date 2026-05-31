@@ -11,6 +11,8 @@
 ^\.mote($|/)
 ^\.claude($|/)
 ^\.\.Rcheck($|/)
+^.*\.Rcheck($|/)
+^\.tmpcheck($|/)
 ^AGENTS\.md$
 (^|/)AGENTS\.md$
 ^CLAUDE\.md$
@@ -27,6 +29,9 @@
 ^src/.*\.so$
 ^\.covr_result\.rds$
 ^\.rcmdcheck_result\.rds$
+^\.scratch($|/)
+^audit($|/)
+^tests/testthat/Rplots\.pdf$
 ^\.lintr$
 ^\.omc($|/)
 ^\.planning($|/)

@@ -167,6 +167,20 @@ test_that("common latent interface works for ImplicitLatent", {
   expect_equal(arr_roi[, , 1, 1], matrix(c(mat[1, 1], 0, mat[1, 3], 0), nrow = 2))
 })
 
+test_that("Latent class union spans explicit, implicit, and transport branches", {
+  lv <- make_test_lvec_ci()
+  il <- make_test_implicit_ci()
+  tl <- make_test_implicit_ci()
+  class(tl) <- c("TransportLatent", class(tl))
+
+  expect_true(methods::is(lv, "Latent"))
+  expect_true(methods::is(il, "Latent"))
+  expect_true(methods::is(tl, "Latent"))
+  expect_true(methods::is(lv, "ExplicitLatent"))
+  expect_false(methods::is(il, "ExplicitLatent"))
+  expect_false(is_explicit_latent(tl))
+})
+
 test_that("common latent interface rejects malformed roi_mask inputs", {
   lv <- make_test_lvec_ci()
   il <- make_test_implicit_ci()

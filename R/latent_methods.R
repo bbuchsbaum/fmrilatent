@@ -21,6 +21,16 @@ NULL
 #' @name series-methods
 NULL
 
+.series_integerish <- function(x, arg) {
+  if (!is.numeric(x) || anyNA(x) || any(!is.finite(x)) || any(x != floor(x))) {
+    .encoder_cli_abort(
+      paste0("series() argument '", arg, "' must be finite integer-valued numeric indices."),
+      class = "fmrilatent_error_invalid_index"
+    )
+  }
+  as.integer(x)
+}
+
 #' @export
 #' @rdname series-methods
 setMethod(
@@ -30,9 +40,6 @@ setMethod(
     if (missing(j)) j <- NULL
     if (missing(k)) k <- NULL
 
-    dots <- list(...)
-    if ("drop" %in% names(dots)) drop <- dots$drop
-
     has_j <- !is.null(j)
     has_k <- !is.null(k)
 
@@ -41,6 +48,12 @@ setMethod(
 
     # CASE A: user gave only i -> interpret as multiple 3D voxel indices
     if (!has_j && !has_k) {
+      if (anyNA(i)) {
+        .encoder_cli_abort(
+          "Some voxel index in 'i' is missing.",
+          class = "fmrilatent_error_invalid_index"
+        )
+      }
       if (any(i < 1 | i > nels3d)) {
         .encoder_cli_abort(
           "Some voxel index in 'i' is out of range [1..(X*Y*Z)].",
@@ -91,6 +104,16 @@ setMethod(
           class = "fmrilatent_error_invalid_argument"
         )
       }
+      coords <- c(i, j, k)
+      if (anyNA(coords) || any(!is.finite(coords)) || any(coords != floor(coords))) {
+        .encoder_cli_abort(
+          "series(x, i,j,k): i,j,k must be finite integer coordinates.",
+          class = "fmrilatent_error_invalid_index"
+        )
+      }
+      i <- as.integer(i)
+      j <- as.integer(j)
+      k <- as.integer(k)
       idx_1d <- i + (j - 1) * dim(x)[1] + (k - 1) * dim(x)[1] * dim(x)[2]
       if (idx_1d < 1 || idx_1d > nels3d) {
         .encoder_cli_abort(
@@ -121,7 +144,7 @@ setMethod(
   f = "series",
   signature = signature(x = "LatentNeuroVec", i = "numeric"),
   definition = function(x, i, j, k, ..., drop = TRUE) {
-    i <- as.integer(i)
+    i <- .series_integerish(i, "i")
     if (missing(j) && missing(k)) {
       return(series(x, i, ..., drop = drop))
     }
@@ -131,8 +154,8 @@ setMethod(
         class = "fmrilatent_error_invalid_argument"
       )
     }
-    j <- as.integer(j)
-    k <- as.integer(k)
+    j <- .series_integerish(j, "j")
+    k <- .series_integerish(k, "k")
     series(x, i, j, k, ..., drop = drop)
   }
 )
@@ -149,7 +172,7 @@ setMethod(
         class = "fmrilatent_error_missing_argument"
       )
     }
-    if (is.numeric(i)) i <- as.integer(i)
+    if (is.numeric(i)) i <- .series_integerish(i, "i")
 
     if (missing(j) && missing(k)) {
       series(x, i, ..., drop = drop)
@@ -159,8 +182,8 @@ setMethod(
         class = "fmrilatent_error_invalid_argument"
       )
     } else {
-      j <- as.integer(j)
-      k <- as.integer(k)
+      j <- .series_integerish(j, "j")
+      k <- .series_integerish(k, "k")
       series(x, i, j, k, ..., drop = drop)
     }
   }
@@ -179,6 +202,49 @@ setMethod(
   do.call(NeuroVecSeq, dense_objects)
 }
 
+.latent_offsets_equal <- function(x, y, tol = sqrt(.Machine$double.eps)) {
+  if (length(x) == 0L || length(y) == 0L) {
+    return(length(x) == 0L && length(y) == 0L)
+  }
+  if (length(x) != length(y)) {
+    return(FALSE)
+  }
+  isTRUE(all.equal(
+    as.numeric(x),
+    as.numeric(y),
+    tolerance = tol,
+    check.attributes = FALSE
+  ))
+}
+
+.latent_handles_identical <- function(x, y) {
+  if (!is(x, "LoadingsHandle") || !is(y, "LoadingsHandle")) {
+    return(FALSE)
+  }
+  identical(x@id, y@id) &&
+    identical(x@kind, y@kind) &&
+    identical(x@dim, y@dim) &&
+    identical(x@spec, y@spec)
+}
+
+.latent_loadings_identical <- function(x, y) {
+  if (.latent_handles_identical(x, y)) {
+    return(TRUE)
+  }
+  if (is(x, "LoadingsHandle") || is(y, "LoadingsHandle")) {
+    return(FALSE)
+  }
+  if (!identical(dim(x), dim(y))) {
+    return(FALSE)
+  }
+  x_sparse <- inherits(x, "sparseMatrix")
+  y_sparse <- inherits(y, "sparseMatrix")
+  if (x_sparse || y_sparse) {
+    return(x_sparse && y_sparse && identical(Matrix::drop0(x), Matrix::drop0(y)))
+  }
+  identical(as.matrix(x), as.matrix(y))
+}
+
 #' Concatenate LatentNeuroVec Objects
 #'
 #' @description
@@ -192,10 +258,19 @@ setMethod(
 #'   a \code{\link[neuroim2]{NeuroVecSeq-class}}.
 #'
 #' @examples
-#' \dontrun{
-#' combined <- concat(lvec1, lvec2, lvec3)
+#' mask <- neuroim2::LogicalNeuroVol(
+#'   array(TRUE, dim = c(2, 2, 1)),
+#'   neuroim2::NeuroSpace(c(2, 2, 1))
+#' )
+#' lvec <- LatentNeuroVec(
+#'   basis = matrix(1:6, nrow = 3),
+#'   loadings = matrix(seq_len(8) / 10, nrow = 4),
+#'   space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+#'   mask = mask,
+#'   expect_dense = TRUE
+#' )
+#' combined <- concat(lvec, lvec)
 #' dim(combined)
-#' }
 #'
 #' @importFrom neuroim2 NeuroVecSeq
 #' @rdname concat-methods
@@ -206,7 +281,7 @@ setMethod(
   definition = function(x, y, ...) {
     additional <- list(...)
     all_objects <- c(list(x, y), additional)
-    all_lvecs <- all(sapply(all_objects, is, "LatentNeuroVec"))
+    all_lvecs <- all(vapply(all_objects, methods::is, logical(1), "LatentNeuroVec"))
 
     if (!all_lvecs) {
       return(.latent_neurovecseq_fallback(all_objects))
@@ -265,10 +340,10 @@ setMethod(
 
     # Check loadings - must be identical
     compatible_loadings <- TRUE
-    x_loadings <- loadings_mat(x)
+    x_loadings <- x@loadings
 
     for (obj in all_objects[-1]) {
-      if (!identical(as.matrix(x_loadings), as.matrix(loadings_mat(obj)))) {
+      if (!.latent_loadings_identical(x_loadings, obj@loadings)) {
         compatible_loadings <- FALSE
         break
       }
@@ -278,9 +353,23 @@ setMethod(
       return(.latent_neurovecseq_fallback(all_objects))
     }
 
+    # Check offsets - the compact representation has one shared offset vector
+    compatible_offsets <- TRUE
+
+    for (obj in all_objects[-1]) {
+      if (!.latent_offsets_equal(x@offset, obj@offset)) {
+        compatible_offsets <- FALSE
+        break
+      }
+    }
+
+    if (!compatible_offsets) {
+      return(.latent_neurovecseq_fallback(all_objects))
+    }
+
     # All compatible - create new LatentNeuroVec with concatenated basis
     all_basis <- lapply(all_objects, function(obj) basis_mat(obj))
-    time_dims <- sapply(all_objects, function(obj) dim(obj@space)[4])
+    time_dims <- vapply(all_objects, function(obj) dim(obj@space)[4], integer(1))
     total_time <- sum(time_dims)
 
     new_space_dims <- dim(x_space)
@@ -293,7 +382,7 @@ setMethod(
       trans = trans(x_space)
     )
 
-    if (all(sapply(all_basis, is, "sparseMatrix"))) {
+    if (all(vapply(all_basis, methods::is, logical(1), "sparseMatrix"))) {
       new_basis <- do.call(rbind, all_basis)
     } else {
       all_basis_matrix <- lapply(all_basis, as.matrix)
@@ -551,12 +640,18 @@ setMethod(
   signature = signature(x = "LatentNeuroVec"),
   definition = function(x, ...) {
     dims <- dim(x)
-    mat <- as.matrix(x)
     arr <- array(0, dim = dims)
     mask_idx <- which(as.logical(x@mask))
+    B <- basis_mat(x)
+    L <- loadings_mat(x)
     for (t in seq_len(dims[4])) {
       slice <- numeric(prod(dims[1:3]))
-      slice[mask_idx] <- mat[t, ]
+      values <- B[t, , drop = FALSE] %*% Matrix::t(L)
+      values <- as.numeric(values)
+      if (length(x@offset) > 0L) {
+        values <- values + x@offset
+      }
+      slice[mask_idx] <- values
       arr[, , , t] <- array(slice, dim = dims[1:3])
     }
     arr

@@ -16,7 +16,9 @@ params:
   preset: homage
 
 vignette: |
-  %\VignetteIndexEntry{Working With LatentNeuroVec Objects} %\VignetteEngine{knitr::rmarkdown} %\VignetteEncoding{UTF-8}
+  %\VignetteIndexEntry{Working With LatentNeuroVec Objects}
+  %\VignetteEngine{knitr::rmarkdown}
+  %\VignetteEncoding{UTF-8}
 ---
 
 ```{r setup, include = FALSE}

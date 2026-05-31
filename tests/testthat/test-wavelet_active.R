@@ -32,6 +32,58 @@ test_that("wavelet_active_latent roundtrips sparse non-contiguous masks", {
   expect_equal(reco, X, tolerance = 1e-8)
 })
 
+test_that("wavelet_active_latent preserves time rows for a single active voxel", {
+  mask_arr <- array(FALSE, dim = c(2, 2, 1))
+  mask_arr[1, 1, 1] <- TRUE
+  mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(2, 2, 1)))
+  X <- matrix(seq_len(5), nrow = 5, ncol = 1)
+
+  lv <- wavelet_active_latent(
+    X,
+    mask_vol,
+    levels_space = 1L,
+    levels_time = 0L,
+    threshold = 0
+  )
+  reco <- predict(lv)
+
+  expect_equal(lv$meta$n_time, nrow(X))
+  expect_equal(dim(lv$coeff), dim(X))
+  expect_equal(reco, X, tolerance = 1e-8)
+})
+
+test_that("wavelet_active_latent validates degenerate inputs early", {
+  empty_mask <- array(FALSE, dim = c(2, 2, 1))
+  expect_error(
+    wavelet_active_latent(matrix(0, nrow = 1L, ncol = 0L), empty_mask),
+    class = "fmrilatent_error_empty_mask"
+  )
+
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  expect_error(
+    wavelet_active_latent(matrix(1, nrow = 2L, ncol = 4L), mask_arr, levels_space = 0L),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    wavelet_active_latent(matrix(1, nrow = 0L, ncol = 4L), mask_arr, levels_space = 1L),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    wavelet_active_latent(matrix(1, nrow = 2L, ncol = 3L), mask_arr, levels_space = 1L),
+    class = "fmrilatent_error_dim"
+  )
+  expect_error(
+    wavelet_active_latent(array(1, dim = c(3L, 2L, 1L, 2L)), mask_arr, levels_space = 1L),
+    class = "fmrilatent_error_dim"
+  )
+  bad_x <- matrix(1, nrow = 2L, ncol = 4L)
+  bad_x[1, 1] <- Inf
+  expect_error(
+    wavelet_active_latent(bad_x, mask_arr, levels_space = 1L),
+    class = "fmrilatent_error_value"
+  )
+})
+
 test_that("wavelet_active_latent partial decode respects time_idx and ROI", {
   mask_arr <- array(TRUE, dim = c(2, 2, 1))
   mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(2, 2, 1)))
@@ -48,6 +100,21 @@ test_that("wavelet_active_latent partial decode respects time_idx and ROI", {
   full <- predict(lv)
   idx <- which(as.logical(roi_mask))
   expect_equal(partial, full[t_sel, idx, drop = FALSE], tolerance = 1e-8)
+})
+
+test_that("wavelet_active_latent validates decoder roi_mask", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask_arr[2, 1, 1] <- FALSE
+  mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(c(2, 2, 1)))
+  X <- matrix(rnorm(4L * sum(mask_arr)), nrow = 4L)
+  lv <- wavelet_active_latent(X, mask_vol, levels_space = 1L, levels_time = 0L, threshold = 0)
+
+  bad_dims <- array(TRUE, dim = c(3, 2, 1))
+  expect_error(predict(lv, roi_mask = bad_dims), class = "fmrilatent_error_dim")
+
+  outside_mask <- array(FALSE, dim = dim(mask_arr))
+  outside_mask[2, 1, 1] <- TRUE
+  expect_error(predict(lv, roi_mask = outside_mask), class = "fmrilatent_error_value")
 })
 
 test_that("bspline_hrbf_st factory roundtrip matches original data", {
@@ -232,4 +299,22 @@ test_that("wavelet_active_latent meta contains correct family", {
   lv <- wavelet_active_latent(X, mask_vol, levels_space = 1L, levels_time = 0L)
 
   expect_equal(lv$meta$family, "wavelet_active")
+})
+
+test_that("wavelet_active_latent keeps LogicalNeuroVol geometry for array reconstruction", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  spacing <- c(2, 3, 4)
+  origin <- c(10, 20, 30)
+  mask_vol <- neuroim2::LogicalNeuroVol(
+    mask_arr,
+    neuroim2::NeuroSpace(dim(mask_arr), spacing = spacing, origin = origin)
+  )
+  X <- matrix(rnorm(4L * sum(mask_arr)), nrow = 4L)
+
+  lv <- wavelet_active_latent(X, mask_vol, levels_space = 1L, levels_time = 0L)
+  rec <- reconstruct_array(lv)
+
+  expect_s4_class(rec, "DenseNeuroVec")
+  expect_equal(neuroim2::spacing(neuroim2::space(rec)), spacing)
+  expect_equal(neuroim2::origin(neuroim2::space(rec)), origin)
 })

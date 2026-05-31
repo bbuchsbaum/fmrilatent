@@ -19,3 +19,24 @@ test_that("slepian_spatial_latent constructs LatentNeuroVec", {
   expect_equal(nrow(loadings(lv)), sum(mask))
   expect_equal(nrow(basis(lv)), nrow(X))
 })
+
+test_that("slepian spatial rejects non-positive component counts", {
+  expect_error(basis_slepian(k = 0L), class = "fmrilatent_error_invalid_count")
+
+  mask <- array(TRUE, dim = c(2, 2, 1))
+  red <- make_cluster_reduction(mask, seq_len(sum(mask)))
+  bad_spec <- structure(list(k = 0L, type = "laplacian"), class = "spec_slepian")
+  expect_error(
+    lift(red, bad_spec, k_neighbors = 2L),
+    class = "fmrilatent_error_invalid_count"
+  )
+})
+
+test_that("slepian spatial uses base eigen when rank equals cluster size", {
+  skip_if_not_installed("rgsp")
+  mask <- array(TRUE, dim = c(2, 2, 1))
+  red <- make_cluster_reduction(mask, rep(1L, sum(mask)))
+  L <- lift(red, basis_slepian(k = sum(mask)), k_neighbors = 2L)
+  expect_equal(dim(L), c(sum(mask), sum(mask)))
+  expect_true(all(is.finite(as.matrix(L))))
+})

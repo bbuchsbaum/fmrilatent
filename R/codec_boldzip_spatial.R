@@ -30,7 +30,7 @@ boldzip_spatial_basis <- function(phi_c = NULL, phi_d = NULL, label = NULL,
     phi_d <- .boldzip_validate_spatial_basis_input(phi_d, "phi_d")
   }
   if (!is.null(phi_c) && !is.null(phi_d) && nrow(phi_c) != nrow(phi_d)) {
-    stop("phi_c and phi_d must have the same number of rows.", call. = FALSE)
+    .boldzip_cli_abort("phi_c and phi_d must have the same number of rows.")
   }
   structure(
     list(
@@ -94,8 +94,10 @@ as_boldzip_spatial_basis.default <- function(x, label = NULL,
     .boldzip_loadings_from_template(x)
   }
   if (is.null(loadings)) {
-    stop("x must be a BoldZipSRSpatialBasis, matrix-like object, SharedReference, ",
-         "or template object with template_loadings().", call. = FALSE)
+    .boldzip_cli_abort(
+      "x must be a BoldZipSRSpatialBasis, matrix-like object, SharedReference, ",
+      "or template object with template_loadings()."
+    )
   }
   phi <- .boldzip_validate_spatial_basis_input(loadings, "template_loadings(x)")
   if (isTRUE(orthonormalize)) {
@@ -133,10 +135,10 @@ boldzip_graph_spatial_basis <- function(adjacency,
                                         label = NULL) {
   adjacency <- .boldzip_validate_matrix(adjacency, "adjacency")
   if (nrow(adjacency) != ncol(adjacency)) {
-    stop("adjacency must be square.", call. = FALSE)
+    .boldzip_cli_abort("adjacency must be square.")
   }
   if (any(adjacency < 0)) {
-    stop("adjacency must be non-negative.", call. = FALSE)
+    .boldzip_cli_abort("adjacency must be non-negative.")
   }
   adjacency <- 0.5 * (adjacency + t(adjacency))
   diag(adjacency) <- 0
@@ -148,7 +150,7 @@ boldzip_graph_spatial_basis <- function(adjacency,
   n_detail <- min(.boldzip_check_scalar_integer(n_detail, "n_detail", min = 0L),
                   n - n_coarse)
   if (n_coarse + n_detail < 1L) {
-    stop("n_coarse + n_detail must be at least 1.", call. = FALSE)
+    .boldzip_cli_abort("n_coarse + n_detail must be at least 1.")
   }
 
   degree <- rowSums(adjacency)

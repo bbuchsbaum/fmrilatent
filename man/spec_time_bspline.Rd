@@ -5,14 +5,15 @@
 \title{Temporal B-spline spec}
 \usage{
 spec_time_bspline(
-  k,
+  k = NULL,
   degree = 3L,
   include_intercept = FALSE,
   orthonormalize = TRUE
 )
 }
 \arguments{
-\item{k}{Components (df).}
+\item{k}{Optional number of components (df). If `NULL`, the encoder uses
+`min(5, n_time)` at encode time.}
 
 \item{degree}{Spline degree (default 3).}
 

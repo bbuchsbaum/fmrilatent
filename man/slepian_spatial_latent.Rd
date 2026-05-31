@@ -26,6 +26,9 @@ slepian_spatial_latent(
 
 \item{label}{Optional label.}
 }
+\value{
+A `LatentNeuroVec` object.
+}
 \description{
 Slepian spatial latent constructor (explicit basis)
 }

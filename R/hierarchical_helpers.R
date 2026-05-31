@@ -170,6 +170,7 @@ build_schaefer_levels <- function(mask,
   # Build voxel-level parcellations for each hierarchy level
   # Finest level = original Schaefer labels
   vox_levels <- vector("list", length(k_levels) + 1L)
+  lh_max <- vapply(levels_lh, max, integer(1))
 
   # For coarser levels, map: voxel → parcel → cluster
 
@@ -192,7 +193,7 @@ build_schaefer_levels <- function(mask,
         # Right hemisphere - offset cluster IDs to avoid collision
         local_id <- parc_id - n_lh
         cluster_id <- levels_rh[[lvl]][local_id]
-        vox_labels[i] <- cluster_id + max(levels_lh[[lvl]])
+        vox_labels[i] <- cluster_id + lh_max[[lvl]]
       }
     }
     vox_levels[[lvl]] <- vox_labels
@@ -368,6 +369,13 @@ parcel_similarity_matrix <- function(boundary_contact, geo_dist, yeo17,
   W
 }
 
+.normalized_laplacian <- function(W) {
+  n <- nrow(W)
+  d <- rowSums(W)
+  d_inv_sqrt <- 1 / sqrt(pmax(d, .Machine$double.eps))
+  diag(n) - outer(d_inv_sqrt, d_inv_sqrt) * W
+}
+
 #' Run spectral+Ward hierarchical clustering on a parcel graph
 #'
 #' @description
@@ -388,23 +396,30 @@ spectral_ward_hclust <- function(W, k_embed = 3, hemi = NULL, network = NULL) {
   if (!is.matrix(W)) {
     .encoder_cli_abort("W must be a matrix", class = "fmrilatent_error_invalid_type")
   }
+  k_embed <- .validate_positive_count(k_embed, "k_embed")
   n <- nrow(W)
   if (n != ncol(W)) {
     .encoder_cli_abort("W must be square", class = "fmrilatent_error_dimension_mismatch")
   }
-
-  d <- rowSums(W)
-  D_inv_sqrt <- 1 / sqrt(pmax(d, .Machine$double.eps))
-  L <- diag(n) - (D_inv_sqrt * W) * D_inv_sqrt
-
-  if (!requireNamespace("RSpectra", quietly = TRUE)) {
-    .encoder_cli_abort("RSpectra is required for spectral embedding",
-                       class = "fmrilatent_error_missing_dependency")
+  if (n < 2L) {
+    .encoder_cli_abort("W must contain at least two parcels",
+                       class = "fmrilatent_error_dimension_mismatch")
   }
 
+  L <- .normalized_laplacian(W)
   k_use <- min(k_embed, n - 1L)
-  eig <- RSpectra::eigs(L, k = k_use, which = "SM")
-  embed <- eig$vectors
+  if (n < 3L || k_use >= n) {
+    eig <- eigen(L, symmetric = TRUE)
+    ord <- order(eig$values)
+    embed <- eig$vectors[, ord[seq_len(k_use)], drop = FALSE]
+  } else {
+    if (!requireNamespace("RSpectra", quietly = TRUE)) {
+      .encoder_cli_abort("RSpectra is required for spectral embedding",
+                         class = "fmrilatent_error_missing_dependency")
+    }
+    eig <- RSpectra::eigs_sym(L, k = k_use, which = "SM")
+    embed <- eig$vectors
+  }
 
   # Optionally enforce hemisphere/network by scaling distances
   if (!is.null(hemi)) {

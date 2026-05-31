@@ -137,9 +137,10 @@ encode_operator <- function(x, template, field_operator = NULL, observation_oper
     X_proj <- sweep(X, 2L, offset, "-")
   }
 
-  penalty_use <- spatial_penalty %||% template_roughness(template, coordinates = "analysis")
+  penalty_use <- spatial_penalty
   if (is.null(penalty_use) && spatial_lambda > 0) {
-    penalty_use <- diag(D_map$n_source)
+    penalty_use <- template_roughness(template, coordinates = "analysis") %||%
+      diag(D_map$n_source)
   }
   coeff_analysis <- if (sparse_lambda > 0 && sparse_mode != "none") {
     .solve_transport_coefficients_sparse_matrix_free(
@@ -279,6 +280,10 @@ encode_transport <- function(x, basis_asset, field_operator = NULL, observation_
 #' @param run_info Optional run metadata; \code{run_lengths} control temporal blocks.
 #' @param label Optional label stored in metadata.
 #' @param ... Reserved for future extensions.
+#' @details
+#' AWPT does not expose a separate ridge penalty. The returned metadata records
+#' \code{lambda = 0}; the anatomical roughness penalty is recorded separately as
+#' \code{spatial_lambda}.
 #' @return A \code{TransportLatent} object with AWPT metadata.
 #' @export
 encode_awpt <- function(x, basis_asset, field_operator = NULL, observation_operator = NULL, mask = NULL,
@@ -306,9 +311,13 @@ encode_awpt <- function(x, basis_asset, field_operator = NULL, observation_opera
     mask = mask,
     domain = domain,
     support = support,
-    lambda = spatial_lambda,
+    lambda = 0,
     spatial_lambda = spatial_lambda,
-    spatial_penalty = template_roughness(basis_asset, coordinates = "analysis"),
+    spatial_penalty = if (spatial_lambda > 0) {
+      template_roughness(basis_asset, coordinates = "analysis")
+    } else {
+      NULL
+    },
     temporal_lambda = temporal_lambda,
     temporal_order = temporal_order,
     sparse_lambda = sparse_lambda,

@@ -63,6 +63,21 @@ test_that("as_cluster_reduction preserves cluster_map when available", {
   expect_length(red@info$cluster_map, num_clusters(cvol))
 })
 
+test_that("as_cluster_reduction rejects ClusteredNeuroVol objects with NA clusters", {
+  dims <- c(2, 2, 1)
+  mask_vol <- LogicalNeuroVol(array(TRUE, dim = dims), NeuroSpace(dims))
+  clusters <- c(1L, 1L, 2L, 2L)
+
+  cvol <- ClusteredNeuroVol(mask_vol, clusters)
+  cvol@clusters[3] <- NA_integer_
+
+  expect_error(
+    as_cluster_reduction(cvol),
+    "NA cluster ids",
+    class = "fmrilatent_error_invalid_cluster_map"
+  )
+})
+
 test_that("as_cluster_reduction rejects non-ClusteredNeuroVol", {
   expect_error(as_cluster_reduction("not a cvol"), "ClusteredNeuroVol")
 })
@@ -82,6 +97,10 @@ test_that("parcel_basis_template builds Slepian template", {
   expect_equal(tmpl$meta$family, "spec_slepian")
   expect_true(tmpl$center)
   expect_true(!is.null(tmpl$gram_factor))
+  expect_true(!is.null(tmpl$meta$analysis_transform))
+
+  proj <- template_project(tmpl, td$X)
+  expect_identical(proj$analysis_transform, tmpl$meta$analysis_transform)
 })
 
 test_that("parcel_basis_template builds PCA template from data", {
@@ -200,6 +219,19 @@ test_that("encode with spec_space_parcel produces valid LatentNeuroVec", {
   expect_equal(dim(lvec)[4], td$n_time)
   expect_true(length(offset(lvec)) > 0)
   expect_equal(lvec@meta$family, "parcel_basis")
+})
+
+test_that("encode with spec_space_parcel warns about ignored reduction argument", {
+  skip_if_not_installed("rgsp")
+  td <- make_test_data(n_time = 20, dims = c(4, 4, 4), n_parcels = 2)
+  red <- make_cluster_reduction(td$mask, td$map)
+  tmpl <- parcel_basis_template(red, basis_slepian(k = 2))
+  ignored_red <- make_cluster_reduction(td$mask, rev(td$map))
+
+  expect_warning(
+    encode(td$X, spec_space_parcel(tmpl), mask = td$mask_vol, reduction = ignored_red),
+    class = "fmrilatent_warning_unused_reduction"
+  )
 })
 
 test_that("encode with spec_space_parcel preserves atlas labels in metadata", {

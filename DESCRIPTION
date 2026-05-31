@@ -11,7 +11,8 @@ Authors@R:
 Maintainer: Bradley Buchsbaum <brad.buchsbaum@gmail.com>
 Description: Provides S4 classes and methods for representing neuroimaging data
     in latent spaces. The LatentNeuroVec class offers a memory-efficient
-    representation using matrix factorization (basis x loadings plus offsets),
+    representation using matrix factorization (basis x loadings plus a
+    per-voxel offset),
     enabling compact storage and efficient computation for PCA, temporal bases,
     graph and wavelet dictionaries, Slepian bases, HRBF atoms, and related fMRI
     decompositions. Integrates with the neuroim2 package for standard
@@ -30,6 +31,7 @@ Imports:
     methods,
     digest,
     neuroim2,
+    rlang,
     stats,
     utils,
     Rcpp
@@ -51,6 +53,7 @@ LinkingTo:
 SystemRequirements: OpenMP (optional)
 Collate:
     'RcppExports.R'
+    'latent_utils.R'
     'latent_handles.R'
     'all_class.R'
     'all_generic.R'
@@ -67,6 +70,8 @@ Collate:
     'codec_boldzip_spatial.R'
     'codec_boldzip_validate.R'
     'compat_profile.R'
+    'encoder_utilities.R'
+    'cpp_boundary.R'
     'dct_basis.R'
     'diffusion_wavelet.R'
     'diffusion_wavelet_handle.R'
@@ -75,12 +80,11 @@ Collate:
     'encode_methods_st.R'
     'encode_methods_time.R'
     'encode_operator.R'
+    'encoder_validators.R'
     'encode_spec.R'
     'encode_template.R'
     'encode_transport_solve.R'
     'encoder_registry.R'
-    'encoder_utilities.R'
-    'encoder_validators.R'
     'fmrilatent-package.R'
     'graph_bridge.R'
     'haar_wavelet.R'

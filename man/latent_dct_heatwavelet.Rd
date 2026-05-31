@@ -6,7 +6,7 @@
 \usage{
 latent_dct_heatwavelet(
   n_time,
-  k_time,
+  k_time = NULL,
   mask,
   cluster_map = NULL,
   reduction = NULL,
@@ -18,8 +18,9 @@ latent_dct_heatwavelet(
 \arguments{
 \item{n_time}{Number of time points.}
 
-\item{k_time}{Ignored (kept for backwards compatibility). The number
-of components is determined by the heat-wavelet loadings.}
+\item{k_time}{Optional ignored legacy argument. The number of
+components is determined by the heat-wavelet loadings. Supplying a
+non-NULL value warns with class `fmrilatent_warning_deprecated`.}
 
 \item{mask}{LogicalNeuroVol or logical array mask (3D).}
 

@@ -250,6 +250,17 @@ test_that("make_cluster_reduction handles non-contiguous cluster IDs", {
   expect_equal(sort(red@cluster_ids), c(1L, 5L, 10L))
 })
 
+test_that("make_cluster_reduction rejects NA cluster ids", {
+  mask <- array(TRUE, dim = c(2, 2, 1))
+  map <- c(1L, 1L, NA_integer_, 2L)
+
+  expect_error(
+    make_cluster_reduction(mask, map),
+    "NA cluster ids",
+    class = "fmrilatent_error_invalid_cluster_map"
+  )
+})
+
 test_that("make_cluster_reduction converts numeric map to integer", {
   mask <- array(TRUE, dim = c(2, 2, 1))
   map <- c(1.0, 1.0, 2.0, 2.0)  # Numeric, not integer
@@ -384,6 +395,47 @@ test_that("CoarsenedReduction works with empty coarse_adj", {
   expect_equal(Matrix::nnzero(red@coarse_adj), 0L)
 })
 
+test_that("make_coarsened_reduction creates a valid reduction with default adjacency", {
+  mask_vol <- make_test_mask_vol(dims = c(2, 2, 1))
+  P_mat <- Matrix::sparseMatrix(
+    i = 1:4,
+    j = c(1, 1, 2, 2),
+    x = 1,
+    dims = c(4, 2)
+  )
+
+  red <- make_coarsened_reduction(mask_vol, P_mat, info = list(kind = "test"))
+
+  expect_s4_class(red, "CoarsenedReduction")
+  expect_equal(red@info$kind, "test")
+  expect_equal(dim(red@P_matrix), c(4L, 2L))
+  expect_equal(dim(red@coarse_adj), c(2L, 2L))
+  expect_equal(Matrix::nnzero(red@coarse_adj), 0L)
+})
+
+test_that("CoarsenedReduction validity enforces fine and coarse dimensions", {
+  mask_vol <- make_test_mask_vol(dims = c(2, 2, 1))
+  bad_P <- Matrix::sparseMatrix(i = 1:3, j = c(1, 1, 2), x = 1, dims = c(3, 2))
+  bad_adj <- Matrix::sparseMatrix(i = 1, j = 1, x = 1, dims = c(3, 3))
+
+  expect_error(
+    new("CoarsenedReduction",
+        mask = mask_vol,
+        info = list(),
+        P_matrix = bad_P,
+        coarse_adj = Matrix::sparseMatrix(i = integer(), j = integer(), x = numeric(), dims = c(2, 2))),
+    "one row per active mask voxel"
+  )
+  expect_error(
+    make_coarsened_reduction(
+      mask_vol,
+      Matrix::sparseMatrix(i = 1:4, j = c(1, 1, 2, 2), x = 1, dims = c(4, 2)),
+      coarse_adj = bad_adj
+    ),
+    "coarse_adj must be square"
+  )
+})
+
 # -----------------------------------------------------------------------------
 # Tests for lift generic and default method
 # -----------------------------------------------------------------------------
@@ -477,19 +529,18 @@ test_that("lift for ClusterReduction with multiple clusters", {
 # Tests for edge cases
 # -----------------------------------------------------------------------------
 
-test_that("basis_slepian with k = 0 creates valid object", {
-  # Edge case: zero components requested
-  spec <- basis_slepian(k = 0)
-
-  expect_s3_class(spec, "spec_slepian")
-  expect_equal(spec$k, 0)
+test_that("basis_slepian rejects k = 0", {
+  expect_error(
+    basis_slepian(k = 0),
+    class = "fmrilatent_error_invalid_count"
+  )
 })
 
-test_that("basis_pca with k = 0 creates valid object", {
-  spec <- basis_pca(k = 0)
-
-  expect_s3_class(spec, "spec_pca")
-  expect_equal(spec$k, 0)
+test_that("basis_pca rejects k = 0", {
+  expect_error(
+    basis_pca(k = 0),
+    class = "fmrilatent_error_invalid_count"
+  )
 })
 
 test_that("ClusterReduction with partial mask works", {

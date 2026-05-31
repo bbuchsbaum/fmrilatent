@@ -12,7 +12,7 @@
 \usage{
 save_template(template, file, compress = "xz", ...)
 
-\S4method{save_template}{SurfaceAWPTBasisTemplate}(template, file, compress = TRUE, ...)
+\S4method{save_template}{SurfaceAWPTBasisTemplate}(template, file, compress = "xz", ...)
 
 \S4method{save_template}{AWPTBasisTemplate}(template, file, compress = "xz", ...)
 
@@ -20,7 +20,7 @@ save_template(template, file, compress = "xz", ...)
 
 \S4method{save_template}{ParcelBasisTemplate}(template, file, compress = "xz", ...)
 
-\S4method{save_template}{SurfaceBasisTemplate}(template, file, compress = TRUE, ...)
+\S4method{save_template}{SurfaceBasisTemplate}(template, file, compress = "xz", ...)
 }
 \arguments{
 \item{template}{A template object.}

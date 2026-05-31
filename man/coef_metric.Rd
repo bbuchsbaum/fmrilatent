@@ -11,17 +11,17 @@
 \alias{coef_metric,BlockLatentNeuroVector-method}
 \title{Extract coefficient-space metric from a latent object}
 \usage{
-coef_metric(x, coordinates = c("raw", "analysis"), ...)
+coef_metric(x, coordinates = c("analysis", "raw"), ...)
 
-\S4method{coef_metric}{LatentNeuroSurfaceVector}(x, coordinates = c("raw", "analysis"), ...)
+\S4method{coef_metric}{LatentNeuroSurfaceVector}(x, coordinates = c("analysis", "raw"), ...)
 
-\S4method{coef_metric}{BilatLatentNeuroSurfaceVector}(x, coordinates = c("raw", "analysis"), ...)
+\S4method{coef_metric}{BilatLatentNeuroSurfaceVector}(x, coordinates = c("analysis", "raw"), ...)
 
-\S4method{coef_metric}{ImplicitLatent}(x, coordinates = c("raw", "analysis"), ...)
+\S4method{coef_metric}{ImplicitLatent}(x, coordinates = c("analysis", "raw"), ...)
 
-\S4method{coef_metric}{LatentNeuroVec}(x, coordinates = c("raw", "analysis"), ...)
+\S4method{coef_metric}{LatentNeuroVec}(x, coordinates = c("analysis", "raw"), ...)
 
-\S4method{coef_metric}{BlockLatentNeuroVector}(x, coordinates = c("raw", "analysis"), ...)
+\S4method{coef_metric}{BlockLatentNeuroVector}(x, coordinates = c("analysis", "raw"), ...)
 }
 \arguments{
 \item{x}{A latent object.}

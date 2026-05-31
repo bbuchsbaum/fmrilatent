@@ -3,12 +3,15 @@
 \name{[[,LatentNeuroVec,numeric-method}
 \alias{[[,LatentNeuroVec,numeric-method}
 \alias{[,LatentNeuroVec,numeric,numeric,ANY-method}
+\alias{[,LatentNeuroVec,matrix,missing,ANY-method}
 \alias{[,LatentNeuroVec,ANY,ANY,ANY-method}
 \title{Extract Elements from LatentNeuroVec}
 \usage{
 \S4method{[[}{LatentNeuroVec,numeric}(x, i)
 
 \S4method{[}{LatentNeuroVec,numeric,numeric,ANY}(x, i, j, k, l, ..., drop = TRUE)
+
+\S4method{[}{LatentNeuroVec,matrix,missing,ANY}(x, i, j, k, l, ..., drop = TRUE)
 
 \S4method{[}{LatentNeuroVec,ANY,ANY,ANY}(x, i, j, k, l, ..., drop = TRUE)
 }
@@ -36,11 +39,20 @@ Extract elements from a \code{LatentNeuroVec}. Use \code{[[} to extract a single
 volume as a \code{SparseNeuroVol}, or \code{[} for 4D subsetting.
 }
 \examples{
-\dontrun{
+mask <- neuroim2::LogicalNeuroVol(
+  array(TRUE, dim = c(2, 2, 1)),
+  neuroim2::NeuroSpace(c(2, 2, 1))
+)
+lvec <- LatentNeuroVec(
+  basis = matrix(1:6, nrow = 3),
+  loadings = matrix(seq_len(8) / 10, nrow = 4),
+  space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+  mask = mask,
+  expect_dense = TRUE
+)
 # Extract volumes
 vol1 <- lvec[[1]]
-vol_mid <- lvec[[dim(lvec)[4] / 2]]
+vol_mid <- lvec[[2]]
 vol_last <- lvec[[dim(lvec)[4]]]
-}
 
 }

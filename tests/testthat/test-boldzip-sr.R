@@ -167,7 +167,7 @@ test_that("BOLDZip-SR reliability-shaped quantization is carrier aligned", {
     as.numeric(theta_raw),
     reliability = as.numeric(reliability),
     quantization = quant,
-    noise_scale = stats::sd(z_raw)
+    noise_scale = fmrilatent:::.boldzip_noise_scale(theta_raw)
   )
 
   expect_equal(fit$carriers$theta, expected)
@@ -238,7 +238,7 @@ test_that("BOLDZip-SR builds and uses a spectral graph spatial basis", {
 
 test_that("BOLDZip-SR validation rejects malformed inputs and settings", {
   expect_error(boldzip_sr_encode(c(1, 2, 3)), "numeric matrix")
-  expect_error(boldzip_sr_encode(matrix(1, nrow = 2, ncol = 1)), "two columns")
+  expect_error(boldzip_sr_encode(matrix(1, nrow = 2, ncol = 1)), "at least two time points")
   expect_error(boldzip_sr_encode(matrix(c(1, Inf), nrow = 1)), "finite")
   expect_error(boldzip_reliability(min_texture_reliability = 2), "finite scalar")
   expect_error(boldzip_quantization(base_step = -0.1), "finite scalar")

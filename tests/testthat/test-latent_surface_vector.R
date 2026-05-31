@@ -2,11 +2,7 @@ library(testthat)
 library(Matrix)
 
 .skip_if_no_neurosurf_lsv <- function() {
-  skip_if(
-    any(commandArgs() == "-f"),
-    "neurosurf surface examples abort under this local R/BATCH setup"
-  )
-  skip_if_not_installed("neurosurf")
+  skip_if_no_neurosurf_surface_examples()
 }
 
 .make_surface_geometry_lsv <- function() {
@@ -62,6 +58,7 @@ test_that("LatentNeuroSurfaceVector supports coefficient decoding and covariance
                     0.5, 1), nrow = 2, byrow = TRUE)
 
   expect_equal(coef_time(lv), as.matrix(basis(lv)))
+  expect_equal(coef_metric(lv), diag(2))
   expect_equal(coef_metric(lv, "analysis"), diag(2))
   expect_equal(
     decode_coefficients(lv, gamma, space = "native"),

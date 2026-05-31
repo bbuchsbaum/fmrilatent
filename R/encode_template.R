@@ -75,54 +75,85 @@ NULL
   data %*% as.matrix(measure) %*% loadings
 }
 
+.matrix_inverse_or_pseudoinverse <- function(mat, tol = 1e-10) {
+  mat <- as.matrix(mat)
+  sv <- svd(mat)
+  if (length(sv$d) == 0L) {
+    return(matrix(0, ncol(mat), nrow(mat)))
+  }
+  cutoff <- tol * max(1, max(sv$d))
+  keep <- sv$d > cutoff
+  if (nrow(mat) == ncol(mat) && all(keep)) {
+    return(solve(mat))
+  }
+  if (!any(keep)) {
+    return(matrix(0, ncol(mat), nrow(mat)))
+  }
+  sv$v[, keep, drop = FALSE] %*%
+    (diag(1 / sv$d[keep], nrow = sum(keep)) %*% t(sv$u[, keep, drop = FALSE]))
+}
+
 .symmetric_matrix_factor <- function(mat, tol = 1e-10, context = "matrix factor") {
-  mat <- 0.5 * (as.matrix(mat) + t(as.matrix(mat)))
+  mat <- as.matrix(mat)
   if (nrow(mat) != ncol(mat)) {
     .encoder_cli_abort(paste0(context, " requires a square matrix."),
                        class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
+  mat <- 0.5 * (mat + t(mat))
 
   if (isTRUE(all.equal(mat, diag(nrow(mat)), tolerance = tol))) {
     return(diag(nrow(mat)))
   }
 
   chol_try <- try(chol(mat), silent = TRUE)
-  if (!inherits(chol_try, "try-error")) {
+  chol_rcond <- try(rcond(mat), silent = TRUE)
+  if (!inherits(chol_try, "try-error") &&
+      !inherits(chol_rcond, "try-error") &&
+      is.finite(chol_rcond) && chol_rcond > tol) {
     return(chol_try)
   }
 
   eig <- eigen(mat, symmetric = TRUE)
-  vals <- pmax(Re(eig$values), tol)
-  eig$vectors %*% diag(sqrt(vals), nrow = length(vals))
+  vals <- Re(eig$values)
+  if (any(vals < -tol)) {
+    .encoder_cli_abort(paste0(context, " must be positive semidefinite."),
+                       class = "fmrilatent_error_value", call = rlang::caller_env())
+  }
+  vals[vals < tol] <- 0
+  eig$vectors %*% diag(sqrt(vals), nrow = length(vals)) %*% t(eig$vectors)
 }
 
 .analysis_transform_from_metric <- function(raw_metric, tol = 1e-10) {
-  raw_metric <- 0.5 * (as.matrix(raw_metric) + t(as.matrix(raw_metric)))
+  raw_metric <- as.matrix(raw_metric)
   k <- nrow(raw_metric)
   if (!identical(dim(raw_metric), c(k, k))) {
     .encoder_cli_abort("raw_metric must be square.",
                        class = "fmrilatent_error_dim", call = rlang::caller_env())
   }
+  raw_metric <- 0.5 * (raw_metric + t(raw_metric))
   if (isTRUE(all.equal(raw_metric, diag(k), tolerance = tol))) {
     return(.transport_identity_transform(k))
   }
 
   factor <- .symmetric_matrix_factor(raw_metric, tol = tol,
                                      context = "analysis transform")
+  inverse_factor <- .matrix_inverse_or_pseudoinverse(factor, tol = tol)
   list(
     type = "metric_factor",
     dim = as.integer(k),
     raw_metric = raw_metric,
     matrix = factor,
+    inverse_matrix = inverse_factor,
     to_analysis = function(data) factor %*% as.matrix(data),
-    to_raw = function(data) solve(factor, as.matrix(data))
+    to_raw = function(data) inverse_factor %*% as.matrix(data)
   )
 }
 
 .analysis_loadings_from_transform <- function(raw_loadings, transform) {
   raw_loadings <- as.matrix(raw_loadings)
   mat <- transform$matrix %||% diag(ncol(raw_loadings))
-  raw_loadings %*% solve(as.matrix(mat))
+  inverse_mat <- transform$inverse_matrix %||% .matrix_inverse_or_pseudoinverse(mat)
+  raw_loadings %*% as.matrix(inverse_mat)
 }
 
 .template_coordinate_payload <- function(raw_loadings, measure = NULL,
@@ -231,5 +262,6 @@ NULL
   }
 
   factor <- transform$matrix %||% diag(nrow(mat))
-  solve(t(as.matrix(factor)), mat) %*% solve(as.matrix(factor))
+  factor_inv <- transform$inverse_matrix %||% .matrix_inverse_or_pseudoinverse(factor)
+  t(as.matrix(factor_inv)) %*% mat %*% as.matrix(factor_inv)
 }

@@ -4,10 +4,11 @@
 \alias{spec_space_slepian}
 \title{Spatial Slepian spec}
 \usage{
-spec_space_slepian(k = 3L, k_neighbors = 6L)
+spec_space_slepian(k = NULL, k_neighbors = 6L)
 }
 \arguments{
-\item{k}{Components per cluster.}
+\item{k}{Optional components per cluster. If `NULL`, encoders use their
+family default (`3L`).}
 
 \item{k_neighbors}{k-NN graph parameter.}
 }

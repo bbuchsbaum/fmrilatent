@@ -377,7 +377,7 @@ test_that("compose_linear_maps warns on conflicting non-euclidean adjoint conven
   )
 })
 
-test_that("compose_linear_maps allows one side to be euclidean_discrete", {
+test_that("compose_linear_maps warns when one side leaves a non-euclidean convention", {
   first <- list(
     n_source = 2L, n_target = 3L,
     forward = function(x, ...) matrix(1, 3, 2) %*% x,
@@ -390,7 +390,10 @@ test_that("compose_linear_maps allows one side to be euclidean_discrete", {
     adjoint_apply = function(y, ...) t(matrix(1, 4, 3)) %*% y,
     adjoint_convention = "jacobian_weighted"
   )
-  composed <- fmrilatent:::.compose_linear_maps(first, second)
+  expect_warning(
+    composed <- fmrilatent:::.compose_linear_maps(first, second),
+    "non-euclidean adjoint_convention"
+  )
   expect_identical(composed$adjoint_convention, "jacobian_weighted")
 })
 

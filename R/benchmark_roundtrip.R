@@ -1,3 +1,7 @@
+.bench_time_to_ms <- function(x) {
+  as.numeric(x) * 1e3
+}
+
 #' Benchmark encode/decode round-trips
 #'
 #' @param mask_dims Integer vector length 3 for spatial dims.
@@ -10,8 +14,12 @@ benchmark_roundtrip <- function(mask_dims = c(16, 16, 8),
                                 n_time = 10L,
                                 methods = c("slepian_space", "hrbf", "wavelet_active", "bspline_hrbf_st"),
                                 iterations = 1L) {
-  if (!requireNamespace("bench", quietly = TRUE)) {
-    stop("bench package required for benchmark_roundtrip (Suggests).", call. = FALSE)
+  if (!.encoder_has_namespace("bench")) {
+    .encoder_cli_abort(
+      "bench package required for benchmark_roundtrip (Suggests).",
+      class = c("fmrilatent_error_missing_dependency", "fmrilatent_error"),
+      call = rlang::caller_env()
+    )
   }
   mask_arr <- array(TRUE, dim = mask_dims)
   mask_vol <- LogicalNeuroVol(mask_arr, NeuroSpace(mask_dims))
@@ -48,7 +56,10 @@ benchmark_roundtrip <- function(mask_dims = c(16, 16, 8),
                                  materialize = "matrix")
             rec <- predict(lv)
           } else {
-            stop("Unknown method: ", m, call. = FALSE)
+            .encoder_cli_abort(
+              paste0("Unknown method: ", m),
+              class = "fmrilatent_error_invalid_argument"
+            )
           }
           list(rec = rec)
         }
@@ -63,7 +74,7 @@ benchmark_roundtrip <- function(mask_dims = c(16, 16, 8),
     err <- sqrt(mean((rec - X)^2))
     res_list[[length(res_list) + 1L]] <- data.frame(
       method = m,
-      median_ms = as.numeric(mark_res$median) / 1e6,
+      median_ms = .bench_time_to_ms(mark_res$median),
       itr = iterations,
       rmse = err,
       stringsAsFactors = FALSE

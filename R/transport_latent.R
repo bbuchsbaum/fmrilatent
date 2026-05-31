@@ -337,7 +337,7 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
     required <- c("forward", "adjoint_apply", "n_source", "n_target")
     present <- vapply(required, function(nm) !is.null(map[[nm]]), logical(1))
     missing <- required[!present]
-    if (any(present) && length(missing) > 0L) {
+    if (length(missing) > 0L) {
       # `missing` is a subset of the fixed `required` field names: no glue hazard.
       .encoder_cli_abort(
         paste0(context, " is missing required fields: ", paste(missing, collapse = ", "), "."),
@@ -405,22 +405,27 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   # composed map is not euclidean_discrete.
   first_conv <- first$adjoint_convention %||% "euclidean_discrete"
   second_conv <- second$adjoint_convention %||% "euclidean_discrete"
-  if (!identical(first_conv, second_conv) &&
-      !identical(first_conv, "euclidean_discrete") &&
-      !identical(second_conv, "euclidean_discrete")) {
-    .encoder_cli_warn(
-      paste0(context, " has incompatible adjoint_conventions: '", first_conv,
-             "' and '", second_conv,
-             "'. decode_covariance() will reject this map at use time. ",
-             "Re-normalize one side to euclidean_discrete before composing ",
-             "if you intend to push a covariance through it."),
-      class = "fmrilatent_warning_adjoint_convention"
-    )
-  }
   composed_conv <- if (identical(first_conv, "euclidean_discrete")) {
     second_conv
   } else {
     first_conv
+  }
+  if (!identical(composed_conv, "euclidean_discrete")) {
+    conv_msg <- if (!identical(first_conv, second_conv) &&
+                    !identical(first_conv, "euclidean_discrete") &&
+                    !identical(second_conv, "euclidean_discrete")) {
+      paste0(context, " has incompatible adjoint_conventions: '", first_conv,
+             "' and '", second_conv, "'.")
+    } else {
+      paste0(context, " has non-euclidean adjoint_convention '", composed_conv,
+             "' after composition.")
+    }
+    .encoder_cli_warn(
+      paste0(conv_msg, " decode_covariance() will reject this map at use time. ",
+             "Re-normalize one side to euclidean_discrete before composing ",
+             "if you intend to push a covariance through it."),
+      class = "fmrilatent_warning_adjoint_convention"
+    )
   }
 
   # Composition exposes only the outer source/target supports and domain
@@ -715,6 +720,43 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   out
 }
 
+.dense_warning_threshold <- function(option_name, default) {
+  threshold <- getOption(option_name, default)
+  threshold <- suppressWarnings(as.numeric(threshold)[1L])
+  if (is.na(threshold) || threshold < 0) {
+    default
+  } else {
+    threshold
+  }
+}
+
+.warn_full_covariance_materialization <- function(map) {
+  threshold <- .dense_warning_threshold(
+    "fmrilatent.decode_covariance.full_warning_entries",
+    5e7
+  )
+  if (!is.finite(threshold)) {
+    return(invisible(FALSE))
+  }
+
+  decoder_entries <- as.double(map$n_target) * as.double(map$n_source)
+  covariance_entries <- as.double(map$n_target) * as.double(map$n_target)
+  if (max(decoder_entries, covariance_entries) <= threshold) {
+    return(invisible(FALSE))
+  }
+
+  .encoder_cli_warn(
+    paste0(
+      "decode_covariance(diag_only = FALSE) will materialize a dense decoder ",
+      "(", map$n_target, " x ", map$n_source, ") and a dense covariance ",
+      "(", map$n_target, " x ", map$n_target, "). ",
+      "Use diag_only = TRUE unless the full covariance matrix is required."
+    ),
+    class = "fmrilatent_warning_dense_covariance"
+  )
+  invisible(TRUE)
+}
+
 .latent_meta_field <- function(x, field, default = NULL) {
   meta <- tryCatch(latent_meta(x), error = function(e) list())
   meta[[field]] %||% default
@@ -737,7 +779,7 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   t(transform$to_raw(t(basis_matrix)))
 }
 
-.explicit_coef_metric <- function(x, k, coordinates = c("raw", "analysis")) {
+.explicit_coef_metric <- function(x, k, coordinates = c("analysis", "raw")) {
   coordinates <- match.arg(coordinates)
   transform <- .explicit_latent_analysis_transform(x, k)
   if (coordinates == "analysis") {
@@ -774,6 +816,7 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   if (isTRUE(diag_only)) {
     .project_covariance_diag(map, Sigma)
   } else {
+    .warn_full_covariance_materialization(map)
     D <- .materialize_linear_map(map)
     D %*% Sigma %*% t(D)
   }
@@ -952,7 +995,7 @@ setMethod("coef_time", "ImplicitLatent",
 #' @export
 #' @rdname coef_metric
 setMethod("coef_metric", "ImplicitLatent",
-          function(x, coordinates = c("raw", "analysis"), ...) {
+          function(x, coordinates = c("analysis", "raw"), ...) {
             if (!.is_transport_latent(x)) {
               return(NULL)
             }
@@ -1062,7 +1105,7 @@ setMethod("coef_time", "LatentNeuroVec",
 #' @export
 #' @rdname coef_metric
 setMethod("coef_metric", "LatentNeuroVec",
-          function(x, coordinates = c("raw", "analysis"), ...) {
+          function(x, coordinates = c("analysis", "raw"), ...) {
             .explicit_coef_metric(x, ncol(basis(x)), coordinates = coordinates)
           })
 

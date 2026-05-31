@@ -4,10 +4,11 @@
 \alias{spec_time_dct}
 \title{Temporal DCT spec}
 \usage{
-spec_time_dct(k, norm = c("ortho", "none"))
+spec_time_dct(k = NULL, norm = c("ortho", "none"))
 }
 \arguments{
-\item{k}{Components.}
+\item{k}{Optional number of components. If `NULL`, the encoder uses all
+available DCT columns (`k = n_time`) at encode time.}
 
 \item{norm}{Normalization ("ortho" or "none").}
 }

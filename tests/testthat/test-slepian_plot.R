@@ -59,10 +59,22 @@ test_that("plot_slepian_temporal handles fewer components than max", {
 })
 
 test_that("plot_slepian_temporal rejects invalid input", {
-  expect_error(plot_slepian_temporal("not_a_matrix"), "must be a matrix")
+  expect_error(
+    plot_slepian_temporal("not_a_matrix"),
+    "must be a matrix",
+    class = "fmrilatent_error_invalid_type"
+  )
   expect_error(plot_slepian_temporal(c(1, 2, 3)), "must be a matrix")
   expect_error(plot_slepian_temporal(data.frame(a = 1:10)), "must be a matrix")
   expect_error(plot_slepian_temporal(list(x = 1)), "must be a matrix")
+  expect_error(
+    plot_slepian_temporal(matrix(1, nrow = 3, ncol = 1), max_components = 0L),
+    class = "fmrilatent_error_invalid_count"
+  )
+  expect_error(
+    plot_slepian_temporal(matrix(numeric(0), nrow = 3, ncol = 0)),
+    class = "fmrilatent_error_dim"
+  )
 })
 
 test_that("plot_slepian_temporal works with sparse Matrix input", {
@@ -218,10 +230,18 @@ test_that("plot_basis_gram shows orthogonality for orthonormal basis", {
 })
 
 test_that("plot_basis_gram rejects invalid input", {
-  expect_error(plot_basis_gram("not_a_matrix"), "must be a matrix")
+  expect_error(
+    plot_basis_gram("not_a_matrix"),
+    "must be a matrix",
+    class = "fmrilatent_error_invalid_type"
+  )
   expect_error(plot_basis_gram(list(a = 1)), "must be a matrix")
   expect_error(plot_basis_gram(c(1, 2, 3, 4)), "must be a matrix")
   expect_error(plot_basis_gram(data.frame(x = 1:5)), "must be a matrix")
+  expect_error(
+    plot_basis_gram(matrix(numeric(0), nrow = 3, ncol = 0)),
+    class = "fmrilatent_error_dim"
+  )
 })
 
 test_that("plot_basis_gram handles single column basis", {

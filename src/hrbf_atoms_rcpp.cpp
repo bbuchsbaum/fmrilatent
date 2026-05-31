@@ -1,4 +1,6 @@
 #include <RcppEigen.h>
+#include <cmath>
+#include <limits>
 #ifdef _OPENMP
 #include <omp.h>
 #endif
@@ -25,6 +27,14 @@ Eigen::SparseMatrix<double> hrbf_atoms_rcpp(
     if (centres_xyz_world.cols() != 3) {
         Rcpp::stop("centres_xyz_world must have exactly 3 columns");
     }
+    if (kernel_type != "gaussian" &&
+        kernel_type != "wendland_c4" &&
+        kernel_type != "wendland_c6") {
+        Rcpp::stop("kernel_type must be one of: gaussian, wendland_c4, wendland_c6");
+    }
+    if (!std::isfinite(value_threshold) || value_threshold < 0.0) {
+        Rcpp::stop("value_threshold must be finite and non-negative");
+    }
     for (int k = 0; k < K; ++k) {
         if (sigma_vec_mm[k] <= 0.0) {
             Rcpp::stop("All sigma values must be positive; sigma_vec_mm[%d] = %g", k, sigma_vec_mm[k]);
@@ -45,6 +55,11 @@ Eigen::SparseMatrix<double> hrbf_atoms_rcpp(
             double sigma = sigma_vec_mm[k];
             double inv_two_sigma2 = 1.0 / (2.0 * sigma * sigma);
             double inv_sigma = 1.0 / sigma;
+            bool wendland_c4 = (kernel_type == "wendland_c4");
+            double gaussian_max_dist2 = std::numeric_limits<double>::infinity();
+            if (gaussian && value_threshold > 0.0) {
+                gaussian_max_dist2 = -2.0 * sigma * sigma * std::log(value_threshold);
+            }
             for (int n = 0; n < N; ++n) {
                 double dx = mask_xyz_world(n,0) - centres_xyz_world(k,0);
                 double dy = mask_xyz_world(n,1) - centres_xyz_world(k,1);
@@ -52,13 +67,19 @@ Eigen::SparseMatrix<double> hrbf_atoms_rcpp(
                 double dist2 = dx*dx + dy*dy + dz*dz;
                 double value;
                 if (gaussian) {
+                    if (dist2 > gaussian_max_dist2) continue;
                     value = std::exp(-dist2 * inv_two_sigma2);
                 } else {
                     double dist = std::sqrt(dist2) * inv_sigma;
                     if (dist >= 1.0) continue;
                     double base = 1.0 - dist;
-                    value = std::pow(base,8.0) * (32.0*dist*dist*dist +
-                                                  25.0*dist*dist + 8.0*dist + 1.0);
+                    if (wendland_c4) {
+                        value = std::pow(base,6.0) *
+                            (35.0*dist*dist + 18.0*dist + 3.0) / 3.0;
+                    } else {
+                        value = std::pow(base,8.0) * (32.0*dist*dist*dist +
+                                                      25.0*dist*dist + 8.0*dist + 1.0);
+                    }
                 }
                 if (std::fabs(value) > value_threshold) {
                     local.emplace_back(k, n, value);
@@ -75,6 +96,11 @@ Eigen::SparseMatrix<double> hrbf_atoms_rcpp(
         double sigma = sigma_vec_mm[k];
         double inv_two_sigma2 = 1.0 / (2.0 * sigma * sigma);
         double inv_sigma = 1.0 / sigma;
+        bool wendland_c4 = (kernel_type == "wendland_c4");
+        double gaussian_max_dist2 = std::numeric_limits<double>::infinity();
+        if (gaussian && value_threshold > 0.0) {
+            gaussian_max_dist2 = -2.0 * sigma * sigma * std::log(value_threshold);
+        }
         for (int n = 0; n < N; ++n) {
             double dx = mask_xyz_world(n,0) - centres_xyz_world(k,0);
             double dy = mask_xyz_world(n,1) - centres_xyz_world(k,1);
@@ -82,13 +108,19 @@ Eigen::SparseMatrix<double> hrbf_atoms_rcpp(
             double dist2 = dx*dx + dy*dy + dz*dz;
             double value;
             if (gaussian) {
+                if (dist2 > gaussian_max_dist2) continue;
                 value = std::exp(-dist2 * inv_two_sigma2);
             } else {
                 double dist = std::sqrt(dist2) * inv_sigma;
                 if (dist >= 1.0) continue;
                 double base = 1.0 - dist;
-                value = std::pow(base,8.0) * (32.0*dist*dist*dist +
-                                              25.0*dist*dist + 8.0*dist + 1.0);
+                if (wendland_c4) {
+                    value = std::pow(base,6.0) *
+                        (35.0*dist*dist + 18.0*dist + 3.0) / 3.0;
+                } else {
+                    value = std::pow(base,8.0) * (32.0*dist*dist*dist +
+                                                  25.0*dist*dist + 8.0*dist + 1.0);
+                }
             }
             if (std::fabs(value) > value_threshold) {
                 triplets.emplace_back(k, n, value);

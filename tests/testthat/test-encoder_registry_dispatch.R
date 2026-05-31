@@ -94,6 +94,20 @@ test_that("registry is discovery-only: register_encoder alone does not enable di
   })
 })
 
+test_that("AWPT is an explicit transport API exception, not a registry family", {
+  with_clean_registry({
+    expect_false("awpt" %in% list_encoders()$family)
+    mask <- array(TRUE, c(2L, 2L, 1L))
+    X <- matrix(rnorm(4 * 4), nrow = 4L, ncol = 4L)
+
+    expect_error(
+      encode(X, basis_awpt_wavelet(), mask = mask),
+      "requires a shared basis_asset and subject field_operator",
+      class = "fmrilatent_error_unsupported_spec"
+    )
+  })
+})
+
 test_that("the documented contract works: register + S3 method => encode() dispatches", {
   skip_if_no_neuroim2()
 

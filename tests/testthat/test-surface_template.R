@@ -2,11 +2,7 @@ library(testthat)
 library(Matrix)
 
 .skip_if_no_neurosurf_st <- function() {
-  skip_if(
-    any(commandArgs() == "-f"),
-    "neurosurf surface examples abort under this local R/BATCH setup"
-  )
-  skip_if_not_installed("neurosurf")
+  skip_if_no_neurosurf_surface_examples()
 }
 
 .make_surface_geometry_st <- function() {
@@ -32,6 +28,38 @@ library(Matrix)
     meta = list(family = "surface_test")
   )
 }
+
+as.matrix.surface_template_bad_as_matrix <- function(x, ...) {
+  stop("loadings coerced before row-count validation", call. = FALSE)
+}
+
+test_that("surface_basis_template checks loadings rows before dense coercion", {
+  geom <- .make_surface_geometry_st()
+  bad_loadings <- structure(
+    matrix(1, nrow = 2, ncol = 2),
+    class = c("surface_template_bad_as_matrix", "matrix")
+  )
+
+  expect_error(
+    surface_basis_template(geometry = geom, loadings = bad_loadings, support = 1:3),
+    regexp = "rows to match the surface support",
+    class = "fmrilatent_error_dim"
+  )
+})
+
+test_that("surface save_template methods mirror the generic compression default", {
+  surface_method <- methods::selectMethod(
+    "save_template",
+    signature(template = "SurfaceBasisTemplate")
+  )
+  surface_awpt_method <- methods::selectMethod(
+    "save_template",
+    signature(template = "SurfaceAWPTBasisTemplate")
+  )
+
+  expect_identical(formals(surface_method)$compress, "xz")
+  expect_identical(formals(surface_awpt_method)$compress, "xz")
+})
 
 test_that("SurfaceBasisTemplate satisfies the template protocol", {
   tmpl <- .make_surface_template_st()

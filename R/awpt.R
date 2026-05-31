@@ -120,13 +120,13 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
       class = "fmrilatent_error_dimension_mismatch"
     )
   }
-  sym <- 0.5 * (mat + t(mat))
-  if (!isTRUE(all.equal(sym, t(sym), tolerance = tol))) {
+  if (!isTRUE(all.equal(mat, t(mat), tolerance = tol))) {
     .encoder_cli_abort(
-      paste0(context, " could not be symmetrized stably."),
+      paste0(context, " must be symmetric within tolerance."),
       class = "fmrilatent_error_not_symmetric"
     )
   }
+  sym <- 0.5 * (mat + t(mat))
   sym
 }
 
@@ -175,6 +175,7 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
   n_coeff <- ncol(B)
   L_field <- .awpt_as_square_matrix(field_operator, n_field, context = "anatomical_operator")
   Q <- crossprod(B, L_field %*% B)
+  Q <- 0.5 * (Q + t(Q))
   scale_weights <- diag(Q)
   atoms <- .awpt_atom_metadata(reduction, basis_spec$scales, rep(NA_real_, length(basis_spec$scales)))
   if (nrow(atoms) != n_coeff) {
@@ -284,7 +285,7 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
     filters[[idx]] <- if (idx < length(scales)) {
       prev - cur
     } else {
-      cur
+      prev
     }
     prev <- cur
   }
@@ -674,7 +675,8 @@ awpt_surface_basis_template <- function(geometry,
   roughness <- if (!is.null(coefficient_roughness)) {
     .awpt_as_square_matrix(coefficient_roughness, ncol(loadings), "coefficient_roughness")
   } else if (!is.null(field_operator_use)) {
-    crossprod(as.matrix(loadings), as.matrix(field_operator_use) %*% as.matrix(loadings))
+    Q <- crossprod(as.matrix(loadings), as.matrix(field_operator_use) %*% as.matrix(loadings))
+    0.5 * (Q + t(Q))
   } else {
     {
       sw <- .awpt_scale_weights(
@@ -691,7 +693,8 @@ awpt_surface_basis_template <- function(geometry,
           class = "fmrilatent_error_dimension_mismatch"
         )
       }
-      Diagonal(x = rep_len(sw, ncol(loadings)))
+      n_centers <- ncol(loadings) %/% length(sw)
+      Diagonal(x = rep(sw, each = n_centers))
     }
   }
 
@@ -868,7 +871,7 @@ setMethod("template_project", signature(x = "SurfaceAWPTBasisTemplate", data = "
 #' @export
 #' @rdname save_template
 setMethod("save_template", signature(template = "SurfaceAWPTBasisTemplate"),
-          function(template, file, compress = TRUE, ...) {
+          function(template, file, compress = "xz", ...) {
             saveRDS(template, file = file, compress = compress)
             invisible(file)
           })

@@ -19,7 +19,7 @@ spec_hierarchical_template <- function(template = NULL, template_file = NULL) {
 }
 
 #' @exportS3Method
-encode_spec.spec_hierarchical <- function(x, spec, mask, materialize, label, ...) {
+encode_spec.spec_hierarchical <- function(x, spec, mask, reduction, materialize, label, ...) {
   materialize <- .resolve_materialize(materialize, context = "encode_spec.spec_hierarchical")
   tmpl <- spec$template
   if (is.null(tmpl)) {

@@ -6,7 +6,7 @@
 \usage{
 heat_wavelet_loadings_handle(
   reduction,
-  basis_spec,
+  basis_spec = basis_heat_wavelet(),
   data = NULL,
   k_neighbors = 6L,
   id = NULL,
@@ -16,9 +16,10 @@ heat_wavelet_loadings_handle(
 \arguments{
 \item{reduction}{Graph/cluster reduction used by `lift()`.}
 
-\item{basis_spec}{Basis specification, e.g., from `basis_heat_wavelet()`.}
+\item{basis_spec}{Basis specification; defaults to `basis_heat_wavelet()`.}
 
-\item{data}{Optional data passed through to `lift()` (often NULL).}
+\item{data}{Ignored by heat-wavelet lifting; accepted only to keep
+the lifted-handle constructor signature aligned across families.}
 
 \item{k_neighbors}{Number of neighbors used for local graph construction
 when materializing the lifted basis.}
@@ -33,7 +34,7 @@ reduction.}
 A \code{LoadingsHandle}.
 }
 \description{
-Wraps `lift(reduction, basis_spec, data)` so multiple `LatentNeuroVec`
+Wraps a heat-wavelet `lift()` call so multiple `LatentNeuroVec`
 instances can share the same spatial dictionary without embedding the
 full matrix in each object.
 }

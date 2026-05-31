@@ -9,7 +9,7 @@
 #'   - `levels` (integer, default 3)
 #'   - `radius_factor` (numeric, default 2.5)
 #'   - `num_extra_fine_levels` (integer, default 0)
-#'   - `kernel_type` (\"gaussian\" or \"wendland_c6\", alias \"wendland_c4\")
+#'   - `kernel_type` (\"gaussian\", \"wendland_c4\", or \"wendland_c6\")
 #'   - `seed` (integer) for deterministic Poisson sampling
 #' @param mask `LogicalNeuroVol` mask defining voxel locations.
 #' @return For `hrbf_generate_basis`, a sparse matrix with one row per
@@ -62,12 +62,19 @@ hrbf_reconstruct_partial <- function(coeff, mask, params,
   if (any(voxel_idx < 1 | voxel_idx > n_vox_total)) {
     .encoder_cli_abort("voxel_idx out of bounds", class = "fmrilatent_error_invalid_index")
   }
+  active_voxel_idx <- as.integer(which(mask_arr))
+  active_col_idx <- match(as.integer(voxel_idx), active_voxel_idx)
+  if (anyNA(active_col_idx)) {
+    .encoder_cli_abort("voxel_idx must index active mask voxels",
+                       class = "fmrilatent_error_invalid_index")
+  }
   time_idx <- time_idx %||% seq_len(nrow(coeff))
   if (any(time_idx < 1 | time_idx > nrow(coeff))) {
     .encoder_cli_abort("time_idx out of bounds", class = "fmrilatent_error_invalid_index")
   }
   B <- hrbf_generate_basis(params, mask) # atoms x voxels
-  B_sub <- B[, voxel_idx, drop = FALSE]
+  basis_col_idx <- if (ncol(B) == n_vox_total) as.integer(voxel_idx) else active_col_idx
+  B_sub <- B[, basis_col_idx, drop = FALSE]
   coeff_sub <- coeff[time_idx, , drop = FALSE]
   out <- coeff_sub %*% B_sub
   as.matrix(out)
@@ -89,7 +96,7 @@ hrbf_latent <- function(X, mask, params = list(), label = "") {
     .encoder_cli_abort("X must have time in rows", class = "fmrilatent_error_dimension_mismatch")
   }
   B_atoms_vox <- hrbf_generate_basis(params, mask)
-  coeff <- hrbf_project_matrix(X, mask, params)
+  coeff <- as.matrix(Matrix::tcrossprod(as.matrix(X), B_atoms_vox))
   loadings <- Matrix::t(B_atoms_vox) # voxels x atoms
   meta <- list(family = "hrbf", params = params)
   .make_latent_neurovector(
@@ -214,7 +221,7 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
 
   sample_component <- function(coords, base_seed) {
     set.seed(as.integer(base_seed))
-    remaining <- coords
+    remaining <- coords[sample.int(nrow(coords)), , drop = FALSE]
     selected <- matrix(numeric(0), ncol = 3)
     while (nrow(remaining) > 0) {
       cand <- remaining[1, , drop = FALSE]
@@ -234,7 +241,7 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
 
   gather <- function(coords, seed_val) {
     out <- sample_component(coords, seed_val)
-    if (nrow(coords) <= 8L) {
+    if (nrow(out) == 0L && nrow(coords) <= 8L) {
       centroid_pt <- round(colMeans(coords))
       out <- matrix(centroid_pt, nrow = 1)
     }
@@ -258,20 +265,7 @@ poisson_disk_sample_neuroim2 <- function(mask_neurovol, radius_mm, seed, compone
     return(matrix(integer(0), ncol = 3, dimnames = list(NULL, c("i", "j", "k"))))
   }
 
-  remaining <- vox_coords  # deterministic order
-  selected <- matrix(numeric(0), ncol = 3)
-  while (nrow(remaining) > 0) {
-    cand <- remaining[1, , drop = FALSE]
-    remaining <- remaining[-1, , drop = FALSE]
-    if (nrow(selected) == 0) {
-      selected <- rbind(selected, cand)
-    } else {
-      d2 <- rowSums((selected - matrix(cand, nrow = nrow(selected), ncol = 3, byrow = TRUE))^2)
-      if (all(d2 >= r2)) {
-        selected <- rbind(selected, cand)
-      }
-    }
-  }
+  selected <- gather(vox_coords, as.integer(seed) + as.integer(component_id_for_seed_offset))
   selected <- if (nrow(selected) > 0) matrix(as.numeric(selected), ncol = 3) else selected
   colnames(selected) <- c("i", "j", "k")
   selected
@@ -362,9 +356,7 @@ generate_hrbf_atom <- function(mask_coords_world, mask_linear_indices,
   mask_coords_world <- as.matrix(mask_coords_world)
   centre_coord_world <- as.numeric(centre_coord_world)
   p_kernel_type <- params$kernel_type %||% "gaussian"
-  if (identical(p_kernel_type, "wendland_c4")) p_kernel_type <- "wendland_c6"
   p_kernel_type_fine <- params$kernel_type_fine_levels %||% "wendland_c6"
-  if (identical(p_kernel_type_fine, "wendland_c4")) p_kernel_type_fine <- "wendland_c6"
   num_alt <- params$num_fine_levels_alt_kernel %||% 0L
   total_levels_effective <- (params$levels %||% total_levels) + (params$num_extra_fine_levels %||% 0L)
   use_alt_kernel <- (num_alt > 0L) && (current_level_j >= (total_levels_effective - num_alt + 1L))
@@ -378,7 +370,11 @@ generate_hrbf_atom <- function(mask_coords_world, mask_linear_indices,
   } else {
     r <- dist_mm / sigma_mm
     base <- pmax(0, 1 - r)
-    phi <- base^8 * (32 * r^3 + 25 * r^2 + 8 * r + 1)
+    phi <- if (identical(eff_kernel, "wendland_c4")) {
+      base^6 * (35 * r^2 + 18 * r + 3) / 3
+    } else {
+      base^8 * (32 * r^3 + 25 * r^2 + 8 * r + 1)
+    }
     phi[r >= 1] <- 0
   }
 
@@ -561,7 +557,6 @@ lna_hrbf_basis_from_params <- function(params,
   levels <- params$levels %||% 3L
   radius_factor <- params$radius_factor %||% 2.5
   kernel_type <- params$kernel_type %||% "gaussian"
-  if (identical(kernel_type, "wendland_c4")) kernel_type <- "wendland_c6"
   num_extra_fine_levels <- params$num_extra_fine_levels %||% 0L
   seed <- params$seed
 
@@ -623,7 +618,7 @@ lna_hrbf_basis_from_params <- function(params,
         ),
         error = function(e) NULL
       )
-      if (!is.null(B_try)) {
+      if (!is.null(B_try) && identical(dim(B_try), c(n_total_vox, n_total_vox))) {
         norms <- sqrt(Matrix::rowSums(B_try^2))
         norms[norms == 0] <- 1
         B_try <- Matrix::Diagonal(x = 1 / norms) %*% B_try
@@ -699,10 +694,7 @@ lna_hrbf_basis_from_params <- function(params,
       ),
       error = function(e) NULL
     )
-    if (!is.null(B_try)) {
-      if (nrow(B_try) == n_active && ncol(B_try) == k_actual) {
-        B_try <- Matrix::t(B_try)
-      }
+    if (!is.null(B_try) && identical(dim(B_try), c(k_actual, n_active))) {
       if (isTRUE(full_grid) && ncol(B_try) == n_active) {
         tri <- as(B_try, "dgTMatrix")
         B_try <- Matrix::sparseMatrix(
@@ -771,7 +763,6 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
   levels <- params$levels %||% 3L
   radius_factor <- params$radius_factor %||% 2.5
   kernel_type <- params$kernel_type %||% "gaussian"
-  if (identical(kernel_type, "wendland_c4")) kernel_type <- "wendland_c6"
   num_extra_fine_levels <- params$num_extra_fine_levels %||% 0L
   seed <- params$seed
 
@@ -794,7 +785,10 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
     mask_linear_indices <- as.integer(which(mask_arr))
   }
   mask_coords_world <- mask_world_coords
-  n_total_vox <- length(mask_linear_indices)
+  active_linear_idx <- as.integer(mask_linear_indices)
+  n_active <- length(active_linear_idx)
+  n_total_vox <- n_active
+  atom_col_indices <- seq_len(n_active)
 
   if (n_total_vox == 0) {
     return(Matrix::sparseMatrix(i = integer(), j = integer(), x = numeric(),
@@ -805,7 +799,6 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
   if (!is.null(seed) && n_total_vox <= 64L) {
     centres_all <- mask_coords_world
     small_sigma <- max(1e-3, sigma0 / 100)
-    atom_col_indices <- seq_len(n_total_vox)
     use_rcpp <- use_hrbf_rcpp() && exists("hrbf_atoms_rcpp")
     if (use_rcpp) {
       B_try <- tryCatch(
@@ -914,7 +907,7 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
       ),
       error = function(e) NULL
     )
-    if (!is.null(B_try)) {
+    if (!is.null(B_try) && identical(dim(B_try), c(k_actual, n_total_vox))) {
       norms <- sqrt(Matrix::rowSums(B_try^2))
       norms[norms == 0] <- 1
       B_try <- Matrix::Diagonal(x = 1 / norms) %*% B_try
@@ -927,7 +920,7 @@ hrbf_basis_from_params <- function(params, mask_neurovol,
   triplet_x_list <- vector("list", k_actual)
   value_threshold <- 1e-8
   for (kk in seq_len(k_actual)) {
-    atom <- generate_hrbf_atom(mask_coords_world, mask_linear_indices,
+    atom <- generate_hrbf_atom(mask_coords_world, atom_col_indices,
                                C_total[kk, ], sigma_vec[kk],
                                level_vec[kk], levels, params)
     keep <- abs(atom$values) >= value_threshold

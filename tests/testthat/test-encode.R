@@ -52,6 +52,11 @@ test_that("spec_time_dct norm defaults to ortho", {
   expect_equal(spec$norm, "ortho")
 })
 
+test_that("spec_time_dct k parameter is optional", {
+  spec <- spec_time_dct()
+  expect_null(spec$k)
+})
+
 test_that("spec_time_dct accepts none normalization", {
   spec <- spec_time_dct(k = 5, norm = "none")
   expect_equal(spec$norm, "none")
@@ -64,7 +69,11 @@ test_that("spec constructors reject malformed inputs", {
   expect_error(spec_time_bspline(k = 0), "positive integer")
   expect_error(spec_space_slepian(k = 0), "positive integer")
   expect_error(spec_space_pca(k = 0), "positive integer")
-  expect_error(spec_space_heat(scales = c(1, -2)), "positive finite values")
+  expect_error(
+    spec_space_heat(scales = c(1, -2)),
+    "positive finite values",
+    class = "fmrilatent_error_invalid_scalar"
+  )
   expect_error(spec_space_heat(order = 0), "positive integer")
   expect_error(spec_space_hrbf(params = "bad"), "params must be a list")
   expect_error(spec_space_hrbf(params = list(kernel_type = "bad")), "kernel_type")
@@ -83,7 +92,8 @@ test_that("spec_time_bspline creates correct spec object", {
 })
 
 test_that("spec_time_bspline uses default values", {
-  spec <- spec_time_bspline(k = 5)
+  spec <- spec_time_bspline()
+  expect_null(spec$k)
   expect_equal(spec$degree, 3L)
   expect_false(spec$include_intercept)
   expect_true(spec$orthonormalize)
@@ -98,32 +108,44 @@ test_that("spec_space_slepian creates correct spec object", {
 
 test_that("spec_space_slepian uses default values", {
   spec <- spec_space_slepian()
-  expect_equal(spec$k, 3L)
+  expect_null(spec$k)
   expect_equal(spec$k_neighbors, 6L)
 })
 
 test_that("spec_space_pca creates correct spec object", {
-  spec <- spec_space_pca(k = 4, center = FALSE, whiten = TRUE, backend = "svd")
+  spec <- spec_space_pca(k = 4, center = FALSE, scale = TRUE, whiten = TRUE, backend = "svd")
   expect_s3_class(spec, "spec_space_pca")
   expect_equal(spec$k, 4L)
   expect_false(spec$center)
+  expect_true(spec$scale)
   expect_true(spec$whiten)
   expect_equal(spec$backend, "svd")
 })
 
 test_that("spec_space_pca uses default values", {
   spec <- spec_space_pca()
-  expect_equal(spec$k, 3L)
+  expect_null(spec$k)
   expect_true(spec$center)
+  expect_false(spec$scale)
   expect_false(spec$whiten)
   expect_equal(spec$backend, "auto")
 })
 
+test_that("spec_space_pca preserves legacy positional argument order", {
+  spec <- spec_space_pca(4, FALSE, TRUE, "svd")
+  expect_equal(spec$k, 4L)
+  expect_false(spec$center)
+  expect_true(spec$whiten)
+  expect_equal(spec$backend, "svd")
+  expect_false(spec$scale)
+})
+
 test_that("spec_space_heat creates correct spec object", {
-  spec <- spec_space_heat(scales = c(1, 2, 4), order = 20, threshold = 1e-5, k_neighbors = 4)
+  spec <- spec_space_heat(scales = c(1, 2, 4), order = 20, sparsify_eps = 1e-5, k_neighbors = 4)
   expect_s3_class(spec, "spec_space_heat")
   expect_equal(spec$scales, c(1, 2, 4))
   expect_equal(spec$order, 20)
+  expect_equal(spec$sparsify_eps, 1e-5)
   expect_equal(spec$threshold, 1e-5)
   expect_equal(spec$k_neighbors, 4)
 })
@@ -132,17 +154,55 @@ test_that("spec_space_heat uses default values", {
   spec <- spec_space_heat()
   expect_equal(spec$scales, c(1, 2, 4, 8))
   expect_equal(spec$order, 30L)
+  expect_equal(spec$sparsify_eps, 1e-6)
   expect_equal(spec$threshold, 1e-6)
   expect_equal(spec$k_neighbors, 6L)
 })
 
+test_that("spec_space_heat keeps threshold as a compatibility alias", {
+  spec <- spec_space_heat(threshold = 0)
+  expect_equal(spec$sparsify_eps, 0)
+  expect_equal(spec$threshold, 0)
+  expect_error(
+    spec_space_heat(sparsify_eps = 0, threshold = 1e-6),
+    class = "fmrilatent_error_invalid_argument"
+  )
+})
+
+test_that("spec_space_heat preserves legacy positional threshold and k_neighbors", {
+  spec <- spec_space_heat(c(1, 2), 10, 0, 4)
+  expect_equal(spec$threshold, 0)
+  expect_equal(spec$sparsify_eps, 0)
+  expect_equal(spec$k_neighbors, 4L)
+})
+
 test_that("spec_space_hrbf creates correct spec object", {
-  params <- list(sigma0 = 4, levels = 2, seed = 42)
-  spec <- spec_space_hrbf(params = params)
+  spec <- spec_space_hrbf(sigma0 = 4, levels = 2, seed = 42)
   expect_s3_class(spec, "spec_space_hrbf")
   expect_equal(spec$params$sigma0, 4)
   expect_equal(spec$params$levels, 2)
   expect_equal(spec$params$seed, 42)
+})
+
+test_that("spec_space_hrbf merges params, explicit formals, and named extras", {
+  spec <- spec_space_hrbf(
+    params = list(sigma0 = 2, levels = 1),
+    sigma0 = 4,
+    radius_factor = 3,
+    kernel_type = "wendland_c4",
+    num_fine_levels_alt_kernel = 1L
+  )
+  expect_equal(spec$params$sigma0, 4)
+  expect_equal(spec$params$levels, 1L)
+  expect_equal(spec$params$radius_factor, 3)
+  expect_equal(spec$params$kernel_type, "wendland_c4")
+  expect_equal(spec$params$num_fine_levels_alt_kernel, 1L)
+})
+
+test_that("spec_space_hrbf preserves params as the first positional argument", {
+  spec <- spec_space_hrbf(list(sigma0 = 2, seed = 7L))
+  expect_equal(spec$params$sigma0, 2)
+  expect_equal(spec$params$seed, 7L)
 })
 
 test_that("spec_space_hrbf with empty params", {
@@ -153,10 +213,11 @@ test_that("spec_space_hrbf with empty params", {
 })
 
 test_that("spec_space_wavelet_active creates correct spec object", {
-  spec <- spec_space_wavelet_active(levels_space = 3, levels_time = 1, threshold = 0.01)
+  spec <- spec_space_wavelet_active(levels_space = 3, levels_time = 1, select_threshold = 0.01)
   expect_s3_class(spec, "spec_space_wavelet_active")
   expect_equal(spec$levels_space, 3)
   expect_equal(spec$levels_time, 1)
+  expect_equal(spec$select_threshold, 0.01)
   expect_equal(spec$threshold, 0.01)
 })
 
@@ -164,7 +225,18 @@ test_that("spec_space_wavelet_active uses default values", {
   spec <- spec_space_wavelet_active()
   expect_equal(spec$levels_space, 2L)
   expect_equal(spec$levels_time, 0L)
+  expect_equal(spec$select_threshold, 0)
   expect_equal(spec$threshold, 0)
+})
+
+test_that("spec_space_wavelet_active keeps threshold as a compatibility alias", {
+  spec <- spec_space_wavelet_active(threshold = 0.2)
+  expect_equal(spec$select_threshold, 0.2)
+  expect_equal(spec$threshold, 0.2)
+  expect_error(
+    spec_space_wavelet_active(select_threshold = 0.1, threshold = 0.2),
+    class = "fmrilatent_error_invalid_argument"
+  )
 })
 
 test_that("spec_st creates correct spatiotemporal spec", {
@@ -185,6 +257,21 @@ test_that("spec_st accepts explicit core_mode", {
     core_mode = "explicit"
   )
   expect_equal(spec$core_mode, "explicit")
+})
+
+test_that("encode_spec methods use the shared method signature", {
+  expected <- c("x", "spec", "mask", "reduction", "materialize", "label", "...")
+  method_names <- c(
+    "encode_spec.spec_time_slepian",
+    "encode_spec.spec_time_dct",
+    "encode_spec.spec_time_bspline",
+    "encode_spec.spec_hierarchical"
+  )
+
+  for (method_name in method_names) {
+    method <- get(method_name, envir = asNamespace("fmrilatent"))
+    expect_identical(names(formals(method)), expected)
+  }
 })
 
 test_that("spec_hierarchical_template requires template or template_file", {
@@ -218,7 +305,9 @@ test_that("encode.default errors for unsupported classes", {
 test_that("encode.matrix works with spec_time_dct", {
   td <- make_test_data()
   spec <- spec_time_dct(k = 4)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
   expect_equal(dim(basis(lv)), c(td$n_time, 4))
@@ -228,7 +317,9 @@ test_that("encode.matrix works with spec_time_dct", {
 test_that("encode.matrix works with spec_time_dct norm='none'", {
   td <- make_test_data()
   spec <- spec_time_dct(k = 4, norm = "none")
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
   expect_equal(dim(basis(lv)), c(td$n_time, 4))
@@ -237,16 +328,31 @@ test_that("encode.matrix works with spec_time_dct norm='none'", {
 test_that("encode.matrix works with spec_time_slepian", {
   td <- make_test_data(n_time = 10)
   spec <- spec_time_slepian(tr = 2, bandwidth = 0.1, k = 3)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
   expect_equal(dim(basis(lv)), c(10, 3))
 })
 
+test_that("encode.matrix records realized Slepian rank after clamping", {
+  td <- make_test_data(n_time = 5)
+  spec <- spec_time_slepian(tr = 2, bandwidth = 0.2, k = 10)
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
+
+  expect_equal(ncol(basis(lv)), 5L)
+  expect_equal(lv@meta$k, 5L)
+})
+
 test_that("encode.matrix works with spec_time_bspline", {
   td <- make_test_data(n_time = 12)
   spec <- spec_time_bspline(k = 5, degree = 3)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
   expect_equal(dim(basis(lv)), c(12, 5))
@@ -255,7 +361,9 @@ test_that("encode.matrix works with spec_time_bspline", {
 test_that("encode.matrix works with spec_time_bspline orthonormalize=FALSE", {
   td <- make_test_data(n_time = 12)
   spec <- spec_time_bspline(k = 5, degree = 3, orthonormalize = FALSE)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
   expect_equal(dim(basis(lv)), c(12, 5))
@@ -301,7 +409,9 @@ test_that("encode with spec_space_slepian returns LatentNeuroVec", {
 
   td <- make_test_data()
   spec <- spec_space_slepian(k = 2, k_neighbors = 3)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
 })
@@ -312,7 +422,9 @@ test_that("encode with spec_space_heat returns LatentNeuroVec", {
 
   td <- make_test_data()
   spec <- spec_space_heat(scales = c(1, 2), order = 10, k_neighbors = 3)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
 })
@@ -321,9 +433,35 @@ test_that("encode with spec_space_hrbf returns LatentNeuroVec", {
   td <- make_test_data()
   params <- list(sigma0 = 4, levels = 2, seed = 42)
   spec <- spec_space_hrbf(params = params)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
+})
+
+test_that("encode spec_space_hrbf matches hrbf_latent projection", {
+  skip_if_not(exists("local_mocked_bindings", envir = asNamespace("testthat")),
+              "testthat local_mocked_bindings unavailable")
+  atoms <- Matrix::Matrix(matrix(c(
+    1, 0, 1, 0,
+    0, 1, 1, 1
+  ), nrow = 2, byrow = TRUE), sparse = TRUE)
+  local_mocked_bindings(
+    hrbf_generate_basis = function(params, mask) atoms,
+    .package = "fmrilatent"
+  )
+
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  mask <- neuroim2::LogicalNeuroVol(mask_arr, neuroim2::NeuroSpace(c(2, 2, 1)))
+  X <- matrix(seq_len(12), nrow = 3)
+  encoded <- without_dense_basis_warning(
+    encode(X, spec_space_hrbf(params = list()), mask = mask, materialize = "matrix")
+  )
+  direct <- without_dense_basis_warning(hrbf_latent(X, mask, params = list()))
+
+  expect_equal(as.matrix(basis(encoded)), as.matrix(basis(direct)), tolerance = 1e-12)
+  expect_equal(as.matrix(loadings(encoded)), as.matrix(loadings(direct)), tolerance = 1e-12)
 })
 
 test_that("encode with spec_space_wavelet_active returns ImplicitLatent", {
@@ -332,6 +470,16 @@ test_that("encode with spec_space_wavelet_active returns ImplicitLatent", {
   result <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
 
   expect_true(is_implicit_latent(result))
+})
+
+test_that("encode with spec_space_wavelet_active rejects handle materialization", {
+  td <- make_test_data(dims = c(4, 4, 2))
+  spec <- spec_space_wavelet_active(levels_space = 1, levels_time = 0)
+
+  expect_error(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "handle"),
+    class = "fmrilatent_error_unsupported_materialize"
+  )
 })
 
 # ---------------------------------------------------------------------------
@@ -366,6 +514,26 @@ test_that("encode with spec_st (bspline time + hrbf space) returns ImplicitLaten
   expect_true(is_implicit_latent(result))
   reco <- predict(result)
   expect_equal(dim(reco), dim(td$X))
+})
+
+test_that("spec_st bspline time basis respects orthonormalize = FALSE", {
+  td <- make_test_data(n_time = 10)
+  spec <- spec_st(
+    time = spec_time_bspline(k = 4, degree = 3, orthonormalize = FALSE),
+    space = spec_space_hrbf(params = list(sigma0 = 4, levels = 2, seed = 42))
+  )
+
+  result <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  expected <- as.matrix(build_bspline_basis(
+    n_time = nrow(td$X),
+    k = 4,
+    degree = 3,
+    include_intercept = FALSE,
+    orthonormalize = FALSE
+  ))
+
+  expect_equal(result$coeff$B_t, expected, tolerance = 1e-12)
+  expect_false(isTRUE(all.equal(crossprod(result$coeff$B_t), diag(4), tolerance = 1e-8)))
 })
 
 test_that("encode with spec_st (bspline time + slepian space) returns ImplicitLatent", {
@@ -429,8 +597,10 @@ test_that("latent_factory with dct_time family works", {
 
 test_that("latent_factory with slepian_time family works", {
   td <- make_test_data(n_time = 10)
-  lv <- latent_factory("slepian_time", x = td$X, mask = td$mask_vol,
-                       tr = 2, bandwidth = 0.1, k = 3, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    latent_factory("slepian_time", x = td$X, mask = td$mask_vol,
+                   tr = 2, bandwidth = 0.1, k = 3, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
   expect_equal(dim(basis(lv)), c(10, 3))
@@ -441,8 +611,10 @@ test_that("latent_factory with slepian_space family works", {
   skip_if_not_installed("rgsp")
 
   td <- make_test_data()
-  lv <- latent_factory("slepian_space", x = td$X, mask = td$mask_vol,
-                       k = 2, k_neighbors = 3, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    latent_factory("slepian_space", x = td$X, mask = td$mask_vol,
+                   k = 2, k_neighbors = 3, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
 })
@@ -452,10 +624,22 @@ test_that("latent_factory with heat_space family works", {
   skip_if_not_installed("rgsp")
 
   td <- make_test_data()
-  lv <- latent_factory("heat_space", x = td$X, mask = td$mask_vol,
-                       scales = c(1, 2), order = 10, k_neighbors = 3, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    latent_factory("heat_space", x = td$X, mask = td$mask_vol,
+                   scales = c(1, 2), order = 10, k_neighbors = 3, materialize = "matrix")
+  )
 
   expect_s4_class(lv, "LatentNeuroVec")
+})
+
+test_that("latent_factory accepts registered space_hrbf family", {
+  td <- make_test_data(n_time = 6, dims = c(3, 3, 1))
+  lv <- latent_factory("space_hrbf", x = td$X, mask = td$mask_vol,
+                       sigma0 = 2, levels = 1, seed = 42,
+                       materialize = "matrix")
+
+  expect_s4_class(lv, "LatentNeuroVec")
+  expect_equal(lv@meta$family, "space_hrbf")
 })
 
 test_that("latent_factory with bspline_hrbf_st family works", {
@@ -466,6 +650,31 @@ test_that("latent_factory with bspline_hrbf_st family works", {
                        materialize = "matrix")
 
   expect_true(is_implicit_latent(lv))
+})
+
+test_that("latent_factory accepts registered st family with explicit specs", {
+  td <- make_test_data(n_time = 8, dims = c(3, 3, 1))
+  lv <- latent_factory(
+    "st",
+    x = td$X,
+    mask = td$mask_vol,
+    time = spec_time_dct(k = 3),
+    space = spec_space_hrbf(sigma0 = 2, levels = 1, seed = 42),
+    materialize = "matrix"
+  )
+
+  expect_true(is_implicit_latent(lv))
+  expect_equal(lv$meta$time, "spec_time_dct")
+  expect_equal(lv$meta$space, "spec_space_hrbf")
+})
+
+test_that("latent_factory registered st family requires explicit specs", {
+  td <- make_test_data(n_time = 8, dims = c(3, 3, 1))
+
+  expect_error(
+    latent_factory("st", x = td$X, mask = td$mask_vol, materialize = "matrix"),
+    class = "fmrilatent_error_missing_argument"
+  )
 })
 
 test_that("latent_factory with wavelet_active family works", {
@@ -497,12 +706,44 @@ test_that("latent_factory with label parameter sets label", {
   expect_equal(lv@label, "factory_test")
 })
 
+test_that("encode resolves optional k defaults at encode time", {
+  td <- make_test_data(n_time = 6)
+
+  dct <- encode(td$X, spec_time_dct(), mask = td$mask_vol, materialize = "matrix")
+  expect_equal(dct@meta$k, 6L)
+  expect_equal(ncol(basis(dct)), 6L)
+
+  bspline <- encode(td$X, spec_time_bspline(), mask = td$mask_vol, materialize = "matrix")
+  expect_equal(bspline@meta$k, 5L)
+  expect_equal(ncol(basis(bspline)), 5L)
+
+  slepian <- without_dense_basis_warning(
+    encode(td$X, spec_space_slepian(), mask = td$mask_vol, materialize = "matrix")
+  )
+  expect_equal(slepian@meta$k, 3L)
+
+  pca <- encode(td$X, spec_space_pca(scale = TRUE, backend = "svd"),
+                mask = td$mask_vol, materialize = "matrix")
+  expect_equal(pca@meta$k, 3L)
+  expect_true(pca@meta$scale)
+})
+
 test_that("latent_factory rejects AWPT family with a direct handoff message", {
   td <- make_test_data()
 
   expect_error(
     latent_factory("awpt", x = td$X, mask = td$mask_vol),
     "does not support AWPT because AWPT requires a shared basis_asset and subject field_operator"
+  )
+})
+
+test_that("encode rejects AWPT template specs with a transport API handoff", {
+  td <- make_test_data()
+
+  expect_error(
+    encode(td$X, basis_awpt_wavelet(), mask = td$mask_vol),
+    "creates an AWPT template spec, not a complete encode\\(\\) spec",
+    class = "fmrilatent_error_unsupported_spec"
   )
 })
 
@@ -536,7 +777,9 @@ test_that("encode works with single voxel mask", {
 test_that("encode works with small k values", {
   td <- make_test_data()
   spec <- spec_time_dct(k = 1)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   expect_equal(ncol(basis(lv)), 1)
 })
@@ -585,7 +828,9 @@ test_that("encode with DCT produces reasonable reconstruction", {
   td <- make_test_data(n_time = 20)
   # Using nearly full rank to get good reconstruction
   spec <- spec_time_dct(k = 18)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   # Reconstruct
   reconstructed <- as.matrix(lv)
@@ -600,7 +845,9 @@ test_that("encode with DCT produces reasonable reconstruction", {
 test_that("encode with slepian produces reasonable reconstruction", {
   td <- make_test_data(n_time = 20)
   spec <- spec_time_slepian(tr = 2, bandwidth = 0.1, k = 10)
-  lv <- encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  lv <- without_dense_basis_warning(
+    encode(td$X, spec, mask = td$mask_vol, materialize = "matrix")
+  )
 
   reconstructed <- as.matrix(lv)
   cor_vals <- diag(cor(td$X, reconstructed))

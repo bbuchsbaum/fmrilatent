@@ -54,6 +54,40 @@ as_logical_mask <- function(arr, location = "haar_wavelet:mask") {
 .morton_overflow_msg <-
   "dimensions too large for Morton codes (max 10 bits / 1024 per axis)"
 
+.morton_order_block_coords <- function(block_dims, location = "haar block order") {
+  block_dims <- as.integer(block_dims)
+  coords <- which(array(TRUE, dim = block_dims), arr.ind = TRUE)
+  if (nrow(coords) == 0L) {
+    return(matrix(integer(), ncol = 3L))
+  }
+
+  x <- coords[, 1L] - 1L
+  y <- coords[, 2L] - 1L
+  z <- coords[, 3L] - 1L
+
+  bits <- ceiling(log2(max(block_dims)))
+  if (bits > .morton_max_bits_per_axis) {
+    .encoder_cli_abort(
+      sprintf("%s: %s", location, .morton_overflow_msg),
+      class = "fmrilatent_error_morton_overflow"
+    )
+  }
+
+  codes <- integer(nrow(coords))
+  for (b in seq_len(bits)) {
+    shift <- b - 1L
+    codes <- bitwOr(codes,
+                    bitwShiftL(bitwAnd(bitwShiftR(x, shift), 1L), 3L * shift))
+    codes <- bitwOr(codes,
+                    bitwShiftL(bitwAnd(bitwShiftR(y, shift), 1L), 3L * shift + 1L))
+    codes <- bitwOr(codes,
+                    bitwShiftL(bitwAnd(bitwShiftR(z, shift), 1L), 3L * shift + 2L))
+  }
+
+  ordering <- do.call(order, list(codes, x, y, z, seq_len(nrow(coords))))
+  coords[ordering, , drop = FALSE]
+}
+
 #' Morton-ordered voxel indices from a 3D mask
 #'
 #' @keywords internal
@@ -127,27 +161,32 @@ precompute_haar_scalings <- function(mask_3d_array, levels) {
     x_seq <- seq(1L, dims[1], by = 2L)
     y_seq <- seq(1L, dims[2], by = 2L)
     z_seq <- seq(1L, dims[3], by = 2L)
-    counts <- integer(length(x_seq) * length(y_seq) * length(z_seq))
-    idx <- 1L
-    for (x in x_seq) {
-      for (y in y_seq) {
-        for (z in z_seq) {
-          block <- current[
-            x:min(x + 1L, dims[1]),
-            y:min(y + 1L, dims[2]),
-            z:min(z + 1L, dims[3])
-          ]
-          counts[idx] <- sum(block)
-          idx <- idx + 1L
-        }
+    block_dims <- c(length(x_seq), length(y_seq), length(z_seq))
+    block_coords <- .morton_order_block_coords(block_dims, "precompute_haar_scalings")
+    counts <- integer(nrow(block_coords))
+    next_occ <- array(FALSE, dim = block_dims)
+    for (idx in seq_len(nrow(block_coords))) {
+      i <- block_coords[idx, 1L]
+      j <- block_coords[idx, 2L]
+      k <- block_coords[idx, 3L]
+      x <- x_seq[i]
+      y <- y_seq[j]
+      z <- z_seq[k]
+      block <- current[
+        x:min(x + 1L, dims[1]),
+        y:min(y + 1L, dims[2]),
+        z:min(z + 1L, dims[3])
+      ]
+      counts[idx] <- sum(block)
+      if (counts[idx] > 0L) {
+        next_occ[i, j, k] <- TRUE
       }
     }
     scalings[[lvl]] <- list(
       sqrt_nvalid = sqrt(as.numeric(counts)),
       sqrt_nvalid_div_8 = sqrt(as.numeric(counts) / 8)
     )
-    current <- array(counts > 0,
-                     dim = c(length(x_seq), length(y_seq), length(z_seq)))
+    current <- next_occ
   }
   scalings
 }
@@ -278,6 +317,10 @@ inverse_lift_R <- function(root_coeff,
         idx_det <- idx_det + nv
         idx_lp  <- idx_lp + 1L
       }
+    }
+    if (idx_lp <= length(current)) {
+      .encoder_cli_abort(sprintf("Lowpass length mismatch at level %d", lvl - 1L),
+                         class = "fmrilatent_error_haar_internal")
     }
     current <- next_data
   }
@@ -561,7 +604,7 @@ perform_haar_lift_synthesis <- function(coeff_list, mask_3d_array, levels,
     detail_vecs <- lapply(seq_len(levels), function(lvl) coeff_list$detail[[lvl]][tt, ])
     if (use_rcpp) {
       reco_morton[tt, ] <- inverse_lift_rcpp(
-        coeff_list$root[tt, 1],
+        coeff_list$root[tt, ],
         detail_vecs,
         mask_flat_morton,
         mask_dims,
@@ -570,7 +613,7 @@ perform_haar_lift_synthesis <- function(coeff_list, mask_3d_array, levels,
       )
     } else {
       reco_morton[tt, ] <- inverse_lift_R(
-        coeff_list$root[tt, 1],
+        coeff_list$root[tt, ],
         detail_vecs,
         mask_flat_morton,
         mask_dims,
@@ -608,28 +651,33 @@ compute_block_map <- function(mask_3d_array, levels) {
     nbx <- length(x_seq)
     nby <- length(y_seq)
     nbz <- length(z_seq)
-    nblocks <- nbx * nby * nbz
+    block_coords <- .morton_order_block_coords(
+      c(nbx, nby, nbz),
+      "compute_block_map"
+    )
+    nblocks <- nrow(block_coords)
     counts <- integer(nblocks)
     codes <- integer(nblocks)
     bits <- ceiling(log2(max(nbx, nby, nbz)))
-    idx <- 1L
-    for (i in seq_along(x_seq)) {
-      for (j in seq_along(y_seq)) {
-        for (k in seq_along(z_seq)) {
-          block <- current[
-            x_seq[i]:min(x_seq[i] + 1L, dims[1]),
-            y_seq[j]:min(y_seq[j] + 1L, dims[2]),
-            z_seq[k]:min(z_seq[k] + 1L, dims[3])
-          ]
-          counts[idx] <- sum(block)
-          codes[idx] <- encode_morton3d(i - 1L, j - 1L, k - 1L, bits)
-          idx <- idx + 1L
-        }
+    next_occ <- array(FALSE, dim = c(nbx, nby, nbz))
+    for (idx in seq_len(nblocks)) {
+      i <- block_coords[idx, 1L]
+      j <- block_coords[idx, 2L]
+      k <- block_coords[idx, 3L]
+      block <- current[
+        x_seq[i]:min(x_seq[i] + 1L, dims[1]),
+        y_seq[j]:min(y_seq[j] + 1L, dims[2]),
+        z_seq[k]:min(z_seq[k] + 1L, dims[3])
+      ]
+      counts[idx] <- sum(block)
+      codes[idx] <- encode_morton3d(i - 1L, j - 1L, k - 1L, bits)
+      if (counts[idx] > 0L) {
+        next_occ[i, j, k] <- TRUE
       }
     }
     start <- c(0L, cumsum(counts)[-length(counts)])
     mapping[[lvl]] <- list(code = codes, count = counts, start = start)
-    current <- array(counts > 0L, dim = c(nbx, nby, nbz))
+    current <- next_occ
   }
   mapping
 }
@@ -696,8 +744,11 @@ haar_wavelet_forward <- function(X, mask, levels = NULL, z_seed = 42L,
     if (is.na(thresh_val)) thresh_val <- 0
     actual_threshold <- switch(thresh_type,
       absolute = thresh_val,
-      relative_to_root_std = thresh_val * stats::sd(c(as.vector(coeffs$root),
-                                                      as.vector(coeffs$detail[[levels]]))),
+      relative_to_root_std = {
+        root_sd <- stats::sd(as.vector(coeffs$root))
+        if (!is.finite(root_sd)) root_sd <- 0
+        thresh_val * root_sd
+      },
       0
     )
     if (actual_threshold > 0) {

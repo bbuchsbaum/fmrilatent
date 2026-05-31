@@ -11,7 +11,8 @@
 
 \item{basis_spec}{Diffusion wavelet spec (basis_diffusion_wavelet()).}
 
-\item{data}{Optional (unused) for API symmetry.}
+\item{data}{Ignored for this graph-only spatial dictionary; accepted only
+for the shared `lift()` method signature.}
 
 \item{k_neighbors}{k for graph building (cluster centroids).}
 

@@ -19,10 +19,15 @@ slepian_spatiotemporal_latent <- function(X, mask, tr,
                                           reduction = NULL,
                                           k_space = 3L,
                                           k_neighbors = 6L,
-                                          label = "") {
+  label = "") {
   mask_arr <- .extract_mask_array(mask, "slepian_spatiotemporal_latent")
   n_time <- nrow(X)
-  if (is.null(n_time) || n_time < 1) stop("X must have time in rows")
+  if (is.null(n_time) || n_time < 1) {
+    .encoder_cli_abort(
+      "X must have time in rows",
+      class = "fmrilatent_error_invalid_argument"
+    )
+  }
   n_vox <- sum(mask_arr)
 
   # Temporal Slepians
@@ -41,19 +46,16 @@ slepian_spatiotemporal_latent <- function(X, mask, tr,
 
   # Core tensor (kt x ks): project data into separable bases
   B_t_mat <- as.matrix(B_t)
-  L_s_mat <- as.matrix(L_s)
-  core <- crossprod(B_t_mat, X) %*% L_s_mat  # kt x ks
+  core <- crossprod(B_t_mat, X) %*% L_s  # kt x ks
 
   decoder <- function(time_idx = NULL, roi_mask = NULL, ...) {
     t_sel <- if (is.null(time_idx)) seq_len(n_time) else as.integer(time_idx)
     B_sel <- B_t_mat[t_sel, , drop = FALSE]
-    rec_mat <- B_sel %*% core %*% t(L_s_mat)  # time x vox
+    rec_mat <- B_sel %*% core %*% Matrix::t(L_s)  # time x vox
+    rec_mat <- as.matrix(rec_mat)
 
     if (!is.null(roi_mask)) {
-      global_idx <- which(as.logical(mask_arr))
-      roi_global <- which(as.logical(roi_mask))
-      col_keep <- which(global_idx %in% roi_global)
-      rec_mat <- rec_mat[, col_keep, drop = FALSE]
+      rec_mat <- roi_subset_columns(rec_mat, mask_arr, roi_mask)
     }
     rec_mat
   }
@@ -67,8 +69,8 @@ slepian_spatiotemporal_latent <- function(X, mask, tr,
     label = label
   )
 
-  implicit_latent(coeff = list(core = core, B_t = B_t_mat, L_s = L_s_mat),
+  implicit_latent(coeff = list(core = core, B_t = B_t_mat, L_s = L_s),
                   decoder = decoder,
                   meta = meta,
-                  mask = mask_arr)
+                  mask = if (inherits(mask, "LogicalNeuroVol")) mask else mask_arr)
 }

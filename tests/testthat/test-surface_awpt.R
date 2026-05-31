@@ -2,11 +2,7 @@ library(testthat)
 library(Matrix)
 
 .skip_if_no_neurosurf_sawpt <- function() {
-  skip_if(
-    any(commandArgs() == "-f"),
-    "neurosurf surface examples abort under this local R/BATCH setup"
-  )
-  skip_if_not_installed("neurosurf")
+  skip_if_no_neurosurf_surface_examples()
 }
 
 .make_surface_geom_sawpt <- function() {
@@ -25,6 +21,37 @@ library(Matrix)
     )
   )
 }
+
+test_that("surface AWPT filters form a partition of unity", {
+  eigenvalues <- c(0, 0.2, 0.75, 2)
+  scales <- c(0.5, 1, 2)
+
+  filters <- fmrilatent:::.surface_awpt_filters(eigenvalues, scales)
+  filter_sum <- Reduce(`+`, filters)
+
+  expect_equal(filter_sum, rep(1, length(eigenvalues)), tolerance = 1e-12)
+})
+
+test_that("surface AWPT scale weights are assigned by scale block", {
+  geom <- .make_surface_geom_sawpt()
+  scales <- c(1, 2)
+  tmpl <- awpt_surface_basis_template(
+    geometry = geom,
+    basis_spec = basis_awpt_wavelet(
+      scales = scales,
+      penalty_rule = "inverse_scale_sq"
+    ),
+    support = 1:4,
+    centers = 1:2,
+    loadings = diag(4)
+  )
+
+  expect_equal(
+    diag(as.matrix(template_roughness(tmpl))),
+    rep(1 / scales ^ 2, each = 2),
+    tolerance = 1e-12
+  )
+})
 
 test_that("surface AWPT template builds from a mesh Laplacian", {
   geom <- .make_surface_geom_sawpt()

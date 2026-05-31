@@ -54,16 +54,8 @@ setMethod(
       b2 <- loadings_mat(x, i = v_idx[inside])
 
       ## -- 4. pair-wise dot product + offset
-      if (is.vector(b1) || (inherits(b1, "Matrix") && prod(dim(b1)) == length(b1))) {
-        b1 <- as.matrix(b1)
-        if (is.vector(b1)) b1 <- matrix(b1, nrow = 1)
-      }
-      if (is.vector(b2) || (inherits(b2, "Matrix") && prod(dim(b2)) == length(b2))) {
-        b2 <- as.matrix(b2)
-        if (is.vector(b2)) b2 <- matrix(b2, nrow = 1)
-      }
-      if (inherits(b1, "Matrix")) b1 <- as.matrix(b1)
-      if (inherits(b2, "Matrix")) b2 <- as.matrix(b2)
+      b1 <- as.matrix(b1)
+      b2 <- as.matrix(b2)
       dot_products <- rowSums(b1 * b2)
       dot_products[is.na(dot_products)] <- 0
 
@@ -134,13 +126,115 @@ setMethod(
 #' @name linear_access-methods
 NULL
 
+.linear_access_impl <- function(x, i) {
+  dims_full <- dim(x)
+  nels_4d <- prod(as.numeric(dims_full))
+  nels_3d <- prod(as.numeric(dims_full[1:3]))
+
+  if (!is.numeric(i) || anyNA(i) || any(!is.finite(i)) || any(i != floor(i))) {
+    .encoder_cli_abort(
+      "[linear_access,LatentNeuroVec] Index `i` must be finite integer-valued numeric indices without NA values.",
+      class = "fmrilatent_error_invalid_index"
+    )
+  }
+  i <- as.numeric(i)
+  if (any(i < 1) || any(i > nels_4d)) {
+    .encoder_cli_abort(
+      paste0("[linear_access,LatentNeuroVec] Index out of bounds for 4D volume [1..", nels_4d, "]"),
+      class = "fmrilatent_error_invalid_index"
+    )
+  }
+
+  # Convert 4D linear indices to 3D spatial index + time index.
+  time_idx <- ceiling(i / nels_3d)
+  spatial_idx_3d <- i %% nels_3d
+  spatial_idx_3d[spatial_idx_3d == 0] <- nels_3d
+
+  # Map 3D spatial indices to mask indices.
+  rowmap <- lookup(x@map, spatial_idx_3d)
+
+  # Identify unique needed mask indices and time indices.
+  unique_valid_mask_idx <- unique(rowmap[rowmap > 0])
+  unique_time_idx <- unique(time_idx)
+
+  # If no requested indices fall within the mask, return zeros.
+  if (length(unique_valid_mask_idx) == 0) {
+    return(numeric(length(i)))
+  }
+
+  loadings_subset <- loadings_mat(x, i = unique_valid_mask_idx)
+  basis_subset <- basis_mat(x, i = unique_time_idx)
+
+  # Shortcut for single time point query.
+  if (length(unique_time_idx) == 1L) {
+    computed_vals <- drop(basis_subset %*% t(loadings_subset))
+    if (length(x@offset) > 0) {
+      computed_vals <- computed_vals + x@offset[unique_valid_mask_idx]
+    }
+    ovals <- numeric(length(i))
+    original_indices_for_computed <- match(rowmap, unique_valid_mask_idx)
+    valid_output_positions <- !is.na(original_indices_for_computed)
+    ovals[valid_output_positions] <- computed_vals[original_indices_for_computed[valid_output_positions]]
+    return(ovals)
+  }
+
+  data_block <- basis_subset %*% t(loadings_subset)
+  if (length(x@offset) > 0) {
+    data_block <- sweep(data_block, 2, x@offset[unique_valid_mask_idx], "+")
+  }
+
+  ovals <- numeric(length(i))
+  time_map <- match(time_idx, unique_time_idx)
+  mask_map <- match(rowmap, unique_valid_mask_idx)
+
+  in_mask_selector <- which(rowmap > 0)
+  row_indices_in_block <- time_map[in_mask_selector]
+  col_indices_in_block <- mask_map[in_mask_selector]
+  linear_indices_in_block <- row_indices_in_block + (col_indices_in_block - 1) * nrow(data_block)
+  ovals[in_mask_selector] <- data_block[linear_indices_in_block]
+
+  ovals
+}
+
+.latent_4col_linear_index <- function(idx, dims) {
+  idx <- matrix(as.numeric(idx), ncol = 4L)
+  if (anyNA(idx) || any(!is.finite(idx)) || any(idx != floor(idx))) {
+    .encoder_cli_abort(
+      "Matrix index coordinates must be finite integer-valued numeric values without NA values.",
+      class = "fmrilatent_error_invalid_index"
+    )
+  }
+  upper <- matrix(as.numeric(dims[1:4]), nrow = nrow(idx), ncol = 4L, byrow = TRUE)
+  if (any(idx < 1 | idx > upper)) {
+    .encoder_cli_abort(
+      "Matrix index coordinates are out of range for LatentNeuroVec.",
+      class = "fmrilatent_error_invalid_index"
+    )
+  }
+  idx[, 1] + (idx[, 2] - 1) * as.numeric(dims[1]) +
+    (idx[, 3] - 1) * as.numeric(dims[1]) * dims[2] +
+    (idx[, 4] - 1) * as.numeric(dims[1]) * dims[2] * dims[3]
+}
+
+.latent_matrix_extract <- function(x, i) {
+  nc <- ncol(i)
+  if (nc == 4L) {
+    linear_idx <- .latent_4col_linear_index(i, dim(x))
+    return(linear_access(x, linear_idx))
+  } else if (nc == 2L) {
+    return(matricized_access(x, i))
+  }
+  .encoder_cli_abort("Matrix index must have 2 or 4 columns for LatentNeuroVec",
+                     class = "fmrilatent_error_invalid_argument")
+}
+
 #' @export
 #' @rdname linear_access-methods
 setMethod(
   f = "linear_access",
   signature = signature(x = "LatentNeuroVec", i = "numeric"),
   definition = function(x, i) {
-    linear_access(x, as.integer(i))
+    .linear_access_impl(x, i)
   }
 )
 
@@ -150,80 +244,7 @@ setMethod(
   f = "linear_access",
   signature = signature(x = "LatentNeuroVec", i = "integer"),
   definition = function(x, i) {
-    dims_full <- dim(x)
-    nels_4d <- prod(dims_full)
-    nels_3d <- prod(dims_full[1:3])
-    n_time <- dims_full[4]
-
-    if (!is.numeric(i) || any(is.na(i))) {
-      .encoder_cli_abort(
-        "[linear_access,LatentNeuroVec] Index `i` must be numeric without NA values",
-        class = "fmrilatent_error_invalid_index"
-      )
-    }
-    if (any(i < 1) || any(i > nels_4d)) {
-      .encoder_cli_abort(
-        paste0("[linear_access,LatentNeuroVec] Index out of bounds for 4D volume [1..", nels_4d, "]"),
-        class = "fmrilatent_error_invalid_index"
-      )
-    }
-
-    # Convert 4D linear indices to 3D spatial index + time index
-    time_idx <- ceiling(i / nels_3d)
-    spatial_idx_3d <- i %% nels_3d
-    spatial_idx_3d[spatial_idx_3d == 0] <- nels_3d
-
-    # Map 3D spatial indices to mask indices
-    rowmap <- lookup(x@map, spatial_idx_3d)
-
-    # Identify unique needed mask indices and time indices
-    unique_valid_mask_idx <- unique(rowmap[rowmap > 0])
-    unique_time_idx <- unique(time_idx)
-
-    # If no requested indices fall within the mask, return zeros
-    if (length(unique_valid_mask_idx) == 0) {
-      return(numeric(length(i)))
-    }
-
-    # Pre-calculate
-    loadings_subset <- loadings_mat(x, i = unique_valid_mask_idx)
-    basis_subset <- basis_mat(x, i = unique_time_idx)
-
-    # Shortcut for single time point query
-    if (length(unique_time_idx) == 1L) {
-      computed_vals <- drop(basis_subset %*% t(loadings_subset))
-      if (length(x@offset) > 0) {
-        computed_vals <- computed_vals + x@offset[unique_valid_mask_idx]
-      }
-      ovals <- numeric(length(i))
-      original_indices_for_computed <- match(rowmap, unique_valid_mask_idx)
-      valid_output_positions <- !is.na(original_indices_for_computed)
-      ovals[valid_output_positions] <- computed_vals[original_indices_for_computed[valid_output_positions]]
-      return(ovals)
-    }
-
-    # Calculate the required data block for multiple time points
-    data_block <- basis_subset %*% t(loadings_subset)
-
-    # Add offsets if they exist
-    if (length(x@offset) > 0) {
-      data_block <- sweep(data_block, 2, x@offset[unique_valid_mask_idx], "+")
-    }
-
-    # Create the output vector
-    ovals <- numeric(length(i))
-
-    # Map results back
-    time_map <- match(time_idx, unique_time_idx)
-    mask_map <- match(rowmap, unique_valid_mask_idx)
-
-    in_mask_selector <- which(rowmap > 0)
-    row_indices_in_block <- time_map[in_mask_selector]
-    col_indices_in_block <- mask_map[in_mask_selector]
-    linear_indices_in_block <- row_indices_in_block + (col_indices_in_block - 1) * nrow(data_block)
-    ovals[in_mask_selector] <- data_block[linear_indices_in_block]
-
-    ovals
+    .linear_access_impl(x, i)
   }
 )
 
@@ -247,12 +268,21 @@ setMethod(
 #'   For \code{[}: An array of extracted values.
 #'
 #' @examples
-#' \dontrun{
+#' mask <- neuroim2::LogicalNeuroVol(
+#'   array(TRUE, dim = c(2, 2, 1)),
+#'   neuroim2::NeuroSpace(c(2, 2, 1))
+#' )
+#' lvec <- LatentNeuroVec(
+#'   basis = matrix(1:6, nrow = 3),
+#'   loadings = matrix(seq_len(8) / 10, nrow = 4),
+#'   space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+#'   mask = mask,
+#'   expect_dense = TRUE
+#' )
 #' # Extract volumes
 #' vol1 <- lvec[[1]]
-#' vol_mid <- lvec[[dim(lvec)[4] / 2]]
+#' vol_mid <- lvec[[2]]
 #' vol_last <- lvec[[dim(lvec)[4]]]
-#' }
 #'
 #' @importFrom neuroim2 SparseNeuroVol
 #' @rdname extract-methods
@@ -299,6 +329,10 @@ setMethod(
   signature = signature(x = "LatentNeuroVec", i = "numeric", j = "numeric", drop = "ANY"),
   definition = function(x, i, j, k, l, ..., drop = TRUE) {
     dims_full <- dim(x)
+    if (!missing(i) && is.matrix(i) && missing(j)) {
+      return(.latent_matrix_extract(x, i))
+    }
+
     if (missing(i)) i <- seq_len(dims_full[1])
     if (missing(j)) j <- seq_len(dims_full[2])
     if (missing(k)) k <- seq_len(dims_full[3])
@@ -376,6 +410,16 @@ setMethod(
 #' @export
 setMethod(
   f = "[",
+  signature = signature(x = "LatentNeuroVec", i = "matrix", j = "missing", drop = "ANY"),
+  definition = function(x, i, j, k, l, ..., drop = TRUE) {
+    .latent_matrix_extract(x, i)
+  }
+)
+
+#' @rdname extract-methods
+#' @export
+setMethod(
+  f = "[",
   signature = signature(x = "LatentNeuroVec", i = "ANY", j = "ANY", drop = "ANY"),
   definition = function(x, i, j, k, l, ..., drop = TRUE) {
     dims <- dim(x)
@@ -400,18 +444,7 @@ setMethod(
 
     # Handle matrix indexing: each row is a coordinate tuple
     if (!missing(i) && is.matrix(i) && missing(j)) {
-      nc <- ncol(i)
-      if (nc == 4L) {
-        linear_idx <- i[, 1] + (i[, 2] - 1L) * dims[1] +
-          (i[, 3] - 1L) * dims[1] * dims[2] +
-          (i[, 4] - 1L) * dims[1] * dims[2] * dims[3]
-        return(linear_access(x, as.integer(linear_idx)))
-      } else if (nc == 2L) {
-        return(matricized_access(x, i))
-      } else {
-        .encoder_cli_abort("Matrix index must have 2 or 4 columns for LatentNeuroVec",
-                           class = "fmrilatent_error_invalid_argument")
-      }
+      return(.latent_matrix_extract(x, i))
     }
 
     if (missing(i)) i <- seq_len(dims[1])
@@ -428,7 +461,6 @@ setMethod(
     result <- array(0, dim = out_dims)
 
     spatial_indices <- array(0, dim = out_dims[1:3])
-    idx <- 1
     for (kk in seq_along(k)) {
       for (jj in seq_along(j)) {
         for (ii in seq_along(i)) {
@@ -441,6 +473,8 @@ setMethod(
     spatial_vec <- as.vector(spatial_indices)
     mask_indices <- lookup(x@map, spatial_vec)
     valid_mask_idx <- unique(mask_indices[mask_indices > 0])
+    col_map <- match(mask_indices, valid_mask_idx, nomatch = 0L)
+    inside_mask <- col_map > 0L
 
     if (length(valid_mask_idx) > 0) {
       basis_sub <- basis_mat(x, i = l)
@@ -452,14 +486,11 @@ setMethod(
       }
 
       for (t_idx in seq_along(l)) {
-        slice_3d <- array(0, dim = out_dims[1:3])
-        for (v_idx in seq_along(valid_mask_idx)) {
-          positions <- which(mask_indices == valid_mask_idx[v_idx])
-          if (length(positions) > 0) {
-            slice_3d[positions] <- values[t_idx, v_idx]
-          }
+        slice_vec <- numeric(length(mask_indices))
+        if (any(inside_mask)) {
+          slice_vec[inside_mask] <- as.numeric(values[t_idx, col_map[inside_mask], drop = TRUE])
         }
-        result[, , , t_idx] <- slice_3d
+        result[, , , t_idx] <- array(slice_vec, dim = out_dims[1:3])
       }
     }
 

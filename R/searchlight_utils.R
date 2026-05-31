@@ -15,6 +15,11 @@
 #' @keywords internal
 compute_local_gram <- function(loadings, neighborhoods, simplify = FALSE) {
   L <- loadings_mat(loadings)
+  neighborhoods <- .validate_searchlight_neighborhoods(
+    neighborhoods,
+    n_voxels = nrow(L),
+    context = "compute_local_gram"
+  )
   k <- ncol(L)
   out <- vector("list", length(neighborhoods))
   for (i in seq_along(neighborhoods)) {
@@ -22,7 +27,7 @@ compute_local_gram <- function(loadings, neighborhoods, simplify = FALSE) {
     Li <- L[idx, , drop = FALSE]
     out[[i]] <- Matrix::crossprod(Li)
   }
-  if (simplify && length(out) > 0 && all(vapply(out, function(m) all(dim(m) == c(k, k)), logical(1)))) {
+  if (simplify && length(out) > 0) {
     arr <- array(NA_real_, dim = c(k, k, length(out)))
     for (i in seq_along(out)) arr[, , i] <- as.matrix(out[[i]])
     return(arr)
@@ -51,6 +56,22 @@ compute_local_gram <- function(loadings, neighborhoods, simplify = FALSE) {
 latent_searchlight <- function(basis, loadings, neighborhoods, fun, ...) {
   B <- basis_mat(basis)
   L <- loadings_mat(loadings)
+  if (ncol(B) != ncol(L)) {
+    .encoder_cli_abort(
+      paste0("latent_searchlight requires ncol(basis) == ncol(loadings); got ",
+             ncol(B), " and ", ncol(L), "."),
+      class = "fmrilatent_error_dimension_mismatch"
+    )
+  }
+  neighborhoods <- .validate_searchlight_neighborhoods(
+    neighborhoods,
+    n_voxels = nrow(L),
+    context = "latent_searchlight"
+  )
+  if (!is.function(fun)) {
+    .encoder_cli_abort("fun must be a function.",
+                       class = "fmrilatent_error_invalid_argument")
+  }
   out <- vector("list", length(neighborhoods))
   for (i in seq_along(neighborhoods)) {
     idx <- neighborhoods[[i]]
@@ -59,4 +80,40 @@ latent_searchlight <- function(basis, loadings, neighborhoods, fun, ...) {
     out[[i]] <- fun(B, L_V, M_V, idx, ...)
   }
   out
+}
+
+.validate_searchlight_neighborhoods <- function(neighborhoods, n_voxels, context) {
+  if (!is.list(neighborhoods)) {
+    .encoder_cli_abort(
+      paste0(context, " requires neighborhoods to be a list of voxel index vectors."),
+      class = "fmrilatent_error_invalid_argument"
+    )
+  }
+  lapply(seq_along(neighborhoods), function(i) {
+    idx <- neighborhoods[[i]]
+    if (!is.numeric(idx)) {
+      .encoder_cli_abort(
+        sprintf("%s neighborhood %d must be numeric indices.", context, i),
+        class = "fmrilatent_error_invalid_index"
+      )
+    }
+    if (length(idx) == 0L) {
+      return(integer())
+    }
+    if (anyNA(idx) || any(!is.finite(idx)) || any(idx != floor(idx))) {
+      .encoder_cli_abort(
+        sprintf("%s neighborhood %d contains missing or non-integer indices.", context, i),
+        class = "fmrilatent_error_invalid_index"
+      )
+    }
+    idx <- as.integer(idx)
+    if (any(idx < 1L | idx > n_voxels)) {
+      .encoder_cli_abort(
+        sprintf("%s neighborhood %d contains indices outside [1, %d].",
+                context, i, n_voxels),
+        class = "fmrilatent_error_invalid_index"
+      )
+    }
+    idx
+  })
 }

@@ -13,6 +13,9 @@ save_hierarchical_template(template, file, compress = "xz")
 
 \item{compress}{Compression passed to saveRDS (default "xz")}
 }
+\value{
+The path in `file`, invisibly.
+}
 \description{
 Save a hierarchical template to disk
 }

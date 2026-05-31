@@ -96,6 +96,10 @@ test_that("conductance helpers reject malformed inputs and conflicting roughness
     awpt_mean_conductance(list(matrix(1:6, nrow = 2))),
     "square"
   )
+  expect_error(
+    awpt_mean_conductance(list(matrix(c(0, 1, 0, 0), nrow = 2, byrow = TRUE))),
+    class = "fmrilatent_error_not_symmetric"
+  )
 
   reduction <- make_cluster_reduction(.make_awpt_mask_robust(2), c(1L, 2L))
   expect_error(

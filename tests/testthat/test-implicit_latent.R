@@ -554,6 +554,38 @@ test_that("implicit_latent integrates with slepian_st pattern", {
   expect_equal(nrow(reco_sub), 2)
 })
 
+test_that("reconstruct_array.ImplicitLatent preserves LogicalNeuroVol geometry", {
+  mask_arr <- array(TRUE, dim = c(2, 2, 1))
+  spacing <- c(2, 3, 4)
+  origin <- c(10, 20, 30)
+  mask_vol <- neuroim2::LogicalNeuroVol(
+    mask_arr,
+    neuroim2::NeuroSpace(dim(mask_arr), spacing = spacing, origin = origin)
+  )
+  values <- matrix(seq_len(3L * sum(mask_arr)), nrow = 3L)
+  decoder <- function(time_idx = NULL, roi_mask = NULL, levels_keep = NULL, ...) {
+    out <- values
+    if (!is.null(time_idx)) {
+      out <- out[as.integer(time_idx), , drop = FALSE]
+    }
+    if (!is.null(roi_mask)) {
+      out <- roi_subset_columns(out, as.array(mask_vol), roi_mask)
+    }
+    out
+  }
+  obj <- implicit_latent(
+    coeff = values,
+    decoder = decoder,
+    meta = list(family = "geometry_test"),
+    mask = mask_vol
+  )
+
+  rec <- reconstruct_array(obj)
+  expect_s4_class(rec, "DenseNeuroVec")
+  expect_equal(neuroim2::spacing(neuroim2::space(rec)), spacing)
+  expect_equal(neuroim2::origin(neuroim2::space(rec)), origin)
+})
+
 # =============================================================================
 # Tests for %||% operator behavior (internal to the module)
 # =============================================================================

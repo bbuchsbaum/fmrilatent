@@ -1,16 +1,19 @@
 # Discrete Cosine Transform (DCT-II) temporal basis and handle
 
-#' Build an orthonormal DCT-II basis matrix
+#' Build a DCT-II temporal basis matrix
 #'
 #' @param n_time Number of time points.
 #' @param k      Number of components (columns); must satisfy k <= n_time.
-#' @param norm   Normalization: "ortho" (default) or "none".
-#' @return Dense Matrix (n_time x k).
+#' @param norm   Normalization: `"ortho"` (default) gives orthonormal columns;
+#'   `"none"` returns raw cosine columns with non-unit L2 norms.
+#' @return Dense Matrix (`n_time x k`). Columns are orthonormal only when
+#'   `norm = "ortho"`; with `norm = "none"` they are unnormalized DCT-II
+#'   cosine columns.
 #' @keywords internal
 build_dct_basis <- function(n_time, k = n_time, norm = c("ortho", "none")) {
   norm   <- match.arg(norm)
-  n_time <- as.integer(n_time)
-  k      <- as.integer(k)
+  n_time <- .validate_positive_count(n_time, "n_time")
+  k      <- .validate_positive_count(k, "k")
 
   if (k > n_time) {
     .encoder_cli_abort(
@@ -51,8 +54,14 @@ build_dct_basis <- function(n_time, k = n_time, norm = c("ortho", "none")) {
 dct_basis_handle <- function(n_time, k, norm = c("ortho", "none"),
                              id = NULL, label = NULL) {
   norm   <- match.arg(norm)
-  n_time <- as.integer(n_time)
-  k      <- as.integer(k)
+  n_time <- .validate_positive_count(n_time, "n_time")
+  k      <- .validate_positive_count(k, "k")
+  if (k > n_time) {
+    .encoder_cli_abort(
+      paste0("k (", k, ") cannot exceed n_time (", n_time, ")."),
+      class = "fmrilatent_error_invalid_count"
+    )
+  }
 
   if (is.null(id)) {
     id <- sprintf("dct-%d-%d-%s", n_time, k, norm)
