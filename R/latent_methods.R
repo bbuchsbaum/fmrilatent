@@ -618,6 +618,7 @@ setMethod(
 #' @param x A \code{LatentNeuroVec} object.
 #' @param ... Ignored.
 #' @return A numeric matrix with rows = time points, columns = mask voxels.
+#' @aliases as.matrix,BilatNeuroSurfaceVector-method
 #' @export
 #' @rdname as.matrix-LatentNeuroVec-method
 setMethod(

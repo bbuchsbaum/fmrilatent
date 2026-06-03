@@ -1,0 +1,8 @@
+bd-01KSX3SQVNFYH3TMRXE6ZF169B	2	[DOCS-1] Ten exported man pages lack a \value section (CRAN NOTE)
+bd-01KSX3T8SEVZ2DBST6YYVKY7R5	2	[DOCS-2] Runnable examples needlessly hidden behind \dontrun{} (CRAN policy)
+bd-01KSX3TS7HKMFK6QFR2AFZC798	3	[DOCS-3] Spec-constructor docs thin and merged: basis_slepian/basis_pca/basis_flat
+bd-01KSX3V66KXQWE6G09ACJ2QYVJ	3	[DOCS-4] latent_factory(family=) documents only 5 of ~19 accepted names
+bd-01KSX3VSJGN4FKMWY78WA8DVA9	3	[DOCS-5] Stale comment and incomplete @include: validator dependencies misattributed in encode_spec.R
+bd-01KSX3WEW64E7QBBGVM40YKYQE	3	[DOCS-6] Inconsistent @param data contract across lift methods and handle constructors
+bd-01KSX3WXZ9QQQMRA9Q10YD9QA5	3	[DOCS-7] basis_spec whiten silently ignored inside lift() -- undocumented caller responsibility
+bd-01KSX3XB5F2MK3DDBNZKC8V2XK	3	[DOCS-8] build_dct_basis() doc claims unconditional orthonormality

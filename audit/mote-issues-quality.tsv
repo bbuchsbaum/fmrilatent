@@ -1,0 +1,12 @@
+bd-01KSX3SPYC3DD07GZ5XE4SNZVN	2	[QUAL-1] HierarchicalBasisTemplate missing setValidity for cross-slot invariants
+bd-01KSX3T6Q4FR5NGP078PN27Q88	2	[QUAL-2] Silent rank reduction in orthonormalization emits no diagnostic
+bd-01KSX3TSXT0SJGY5GVD42V03CS	3	[QUAL-3] Missing input validation defers failure to opaque downstream errors (rollup)
+bd-01KSX3V687ES448DVT7VSVMXR0	3	[QUAL-4] Misleading error when transport contract list has no required fields
+bd-01KSX3VN8WBY3RX0MMYRPT44QD	3	[QUAL-5] is_explicit_latent dispatch failure swallows informative error
+bd-01KSX3W245GX0AH75R716QXK10	3	[QUAL-6] Validity check short-circuits dimension cross-checks on unrelated early errors
+bd-01KSX3WB6J47TW4QEQ0DBMSTYB	3	[QUAL-7] Redundant first validation pass discarded then repeated in shared_structure
+bd-01KSX3WPFQ5DYFMC5FVMV79CG4	3	[QUAL-8] Local variables shadow generics/base functions (rollup)
+bd-01KSX3X4VSBGTTVBQ8DS1HZCKY	3	[QUAL-9] Dead variables left by refactoring (rollup)
+bd-01KSX3XFVCPBAXDWQ9CW0W1SBE	3	[QUAL-10] k_time is a required argument that is silently ignored
+bd-01KSX3XWB03MPG9A0S6WEYCHAS	3	[QUAL-11] sapply() used where type-stable vapply() is the package convention
+bd-01KSX3Y5WHA9KM8TBCWVKDP6G4	3	[QUAL-12] Duplicated identical basis_mat/loadings_mat method bodies

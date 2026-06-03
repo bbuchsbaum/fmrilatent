@@ -5,11 +5,16 @@
 #' @importFrom methods setMethod
 NULL
 
-.require_neurosurf <- function(context = "surface support") {
+.require_neurosurf <- function(context = "surface support", domain = NULL) {
+  if (!is.null(domain) &&
+      !is.null(attr(domain, "fmrilatent.surface_n_nodes", exact = TRUE))) {
+    return(invisible(TRUE))
+  }
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
     .encoder_cli_abort(paste0(context, " requires the 'neurosurf' package."),
                        class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
   }
+  invisible(TRUE)
 }
 
 #' Build a shared surface basis template
@@ -29,14 +34,14 @@ NULL
 surface_basis_template <- function(geometry, loadings, support = NULL, roughness = NULL,
                                    measure = NULL, ridge = 1e-8,
                                    label = "surface_basis", meta = list()) {
-  .require_neurosurf("surface_basis_template")
   if (!(methods::is(geometry, "SurfaceGeometry") || methods::is(geometry, "SurfaceSet"))) {
     .encoder_cli_abort(
       "geometry must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet.",
       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
+  .require_neurosurf("surface_basis_template", domain = geometry)
 
-  n_nodes <- length(neurosurf::nodes(geometry))
+  n_nodes <- .surface_node_count(geometry, context = "surface_basis_template geometry")
   if (is.null(support)) {
     support <- seq_len(n_nodes)
   }

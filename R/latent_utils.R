@@ -75,6 +75,29 @@ mask_to_array <- function(mask, location = "unknown function") {
   neuroim2::NeuroSpace(c(dim(mask_arr), as.integer(n_time)))
 }
 
+.surface_node_count <- function(domain, context = "surface domain") {
+  test_n <- attr(domain, "fmrilatent.surface_n_nodes", exact = TRUE)
+  if (!is.null(test_n)) {
+    if (length(test_n) != 1L || is.na(test_n) || test_n < 1L) {
+      .encoder_cli_abort(
+        paste0(context, " test node count must be a positive scalar."),
+        class = "fmrilatent_error_invalid_geometry",
+        call = rlang::caller_env()
+      )
+    }
+    return(as.integer(test_n))
+  }
+
+  if (!requireNamespace("neurosurf", quietly = TRUE)) {
+    .encoder_cli_abort(
+      paste0(context, " requires the 'neurosurf' package."),
+      class = "fmrilatent_error_missing_dependency",
+      call = rlang::caller_env()
+    )
+  }
+  length(neurosurf::nodes(domain))
+}
+
 .assert_template_mask_match <- function(mask, template_mask, location = "unknown function") {
   supplied_mask_arr <- .mask_to_array(mask, location)
   template_mask_arr <- as.array(template_mask)

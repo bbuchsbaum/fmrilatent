@@ -1,0 +1,39 @@
+bd-01KSX3S0CAJN0NEMW6MWTAZGS8	0	[C1] Haar wavelet block ordering: scalings are z-inner, data is Morton — wrong normalization on real masks
+bd-01KSX3SPJY9S1P8JGK04FFQGB4	0	[C2] Normalized Laplacian scales rows twice instead of rows-then-columns
+bd-01KSX3T3CXN5TZGRV98PDV406Q	0	[C3] B-spline interior-knot formula has inverted intercept correction — k+-1 columns
+bd-01KSX3TFK8Z0TKPT7VWBBPDB51	0	[C4] DCT/Haar/B-spline kernels: k<=0 / n_time<=0 not guarded — seq.int returns wrong-length vector
+bd-01KSX3TS6Z7XFQ1G34XCDZJS9X	0	[C5] latent_dct_heatwavelet builds NeuroSpace without spacing/origin — fails on every real fMRI mask
+bd-01KSX3V3W8XVX8ZJDF8CDVE6T8	1	[H1] AWPT last-scale filter emits low-pass smoother — filter bank is not a partition of unity
+bd-01KSX3VK0SBPGZP7XJ8HR8JB5P	1	[H2] AWPT scale weights cycled across columns instead of per-scale block
+bd-01KSX3VX9SBE86W6Y1J6YJZP07	1	[H3] Eigen fallback in .symmetric_matrix_factor computes the wrong matrix square root
+bd-01KSX3W8X2TEBBS5F0JM3HKEPC	1	[H4] concat() silently discards offsets from all objects except the first
+bd-01KSX3WJFS7B22WTK6J5SWCFZX	1	[H5] project_hierarchical returns OLS coefficients incompatible with stored analysis loadings
+bd-01KSX3WW543AGS5290FW2Q3T0P	1	[H6] gram_factor slot 'ANY' stores incompatible factorizations; QR fallback breaks Matrix::solve()
+bd-01KSX3X5CG2SN3ETB6DYZHKYJX	1	[H7] is_explicit_latent decoder validation omits levels_keep — every prediction crashes for compliant decoders
+bd-01KSX3XCRV8ZHQRVDVK9C80R3M	1	[H8] neuroarchive_handoff_contract stores manifest lists instead of template objects
+bd-01KSX3XMV21CRB23HP6B19RNHZ	1	[H9] make_cluster_reduction: NA cluster ids silently dropped from cluster_ids but kept in map
+bd-01KSX3XYXJT5VVBYSPM7FBFKJW	1	[H10] Inverted orthonormalize condition in spec_st bspline — always force-orthonormalizes
+bd-01KSX3Y8BQE7YM3MM1R9AZQBR3	1	[H11] wavelet_active t(apply()) transposes coeffs when exactly one voxel is masked
+bd-01KSX3YG5W66S93RH6Z8AB7NE8	1	[H12] plot_spatial_atom ggplot2 branch never displays the plot
+bd-01KSX3YSCD69C4JDBP5EXZS4K9	1	[H13] k_neighbors not clamped before rgsp::graph_knn — opaque crash on small parcels
+bd-01KSX3Z2PFNQBMQ03TG4G7CASW	1	[H14] inverse_lift_rcpp scalar root_coeff truncates the multi-block root vector
+bd-01KSX3ZHGM08A37Q9ZTCEC4JWJ	1	[H15] Validators accept integer-overflowing counts — NA_integer_ reaches C++
+bd-01KSX3ZSJF1G1C4WACXK7Y4Q43	1	[H16] Heat-wavelet NULL-reduction default creates one singleton cluster per voxel
+bd-01KSX408C9H4YQHG1Y8XVYM0NG	1	[H17] eigs() used instead of eigs_sym() for symmetric Laplacian
+bd-01KSX40H424VY1HAFS7WZ8J7BR	1	[H18] gather() unconditionally discards Poisson samples for small components
+bd-01KSX40S327C8NZJP00CV2YNWT	1	[H19] benchmark_roundtrip unit conversion off by 10^9 (seconds treated as nanoseconds)
+bd-01KSX416B8RZRWVGBRB310M88Y	2	[M-noise] noise_scale computed from the wrong (untrimmed / pre-projection) value
+bd-01KSX41HZ28CCDJMPJXM2NEGJW	2	[M-symmetry] AWPT symmetry/normalization guards are vacuous or skipped
+bd-01KSX41ZXDCDK82QW6D80Y9BA0	2	[M-hrbf] HRBF orientation/index/projection inconsistencies
+bd-01KSX42KASKV3ECGC32X1SEE1R	2	[M-validate] Missing positivity/finiteness guards defer errors into internals
+bd-01KSX42Y37T704NJ6KGMDPZ2WP	2	[M-codepath] Validated/accepted arguments silently ignored
+bd-01KSX4391DXSV58S09JQCPRAEM	2	[M-roi] ROI/coordinate handling reimplemented or mis-shaped
+bd-01KSX43PH20RHPPKJDMK3VWP10	2	[M-diffusion] Diffusion-wavelet operator and cache defects
+bd-01KSX43YFYTCRVJZG804W2WX7N	2	[M-quad] AWPT FISTA objective double-counts the Gram term
+bd-01KSX44AKM16ZHGN0B5EJHCJ5Z	2	[M-dead] Misordered/dead validation guards yield base-R errors instead of classed conditions
+bd-01KSX44TKABENJSJPJ1E64EMJK	2	[M-misc] Other medium correctness gaps (Haar synthesis, reduction, HRBF projection, searchlight)
+bd-01KSX456RQV0XCW38TA347M6KM	3	[LOW] Dead/vacuous conditions cleanup (correctness)
+bd-01KSX45G68H52TDSS371F2FZPT	3	[LOW] Condition-object hygiene cleanup (correctness)
+bd-01KSX45VV15CCBV7T6P1AEDTDT	3	[LOW] Missing diagnostic/early-validation in plotting, registry, and helpers (correctness)
+bd-01KSX4670NGKXN113E3PMM0M0Y	3	[LOW] Defensive C++ gaps (require malformed direct .Call to trigger)
+bd-01KSX46JJ32E3MJV7P5QSJWK6C	3	[LOW] Edge-case-only correctness gaps (degenerate inputs, dead branches)

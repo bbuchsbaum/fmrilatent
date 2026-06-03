@@ -1,0 +1,4 @@
+bd-01KSX3T6RK2Q09HRJ8WXCDZMFA	2	[TEST-1] Transport solvers (519-line numerical core) have no path-isolated equivalence or conditioning tests
+bd-01KSX3TRH43QC8JQF0JJYHD30V	2	[TEST-2] Shared encoder validators are nearly untested; NA/Inf/non-integer and scalar/flag branches have zero assertions
+bd-01KSX3V7X3Q10EFEHN6GJ0QA4D	2	[TEST-3] Shared encoder utilities: empty-cluster sparse-dictionary branches and basis-synthesis contract are untested
+bd-01KSX3VZ2K94JD9CQMK240XXV6	3	[TEST-4] BOLDZip texture-fit internals exercised only through end-to-end RMSE round trip

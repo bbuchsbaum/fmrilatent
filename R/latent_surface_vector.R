@@ -3,11 +3,17 @@
 #' @importFrom methods setMethod setValidity
 NULL
 
-.require_neurosurf_surface_latent <- function(context = "LatentNeuroSurfaceVector") {
+.require_neurosurf_surface_latent <- function(context = "LatentNeuroSurfaceVector",
+                                             domain = NULL) {
+  if (!is.null(domain) &&
+      !is.null(attr(domain, "fmrilatent.surface_n_nodes", exact = TRUE))) {
+    return(invisible(TRUE))
+  }
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
     .encoder_cli_abort(paste0(context, " requires the 'neurosurf' package."),
                        class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
   }
+  invisible(TRUE)
 }
 
 #' Construct a LatentNeuroSurfaceVector
@@ -23,12 +29,12 @@ NULL
 #' @export
 LatentNeuroSurfaceVector <- function(basis, loadings, geometry, support = NULL,
                                      offset = NULL, label = "", meta = list()) {
-  .require_neurosurf_surface_latent()
   if (!(methods::is(geometry, "SurfaceGeometry") || methods::is(geometry, "SurfaceSet"))) {
     .encoder_cli_abort(
       "'geometry' must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet object.",
       class = "fmrilatent_error_type", call = rlang::caller_env())
   }
+  .require_neurosurf_surface_latent(domain = geometry)
   if (!is.matrix(basis) && !inherits(basis, c("Matrix", "BasisHandle"))) {
     .encoder_cli_abort("'basis' must be a matrix, Matrix, or BasisHandle object",
                        class = "fmrilatent_error_type", call = rlang::caller_env())
@@ -38,7 +44,7 @@ LatentNeuroSurfaceVector <- function(basis, loadings, geometry, support = NULL,
                        class = "fmrilatent_error_type", call = rlang::caller_env())
   }
 
-  n_nodes <- length(neurosurf::nodes(geometry))
+  n_nodes <- .surface_node_count(geometry, context = "LatentNeuroSurfaceVector geometry")
   if (is.null(support)) {
     support <- seq_len(n_nodes)
   }
@@ -238,7 +244,7 @@ setMethod("basis_asset", "LatentNeuroSurfaceVector", function(x, ...) .explicit_
     if (!(methods::is(object@geometry, "SurfaceGeometry") || methods::is(object@geometry, "SurfaceSet"))) {
       errors <- c(errors, "Slot @geometry must be a neurosurf SurfaceGeometry or SurfaceSet.")
     } else {
-      n_nodes <- length(neurosurf::nodes(object@geometry))
+      n_nodes <- .surface_node_count(object@geometry, context = "LatentNeuroSurfaceVector geometry")
       if (any(object@support < 1L | object@support > n_nodes)) {
         errors <- c(errors, "Slot @support contains invalid vertex indices.")
       }

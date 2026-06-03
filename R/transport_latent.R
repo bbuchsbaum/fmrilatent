@@ -530,7 +530,8 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   if (is.logical(roi_mask) && is.null(dim(roi_mask))) {
     keep <- if (length(roi_mask) == length(support_idx)) {
       roi_mask
-    } else if (.is_surface_domain(domain) && length(roi_mask) == length(neurosurf::nodes(domain))) {
+    } else if (.is_surface_domain(domain) &&
+               length(roi_mask) == .surface_node_count(domain, context = context)) {
       roi_mask[support_idx]
     } else {
       .encoder_cli_abort(paste0(context, " logical roi_mask has incompatible length."),

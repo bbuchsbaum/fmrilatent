@@ -1,5 +1,5 @@
 <!-- Parent: ../AGENTS.md -->
-<!-- Generated: 2026-02-10 | Updated: 2026-02-10 -->
+<!-- Generated: 2026-02-10 | Updated: 2026-06-03 -->
 
 # vignettes/
 
@@ -11,20 +11,28 @@ R Markdown vignettes providing narrative documentation and tutorials for the fmr
 
 | File | Description |
 |------|-------------|
-| `intro.Rmd` | Introduction to fmrilatent: core concepts, LatentNeuroVec construction, basic usage |
+| `fmrilatent.Rmd` | Introduction to fmrilatent: core concepts, core workflows, and article map |
 | `encode-factory.Rmd` | Guide to the `encode()` pipeline and `latent_factory()` convenience API |
-| `albers.css` | Custom CSS for Albers color theme (used by pkgdown) |
-| `albers.js` | Custom JS for Albers theme interactivity |
+| `working-with-latentneurovec.Rmd` | Object access, slicing, reconstruction, and matrix contracts |
+| `choosing-basis-family.Rmd` | Basis-family trade-offs on a compact toy dataset |
+| `shared-spatial-dictionaries.Rmd` | Shared parcel and spatial dictionary workflows |
+| `transport-aware-encoding.Rmd` | Transport-aware shared-asset and subject decoder workflows |
+| `boldzip.Rmd`, `standalone-codecs.Rmd`, `shared-structure-boldzip.Rmd`, `compression-diagnostics.Rmd` | BOLDZip-SR and codec documentation |
+| `explicit-vs-implicit-latents.Rmd` | Explicit versus implicit latent object model |
+| `albers-header.html` | Vignette header hook that loads local Albers theme assets |
+| `albers.css` | Local CSS for the Albers theme |
+| `albers.js` | Local JS for Albers theme interactivity |
 
 ## For AI Agents
 
 ### Working In This Directory
 
 - Vignettes use `knitr` and `rmarkdown` for rendering
-- Test locally: `Rscript -e "rmarkdown::render('vignettes/intro.Rmd')"`
+- Test one vignette locally: `Rscript -e "rmarkdown::render('vignettes/fmrilatent.Rmd')"`
 - Keep code chunks small and fast (vignettes run during `R CMD check`)
 - Use `eval = FALSE` for expensive or data-dependent examples
-- CSS/JS files are shared with the pkgdown site theme
+- Vignette YAML uses `includes: in_header: albers-header.html`; keep local `albers.css` and `albers.js` in sync with README and pkgdown theme notes
+- `albersdown` is a vignette dependency and should remain declared in `DESCRIPTION` when vignettes call `albersdown::`
 
 ### Testing Requirements
 

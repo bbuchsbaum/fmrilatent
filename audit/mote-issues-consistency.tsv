@@ -1,0 +1,14 @@
+bd-01KSX3SANHNQ9ZMWX0VPN1Y4M5	1	[HIGH] codec_boldzip family bypasses classed-condition convention
+bd-01KSX3SVFV5CE9WTRZWRN8TFXF	2	[MEDIUM] Decoder roi_mask branch bypasses .normalize_roi_mask
+bd-01KSX3T71RGH8ATSSQF8XG65RH	2	[MEDIUM] encode() and core-constructor validation use bare stop()
+bd-01KSX3TFP4G9JFYK7H22STA35X	2	[MEDIUM] Optional-dependency guards use bare stop()
+bd-01KSX3TTHRRG1NPJ69KBRZ50QN	3	[LOW] Bare stop() stragglers across validators, encoders, and plot helpers
+bd-01KSX3V2XEPZ209Y66MYMBRZDD	3	[LOW] Cholesky fallback uses bare message() instead of classed .encoder_cli_warn()
+bd-01KSX3VRP1P0MXGAJXKRYG8GGH	3	[LOW] C++ boundary aborts are unclassed while R layer uses classed conditions
+bd-01KSX3WDNVQJ5W3MWQNEXTXMFN	3	[LOW] spec_* sibling constructors disagree on argument contracts (API drift)
+bd-01KSX3WVYYQ9ZNAT2S87BRK1Y7	3	[LOW] encode_spec methods and accessor generics have divergent signatures
+bd-01KSX3XDGHCYDQ2VPSRM4PTAJR	3	[LOW] Public name surfaces and return types not aligned (registry vs factory, spec_st asymmetry)
+bd-01KSX3XQ0EGSEVYWCCYJ94BKK5	3	[LOW] *_loadings_handle constructors: only slepian gives basis_spec a default
+bd-01KSX3XZC3GW1F2WM22YDJ6YAJ	3	[LOW] save_template SurfaceBasisTemplate method ignores generic xz compress default
+bd-01KSX3Y9J8VE1BCGV25F4GPGX6	3	[LOW] encode_awpt records lambda = spatial_lambda in meta, conflating two parameters
+bd-01KSX3YJM18B87Z6P1H8P1XC3B	3	[LOW] DESCRIPTION says 'offsets' (plural), diverging from single per-voxel offset model

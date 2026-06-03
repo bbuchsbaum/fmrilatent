@@ -223,13 +223,18 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
   )
 }
 
-.awpt_require_neurosurf <- function(context = "surface AWPT") {
+.awpt_require_neurosurf <- function(context = "surface AWPT", domain = NULL) {
+  if (!is.null(domain) &&
+      !is.null(attr(domain, "fmrilatent.surface_n_nodes", exact = TRUE))) {
+    return(invisible(TRUE))
+  }
   if (!requireNamespace("neurosurf", quietly = TRUE)) {
     .encoder_cli_abort(
       paste0(context, " requires the 'neurosurf' package."),
       class = "fmrilatent_error_missing_dependency"
     )
   }
+  invisible(TRUE)
 }
 
 .awpt_normalize_surface_support <- function(support, geometry, context = "surface support") {
@@ -249,7 +254,7 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
       class = "fmrilatent_error_invalid_support"
     )
   }
-  n_nodes <- length(neurosurf::nodes(geometry))
+  n_nodes <- .surface_node_count(geometry, context = context)
   if (any(support > n_nodes)) {
     .encoder_cli_abort(
       paste0(context, " contains indices beyond the geometry node count ", n_nodes, "."),
@@ -294,7 +299,7 @@ basis_awpt_wavelet <- function(scales = c(1, 2, 4, 8), order = 30L, threshold = 
 
 .surface_awpt_loadings <- function(geometry, support, basis_spec,
                                    centers = NULL, threshold = 1e-6) {
-  .awpt_require_neurosurf("awpt_surface_basis_template")
+  .awpt_require_neurosurf("awpt_surface_basis_template", domain = geometry)
   support <- .awpt_normalize_surface_support(
     support,
     geometry = geometry,
@@ -602,13 +607,13 @@ awpt_surface_basis_template <- function(geometry,
                                         center = FALSE,
                                         ridge = 1e-8,
                                         label = "surface_awpt_wavelet") {
-  .awpt_require_neurosurf("awpt_surface_basis_template")
   if (!(methods::is(geometry, "SurfaceGeometry") || methods::is(geometry, "SurfaceSet"))) {
     .encoder_cli_abort(
       "geometry must be a neurosurf::SurfaceGeometry or neurosurf::SurfaceSet.",
       class = "fmrilatent_error_invalid_geometry"
     )
   }
+  .awpt_require_neurosurf("awpt_surface_basis_template", domain = geometry)
   supplied_sources <- sum(!vapply(
     list(anatomical_operator, conductance, coefficient_roughness),
     is.null,
@@ -621,7 +626,7 @@ awpt_surface_basis_template <- function(geometry,
     )
   }
 
-  n_nodes <- length(neurosurf::nodes(geometry))
+  n_nodes <- .surface_node_count(geometry, context = "awpt_surface_basis_template geometry")
   if (is.null(support)) {
     support <- seq_len(n_nodes)
   }

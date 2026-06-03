@@ -7,6 +7,7 @@
 \alias{as.matrix,BilatLatentNeuroSurfaceVector-method}
 \alias{as.matrix,BlockLatentNeuroVector-method}
 \alias{as.matrix,LatentNeuroVec-method}
+\alias{as.matrix,BilatNeuroSurfaceVector-method}
 \title{Reconstruct LatentNeuroVec as a matrix (time x voxels)}
 \usage{
 \S4method{as.matrix}{LatentNeuroSurfaceVector}(x, ...)

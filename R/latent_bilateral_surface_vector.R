@@ -23,6 +23,9 @@ NULL
   out
 }
 
+.bilat_neurosurfacevector_registry <- new.env(parent = emptyenv())
+.bilat_neurosurfacevector_registry$as_matrix <- FALSE
+
 .require_bilat_neurosurfacevector_class <- function(context) {
   caller <- rlang::caller_env()
   tryCatch(
@@ -37,10 +40,14 @@ NULL
   )
 }
 
-if (requireNamespace("neurosurf", quietly = TRUE)) {
-  .require_bilat_neurosurfacevector_class("bilateral surface support")
-  methods::setMethod("as.matrix", "BilatNeuroSurfaceVector",
-                     .bilat_neurosurfacevector_as_matrix)
+.register_bilat_neurosurfacevector_methods <- function(context) {
+  .require_bilat_neurosurfacevector_class(context)
+  if (!isTRUE(.bilat_neurosurfacevector_registry$as_matrix)) {
+    methods::setMethod("as.matrix", "BilatNeuroSurfaceVector",
+                       .bilat_neurosurfacevector_as_matrix)
+    .bilat_neurosurfacevector_registry$as_matrix <- TRUE
+  }
+  invisible(TRUE)
 }
 
 #' Construct a bilateral surface latent object

@@ -1,0 +1,10 @@
+bd-01KSX3SQJT9VVJXAJ4TM3M21CX	1	[PERF-1] Spatial-wavelet handle constructors run lift() before checking cache
+bd-01KSX3TJG0J7RPJXQF7S83AX6M	2	[PERF-2] Premature dense materialization of sparse/lazy matrices (9 sites)
+bd-01KSX3TYH1QBMEXHYFVXVCEB06	2	[PERF-3] Redundant recomputation: HRBF basis built twice and Gram re-factored per subject
+bd-01KSX3VBQQEBZTD3CJPY95GTFV	2	[PERF-4] Avoidable dense/O(n^2) allocations on inactive or guarded paths
+bd-01KSX3VRT3B06Y5AMKZVD6JCPQ	2	[PERF-5] Quadratic/nested-loop scaling in indexing and event rendering
+bd-01KSX3W8YQBHHHZCV2T30RCXE8	2	[PERF-6] Laplacian eigensolver targets singularity (SM mode on PSD matrix)
+bd-01KSX3WN3DN6X8ESHBSKEXCKAS	2	[PERF-7] C++ Gaussian HRBF atom: no distance cutoff causes ~10^9 transcendental calls
+bd-01KSX3X1Y2Y6TS9YHVBDRPHSZ8	3	[PERF-8] S4 validity functions materialize bases on every validObject()
+bd-01KSX3XR8J31VWQ9BNZS82SC1V	3	[PERF-9] Redundant self-comparison and unconditional densify in validators (5 sites)
+bd-01KSX3Y6G9GFCKQ7P973RT68VE	3	[PERF-10] Minor compute waste: hoistable constant, double power-iteration, premature Gram guard, epsilon threshold

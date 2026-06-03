@@ -1,0 +1,5 @@
+bd-01KSX3S61ZEX5BKSHWC07WHS3K	2	[A1] Lazy-handle mechanism is closed to extension and inverts dependency direction
+bd-01KSX3SRG4E0NPP47JM3BB891V	3	[A2] Two parallel cache subsystems must be kept manually in sync
+bd-01KSX3T8D861CM077447YH3BT8	3	[A3] The advertised encode_spec seam is not actually uniform
+bd-01KSX3TQM36AKQS0CWTJ282H2G	3	[A4] No unifying latent supertype; type system split across S4 and S3
+bd-01KSX3V9MT3XT2GEG2XYBY3K4W	3	[A5] latent_handles.R is a mixed-concern foundational catch-all including %||%

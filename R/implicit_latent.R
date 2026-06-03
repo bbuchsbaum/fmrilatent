@@ -67,7 +67,7 @@ NULL
 }
 
 .is_surface_domain <- function(domain) {
-  if (is.null(domain) || !requireNamespace("neurosurf", quietly = TRUE)) {
+  if (is.null(domain)) {
     return(FALSE)
   }
   methods::is(domain, "SurfaceGeometry") || methods::is(domain, "SurfaceSet")
@@ -87,7 +87,7 @@ NULL
                        class = "fmrilatent_error_invalid_support")
   }
   if (.is_surface_domain(domain)) {
-    n_nodes <- length(neurosurf::nodes(domain))
+    n_nodes <- .surface_node_count(domain, context = context)
     if (any(support > n_nodes)) {
       .encoder_cli_abort(
         paste0(context, " contains indices beyond the domain node count ", n_nodes, "."),
