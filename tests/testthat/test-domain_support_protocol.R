@@ -152,10 +152,21 @@ test_that("LatentNeuroVec satisfies the domain/support protocol", {
   lv <- .make_lvec_dsp()
   mat <- reconstruct_matrix(lv)
   arr <- reconstruct_array(lv)
+  wrapped <- wrap_decoded(lv, mat)
 
   expect_equal(latent_domain(lv), neuroim2::space(mask(lv)))
   expect_equal(as.array(latent_support(lv)), as.array(mask(lv)))
-  expect_equal(wrap_decoded(lv, mat), arr)
+  expect_s4_class(wrapped, "DenseNeuroVec")
+  expect_equal(as.array(wrapped), arr)
+  expect_equal(dim(neuroim2::space(wrapped)), c(dim(mask(lv)), nrow(mat)))
+  expect_equal(
+    neuroim2::spacing(neuroim2::space(wrapped)),
+    neuroim2::spacing(latent_domain(lv))
+  )
+  expect_equal(
+    neuroim2::origin(neuroim2::space(wrapped)),
+    neuroim2::origin(latent_domain(lv))
+  )
 })
 
 test_that("ImplicitLatent satisfies the domain/support protocol", {
