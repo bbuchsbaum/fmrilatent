@@ -8,8 +8,9 @@ Spatial heat-wavelet spec (graph diffusion)
 spec_space_heat(
   scales = c(1, 2, 4, 8),
   order = 30L,
-  threshold = 1e-06,
-  k_neighbors = 6L
+  threshold = NULL,
+  k_neighbors = 6L,
+  sparsify_eps = NULL
 )
 ```
 
@@ -25,11 +26,16 @@ spec_space_heat(
 
 - threshold:
 
-  Threshold for small coefficients.
+  Deprecated alias for \`sparsify_eps\`.
 
 - k_neighbors:
 
   k-NN graph parameter.
+
+- sparsify_eps:
+
+  Non-negative threshold for small heat-wavelet coefficients. This is
+  stored as \`threshold\` for compatibility.
 
 ## Value
 

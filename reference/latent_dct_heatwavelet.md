@@ -1,15 +1,18 @@
-# Create a LatentNeuroVec with heat-wavelet spatial dictionary
+# Create a template LatentNeuroVec with heat-wavelet spatial loadings
 
-Creates a template LatentNeuroVec with heat-wavelet spatial loadings.
-The basis matrix is initialized to zeros and should be populated with
-actual coefficients (e.g., via encoding fMRI data).
+Builds a `LatentNeuroVec` whose loadings are a heat-wavelet
+`LoadingsHandle` and whose basis is a placeholder zero matrix of
+`n_time x k` (where `k` is determined by the heat-wavelet loadings, not
+by the caller). The caller is expected to overwrite `lvec@basis` with
+real coefficients (e.g. fitted from data) before the object represents a
+valid factorization.
 
 ## Usage
 
 ``` r
 latent_dct_heatwavelet(
   n_time,
-  k_time,
+  k_time = NULL,
   mask,
   cluster_map = NULL,
   reduction = NULL,
@@ -27,8 +30,9 @@ latent_dct_heatwavelet(
 
 - k_time:
 
-  Ignored (kept for backwards compatibility). The number of components
-  is determined by the heat-wavelet loadings.
+  Optional ignored legacy argument. The number of components is
+  determined by the heat-wavelet loadings. Supplying a non-NULL value
+  warns with class \`fmrilatent_warning_deprecated\`.
 
 - mask:
 
@@ -59,3 +63,12 @@ latent_dct_heatwavelet(
 ## Value
 
 A `LatentNeuroVec` with placeholder basis matrix.
+
+## Details
+
+Despite the name, no DCT basis is constructed: the "dct" reference
+predates the spec/encoder pipeline and is retained for API
+compatibility. For an encoded DCT-temporal + heat-wavelet-spatial
+pipeline see
+`spec_st(time = spec_time_dct(...), space = spec_space_heat(...))`
+passed to [`encode`](encode.md).

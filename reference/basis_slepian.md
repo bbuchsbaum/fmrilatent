@@ -1,27 +1,27 @@
-# Basis specifications (lightweight descriptors)
+# Create a Slepian basis specification
 
-Basis specifications (lightweight descriptors)
+\`basis_slepian()\` creates a lightweight descriptor for graph/Slepian
+basis construction during \`lift()\` or spatial encoding. It records the
+requested component count and Slepian flavor; the actual basis is
+computed later by a \`lift()\` method for the supplied reduction.
 
 ## Usage
 
 ``` r
 basis_slepian(k = 3, type = "laplacian")
-
-basis_pca(k = 3, whiten = FALSE)
-
-basis_flat()
 ```
 
 ## Arguments
 
 - k:
 
-  Number of components.
+  Positive integer number of Slepian components.
 
 - type:
 
-  Basis flavor (implementation-dependent).
+  Character scalar naming the Slepian basis flavor. The built-in spatial
+  methods use \`"laplacian"\`.
 
-- whiten:
+## Value
 
-  Whether to whiten PCA scores.
+A list with class \`spec_slepian\` containing \`k\` and \`type\`.

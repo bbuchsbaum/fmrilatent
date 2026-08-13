@@ -5,14 +5,15 @@ Temporal DCT spec
 ## Usage
 
 ``` r
-spec_time_dct(k, norm = c("ortho", "none"))
+spec_time_dct(k = NULL, norm = c("ortho", "none"))
 ```
 
 ## Arguments
 
 - k:
 
-  Components.
+  Optional number of components. If \`NULL\`, the encoder uses all
+  available DCT columns (\`k = n_time\`) at encode time.
 
 - norm:
 

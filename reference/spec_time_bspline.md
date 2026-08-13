@@ -6,7 +6,7 @@ Temporal B-spline spec
 
 ``` r
 spec_time_bspline(
-  k,
+  k = NULL,
   degree = 3L,
   include_intercept = FALSE,
   orthonormalize = TRUE
@@ -17,7 +17,8 @@ spec_time_bspline(
 
 - k:
 
-  Components (df).
+  Optional number of components (df). If \`NULL\`, the encoder uses
+  \`min(5, n_time)\` at encode time.
 
 - degree:
 

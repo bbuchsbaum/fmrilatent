@@ -40,3 +40,7 @@ diffusion_wavelet_latent(
 - label:
 
   Optional label.
+
+## Value
+
+A \`LatentNeuroVec\` object.

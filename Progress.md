@@ -58,9 +58,8 @@
 - Extend tests to medium masks and both kernels; add encode/decode
   tolerances with noise.
 
-- Generate/update man pages with
-  [`devtools::document()`](https://devtools.r-lib.org/reference/document.html)
-  once imports are stable.
+- Generate/update man pages with `devtools::document()` once imports are
+  stable.
 
 - Begin Slepian/DPSS phase:
 

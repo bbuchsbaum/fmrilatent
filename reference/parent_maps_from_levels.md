@@ -12,8 +12,8 @@ parent_maps_from_levels(levels)
 
 - levels:
 
-  List of integer label vectors (all same length), coarse→fine or
-  fine→coarse; order agnostic.
+  List of integer label vectors (all same length), coarse to fine or
+  fine to coarse; order agnostic.
 
 ## Value
 

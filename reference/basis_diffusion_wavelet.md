@@ -8,9 +8,11 @@ Diffusion wavelet basis specification
 basis_diffusion_wavelet(
   target_rank = 2000L,
   oversample = 20L,
-  threshold = 1e-05,
+  threshold = NULL,
   max_scales = 1L,
-  epsilon = NULL
+  epsilon = NULL,
+  seed = 1L,
+  sparsify_eps = NULL
 )
 ```
 
@@ -26,7 +28,7 @@ basis_diffusion_wavelet(
 
 - threshold:
 
-  Absolute value threshold to enforce sparsity in compressed ops.
+  Deprecated alias for \`sparsify_eps\`.
 
 - max_scales:
 
@@ -35,3 +37,16 @@ basis_diffusion_wavelet(
 - epsilon:
 
   Optional precision (unused in capped-rank path; kept for API parity).
+
+- seed:
+
+  Optional integer seed for deterministic randomized range finding.
+
+- sparsify_eps:
+
+  Absolute value threshold to enforce sparsity in compressed operators.
+  Stored as \`threshold\` for compatibility.
+
+## Value
+
+A \`spec_diffusion_wavelet\` basis specification descriptor.

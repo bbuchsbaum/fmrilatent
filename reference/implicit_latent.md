@@ -5,7 +5,14 @@ Construct an ImplicitLatent object
 ## Usage
 
 ``` r
-implicit_latent(coeff, decoder, meta, mask)
+implicit_latent(
+  coeff,
+  decoder,
+  meta,
+  mask = NULL,
+  domain = NULL,
+  support = NULL
+)
 ```
 
 ## Arguments
@@ -25,7 +32,20 @@ implicit_latent(coeff, decoder, meta, mask)
 
 - mask:
 
-  Logical 3D array (or LogicalNeuroVol) describing voxel support.
+  Logical 3D array (or LogicalNeuroVol) describing volumetric support.
+
+- domain:
+
+  Optional decoded output domain. For non-volumetric latent objects,
+  supply a domain such as a
+  [`neurosurf::SurfaceGeometry`](https://bbuchsbaum.github.io/neurosurf/reference/SurfaceGeometry.html)
+  together with `support`.
+
+- support:
+
+  Optional decoded output support. For volumetric latent objects this is
+  usually derived from `mask`; for surface-like latent objects it should
+  be a vector of vertex indices (or a logical mask over vertices).
 
 ## Value
 

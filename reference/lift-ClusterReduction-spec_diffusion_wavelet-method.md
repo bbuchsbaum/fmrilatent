@@ -21,7 +21,8 @@ lift(reduction, basis_spec, data = NULL, k_neighbors = 6L, ...)
 
 - data:
 
-  Optional (unused) for API symmetry.
+  Ignored for this graph-only spatial dictionary; accepted only for the
+  shared \`lift()\` method signature.
 
 - k_neighbors:
 

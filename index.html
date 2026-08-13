@@ -7,13 +7,12 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
 <title>Latent Space Representations of fMRI Data • fmrilatent</title>
 <script src="deps/jquery-3.6.0/jquery-3.6.0.min.js"></script><meta name="viewport" content="width=device-width, initial-scale=1, shrink-to-fit=no">
-<link href="deps/bootstrap-5.3.1/bootstrap.min.css" rel="stylesheet">
-<script src="deps/bootstrap-5.3.1/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
+<link href="deps/bootstrap-5.3.8/bootstrap.min.css" rel="stylesheet">
+<script src="deps/bootstrap-5.3.8/bootstrap.bundle.min.js"></script><link href="deps/font-awesome-6.5.2/css/all.min.css" rel="stylesheet">
 <link href="deps/font-awesome-6.5.2/css/v4-shims.min.css" rel="stylesheet">
-<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><link href="extra.css" rel="stylesheet">
-<script src="extra.js"></script><meta property="og:title" content="Latent Space Representations of fMRI Data">
-<meta name="description" content="Provides S4 classes and methods for representing neuroimaging data in latent spaces. The LatentNeuroVec class offers a memory-efficient representation using matrix factorization (basis x loadings), enabling compact storage and efficient computation for dimensionality-reduced fMRI data such as PCA or ICA decompositions. Integrates with the neuroim2 package for standard neuroimaging data structures.">
-<meta property="og:description" content="Provides S4 classes and methods for representing neuroimaging data in latent spaces. The LatentNeuroVec class offers a memory-efficient representation using matrix factorization (basis x loadings), enabling compact storage and efficient computation for dimensionality-reduced fMRI data such as PCA or ICA decompositions. Integrates with the neuroim2 package for standard neuroimaging data structures.">
+<script src="deps/headroom-0.11.0/headroom.min.js"></script><script src="deps/headroom-0.11.0/jQuery.headroom.min.js"></script><script src="deps/bootstrap-toc-1.0.1/bootstrap-toc.min.js"></script><script src="deps/clipboard.js-2.0.11/clipboard.min.js"></script><script src="deps/search-1.0.0/autocomplete.jquery.min.js"></script><script src="deps/search-1.0.0/fuse.min.js"></script><script src="deps/search-1.0.0/mark.min.js"></script><!-- pkgdown --><script src="pkgdown.js"></script><meta property="og:title" content="Latent Space Representations of fMRI Data">
+<meta name="description" content="Provides S4 classes and methods for representing neuroimaging data in latent spaces. The LatentNeuroVec class offers a memory-efficient representation using matrix factorization (basis x loadings plus a per-voxel offset), enabling compact storage and efficient computation for PCA, temporal bases, graph and wavelet dictionaries, Slepian bases, HRBF atoms, and related fMRI decompositions. Integrates with the neuroim2 package for standard neuroimaging data structures.">
+<meta property="og:description" content="Provides S4 classes and methods for representing neuroimaging data in latent spaces. The LatentNeuroVec class offers a memory-efficient representation using matrix factorization (basis x loadings plus a per-voxel offset), enabling compact storage and efficient computation for PCA, temporal bases, graph and wavelet dictionaries, Slepian bases, HRBF atoms, and related fMRI decompositions. Integrates with the neuroim2 package for standard neuroimaging data structures.">
 </head>
 <body>
     <a href="#main" class="visually-hidden-focusable">Skip to contents</a>
@@ -32,14 +31,34 @@
 
     <div id="navbar" class="collapse navbar-collapse ms-3">
       <ul class="navbar-nav me-auto">
+<li class="nav-item"><a class="nav-link" href="articles/fmrilatent.html">Get started</a></li>
 <li class="nav-item"><a class="nav-link" href="reference/index.html">Reference</a></li>
 <li class="nav-item dropdown">
   <button class="nav-link dropdown-toggle" type="button" id="dropdown-articles" data-bs-toggle="dropdown" aria-expanded="false" aria-haspopup="true">Articles</button>
   <ul class="dropdown-menu" aria-labelledby="dropdown-articles">
-<li><a class="dropdown-item" href="articles/encode-factory.html">Encoding API reference</a></li>
-    <li><a class="dropdown-item" href="articles/intro.html">Introduction to fmrilatent</a></li>
+<li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Get started</h6></li>
+    <li><a class="dropdown-item" href="articles/explicit-vs-implicit-latents.html">Explicit vs decoder-backed latents</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Core concepts</h6></li>
+    <li><a class="dropdown-item" href="articles/choosing-basis-family.html">Choosing a Basis Family</a></li>
+    <li><a class="dropdown-item" href="articles/encode-factory.html">Encoding workflows</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Common tasks</h6></li>
+    <li><a class="dropdown-item" href="articles/working-with-latentneurovec.html">Working With LatentNeuroVec Objects</a></li>
+    <li><a class="dropdown-item" href="articles/compression-diagnostics.html">Compression Diagnostics</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Advanced</h6></li>
+    <li><a class="dropdown-item" href="articles/shared-spatial-dictionaries.html">Shared Spatial Dictionaries Across Subjects</a></li>
+    <li><a class="dropdown-item" href="articles/transport-aware-encoding.html">Transport-Aware Encoding</a></li>
+    <li><hr class="dropdown-divider"></li>
+    <li><h6 class="dropdown-header" data-toc-skip>Research &amp; integration</h6></li>
+    <li><a class="dropdown-item" href="articles/boldzip.html">Compressing fMRI Matrices with BOLDZip-SR</a></li>
+    <li><a class="dropdown-item" href="articles/shared-structure-boldzip.html">Shared Structure and BOLDZip-SR</a></li>
+    <li><a class="dropdown-item" href="articles/standalone-codecs.html">Standalone Codecs</a></li>
   </ul>
 </li>
+<li class="nav-item"><a class="nav-link" href="news/index.html">Changelog</a></li>
       </ul>
 <ul class="navbar-nav">
 <li class="nav-item"><form class="form-inline" role="search">
@@ -56,6 +75,8 @@
   <main id="main" class="col-md-9"><div class="section level1">
 <div class="page-header"><h1 id="fmrilatent">fmrilatent<a class="anchor" aria-label="anchor" href="#fmrilatent"></a>
 </h1></div>
+<!-- badges: start -->
+
 <p>Memory-efficient latent space representations for fMRI data in R.</p>
 <div class="section level2">
 <h2 id="overview">Overview<a class="anchor" aria-label="anchor" href="#overview"></a>
@@ -63,19 +84,27 @@
 <p><strong>fmrilatent</strong> provides S4 classes and methods for representing neuroimaging data using matrix factorization. The <code>LatentNeuroVec</code> class stores 4D fMRI data as:</p>
 <pre><code>X[v,t] = Σ basis[t,k] × loadings[v,k] + offset[v]</code></pre>
 <p>This enables compact storage and efficient computation for dimensionality-reduced fMRI data (PCA, ICA, wavelet decompositions, etc.).</p>
+<p>The package also provides operator-backed latent representations for transport-aware workflows. In that role, <code>fmrilatent</code> owns:</p>
+<ul>
+<li>shared basis assets on template anatomy</li>
+<li>latent objects with stable coefficient semantics</li>
+<li>coefficient recovery from observed data</li>
+<li>coefficient-to-map projection into native or template space</li>
+</ul>
+<p>It does not own first-level GLM fitting, contrast handling, temporal autocorrelation models, or inference. Downstream modeling packages should consume <code>coef_time(x, "analysis")</code> together with the decoder and projection generics.</p>
 </div>
 <div class="section level2">
 <h2 id="installation">Installation<a class="anchor" aria-label="anchor" href="#installation"></a>
 </h2>
 <div class="sourceCode" id="cb2"><pre class="downlit sourceCode r">
 <code class="sourceCode R"><span><span class="co"># Install from GitHub</span></span>
-<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"bbuchsbaum/fmrilatent"</span><span class="op">)</span></span></code></pre></div>
+<span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"bbuchsbaum/fmrilatent"</span><span class="op">)</span></span></code></pre></div>
 <div class="section level3">
 <h3 id="dependencies">Dependencies<a class="anchor" aria-label="anchor" href="#dependencies"></a>
 </h3>
 <p>The package requires <a href="https://github.com/bbuchsbaum/neuroim2" class="external-link">neuroim2</a> for neuroimaging data structures:</p>
 <div class="sourceCode" id="cb3"><pre class="downlit sourceCode r">
-<code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu"><a href="https://remotes.r-lib.org/reference/install_github.html" class="external-link">install_github</a></span><span class="op">(</span><span class="st">"bbuchsbaum/neuroim2"</span><span class="op">)</span></span></code></pre></div>
+<code class="sourceCode R"><span><span class="fu">remotes</span><span class="fu">::</span><span class="fu">install_github</span><span class="op">(</span><span class="st">"bbuchsbaum/neuroim2"</span><span class="op">)</span></span></code></pre></div>
 </div>
 </div>
 <div class="section level2">
@@ -141,6 +170,25 @@
 <span><span class="op">)</span></span></code></pre></div>
 </div>
 <div class="section level3">
+<h3 id="transport-backed-encoding">Transport-Backed Encoding<a class="anchor" aria-label="anchor" href="#transport-backed-encoding"></a>
+</h3>
+<p>Transport-backed encoding uses a shared basis asset together with a subject-specific field operator. The target mask must describe the field operator target domain. Pass it explicitly, or attach it to <code>field_operator$provenance$target_mask</code>.</p>
+</div>
+<div class="section level3">
+<h3 id="downstream-handoff">Downstream Handoff<a class="anchor" aria-label="anchor" href="#downstream-handoff"></a>
+</h3>
+<p>The stable handoff to downstream model-fitting code is:</p>
+<ul>
+<li>
+<code>coef_time(x, "analysis")</code> for the response matrix</li>
+<li>
+<code><a href="reference/decode_coefficients.html">decode_coefficients()</a></code> / <code><a href="reference/project_effect.html">project_effect()</a></code> for coefficient-to-map effects</li>
+<li>
+<code><a href="reference/decode_covariance.html">decode_covariance()</a></code> / <code><a href="reference/project_vcov.html">project_vcov()</a></code> for coefficient-to-map uncertainty</li>
+</ul>
+<p>In v1, analysis coordinates are Euclidean by contract. Raw-coordinate metrics are only exposed when the raw-to-analysis transform has an explicit linear matrix representation.</p>
+</div>
+<div class="section level3">
 <h3 id="available-basis-families">Available Basis Families<a class="anchor" aria-label="anchor" href="#available-basis-families"></a>
 </h3>
 <p><strong>Temporal bases:</strong> - <code><a href="reference/spec_time_slepian.html">spec_time_slepian()</a></code> - DPSS/Slepian sequences (bandlimited) - <code><a href="reference/spec_time_dct.html">spec_time_dct()</a></code> - Discrete cosine transform - <code><a href="reference/spec_time_bspline.html">spec_time_bspline()</a></code> - B-spline basis</p>
@@ -180,15 +228,33 @@
 </h2>
 <ul>
 <li>
-<code><a href="articles/intro.html">vignette("intro", package = "fmrilatent")</a></code> - Introduction and concepts</li>
+<code><a href="articles/fmrilatent.html">vignette("fmrilatent", package = "fmrilatent")</a></code> - Introduction and concepts</li>
 <li>
-<code><a href="articles/encode-factory.html">vignette("encode-factory", package = "fmrilatent")</a></code> - Encoding API reference</li>
+<code><a href="articles/encode-factory.html">vignette("encode-factory", package = "fmrilatent")</a></code> - Encoding workflows</li>
+<li>
+<code><a href="articles/working-with-latentneurovec.html">vignette("working-with-latentneurovec", package = "fmrilatent")</a></code> - Object access and reconstruction</li>
+<li>
+<code><a href="articles/choosing-basis-family.html">vignette("choosing-basis-family", package = "fmrilatent")</a></code> - Basis-family trade-offs</li>
+<li>
+<code><a href="articles/shared-spatial-dictionaries.html">vignette("shared-spatial-dictionaries", package = "fmrilatent")</a></code> - Reusable spatial templates</li>
+<li>
+<code><a href="articles/transport-aware-encoding.html">vignette("transport-aware-encoding", package = "fmrilatent")</a></code> - Transport-aware handoff</li>
+<li>
+<code><a href="articles/boldzip.html">vignette("boldzip", package = "fmrilatent")</a></code> - BOLDZip-SR matrix codec workflow</li>
+<li>
+<code><a href="articles/compression-diagnostics.html">vignette("compression-diagnostics", package = "fmrilatent")</a></code> - Reconstruction and storage diagnostics</li>
 </ul>
 </div>
 <div class="section level2">
 <h2 id="license">License<a class="anchor" aria-label="anchor" href="#license"></a>
 </h2>
 <p>GPL (&gt;= 3)</p>
+<!-- albersdown:theme-note:start -->
+</div>
+<div class="section level2">
+<h2 id="albers-theme">Albers theme<a class="anchor" aria-label="anchor" href="#albers-theme"></a>
+</h2>
+<p>This package uses the albersdown theme. Existing vignette theme hooks are replaced so <code>albers.css</code> and local <code>albers.js</code> render consistently on CRAN and GitHub Pages. The defaults are configured via <code>params$family</code> and <code>params$preset</code> (family = ‘red’, preset = ‘homage’). The pkgdown site uses <code>template: { package: albersdown }</code> together with generated <code>pkgdown/extra.css</code> and <code>pkgdown/extra.js</code> so the theme is linked and activated on site pages. <!-- albersdown:theme-note:end --></p>
 </div>
 </div>
   </main><aside class="col-md-3"><div class="links">
@@ -221,7 +287,12 @@
 </ul>
 </div>
 
-
+<div class="dev-status">
+<h2 data-toc-skip>Dev status</h2>
+<ul class="list-unstyled">
+<li><a href="https://github.com/bbuchsbaum/fmrilatent/actions/workflows/R-CMD-check.yaml" class="external-link"><img src="https://github.com/bbuchsbaum/fmrilatent/actions/workflows/R-CMD-check.yaml/badge.svg" alt="R-CMD-check"></a></li>
+</ul>
+</div>
 
   </aside>
 </div>
@@ -232,7 +303,7 @@
 </div>
 
 <div class="pkgdown-footer-right">
-  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.0.</p>
+  <p>Site built with <a href="https://pkgdown.r-lib.org/" class="external-link">pkgdown</a> 2.2.1.</p>
 </div>
 
     </footer>

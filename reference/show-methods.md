@@ -9,6 +9,15 @@ dimensions, components, memory usage, and other relevant information.
 ## Usage
 
 ``` r
+# S4 method for class 'LatentNeuroSurfaceVector'
+show(object)
+
+# S4 method for class 'BilatLatentNeuroSurfaceVector'
+show(object)
+
+# S4 method for class 'BlockLatentNeuroVector'
+show(object)
+
 # S4 method for class 'LatentNeuroVec'
 show(object)
 ```

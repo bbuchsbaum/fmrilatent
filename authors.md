@@ -8,7 +8,7 @@
 ## Citation
 
 Source:
-[`DESCRIPTION`](https://github.com/bbuchsbaum/fmrilatent/blob/HEAD/DESCRIPTION)
+[`DESCRIPTION`](https://github.com/bbuchsbaum/fmrilatent/blob/main/DESCRIPTION)
 
 Buchsbaum B (2026). *fmrilatent: Latent Space Representations of fMRI
 Data*. R package version 0.1.0,

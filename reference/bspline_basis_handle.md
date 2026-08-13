@@ -12,6 +12,7 @@ bspline_basis_handle(
   knots = NULL,
   boundary_knots = NULL,
   include_intercept = FALSE,
+  orthonormalize = TRUE,
   id = NULL,
   label = NULL
 )
@@ -42,6 +43,10 @@ bspline_basis_handle(
 - include_intercept:
 
   Logical; include intercept column (default FALSE).
+
+- orthonormalize:
+
+  Logical; orthonormalize columns when materialized.
 
 - id:
 

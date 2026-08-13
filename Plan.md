@@ -26,8 +26,10 @@ enabling reuse across studies.
       k_per_level, build hash).
     - Accessors:
       [`is_hierarchical_template()`](reference/is_hierarchical_template.md),
-      `template_meta()`, `template_loadings()`, `template_solver()`;
-      keep consistent with `LatentNeuroVec` helper naming.
+      [`template_meta()`](reference/template_meta.md),
+      [`template_loadings()`](reference/template_loadings.md),
+      `template_solver()`; keep consistent with `LatentNeuroVec` helper
+      naming.
 2.  **Builder pipeline (offline)**
     - `build_hierarchical_basis(mask, parcellations, k_per_level, ridge = 1e-8, solver = c("chol","qr"))`.
     - Validate nesting (parent is union of children), reindex labels per
@@ -198,8 +200,7 @@ enabling reuse across studies.
   `LatentNeuroVec` plus meta tags. \## Deliverables
 - R implementations (and optional Rcpp) under `R/` and `src/`.
 - testthat coverage for HRBF paths.
-- Updated `NAMESPACE` and man pages via
-  [`devtools::document()`](https://devtools.r-lib.org/reference/document.html).
+- Updated `NAMESPACE` and man pages via `devtools::document()`.
 
 # Diffusion / Heat Wavelets (rgsp) Plan
 

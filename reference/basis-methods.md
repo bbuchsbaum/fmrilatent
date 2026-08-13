@@ -9,6 +9,15 @@ dimensions (nTime x k) where k is the number of components.
 ``` r
 basis(x, ...)
 
+# S4 method for class 'LatentNeuroSurfaceVector'
+basis(x)
+
+# S4 method for class 'BilatLatentNeuroSurfaceVector'
+basis(x)
+
+# S4 method for class 'BlockLatentNeuroVector'
+basis(x)
+
 # S4 method for class 'LatentNeuroVec'
 basis(x)
 ```
@@ -30,9 +39,18 @@ The basis matrix (typically time x components)
 ## Examples
 
 ``` r
-if (FALSE) { # \dontrun{
-# For LatentNeuroVec:
+mask <- neuroim2::LogicalNeuroVol(
+  array(TRUE, dim = c(2, 2, 1)),
+  neuroim2::NeuroSpace(c(2, 2, 1))
+)
+lvec <- LatentNeuroVec(
+  basis = matrix(1:6, nrow = 3),
+  loadings = matrix(seq_len(8) / 10, nrow = 4),
+  space = neuroim2::NeuroSpace(c(2, 2, 1, 3)),
+  mask = mask,
+  expect_dense = TRUE
+)
 b_matrix <- basis(lvec)
-print(dim(b_matrix)) # nTime x nComponents
-} # }
+dim(b_matrix)
+#> [1] 3 2
 ```

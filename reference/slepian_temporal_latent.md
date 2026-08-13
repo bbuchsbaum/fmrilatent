@@ -45,7 +45,8 @@ slepian_temporal_latent(
 
 - backend:
 
-  DPSS computation backend passed to \`dpss_time_basis\`.
+  DPSS computation backend passed to \`dpss_time_basis\`; only
+  `"tridiag"` is currently supported.
 
 - label:
 

@@ -14,9 +14,23 @@ This enables compact storage and efficient computation for
 dimensionality-reduced fMRI data (PCA, ICA, wavelet decompositions,
 etc.).
 
+The package also provides operator-backed latent representations for
+transport-aware workflows. In that role, `fmrilatent` owns:
+
+- shared basis assets on template anatomy
+- latent objects with stable coefficient semantics
+- coefficient recovery from observed data
+- coefficient-to-map projection into native or template space
+
+It does not own first-level GLM fitting, contrast handling, temporal
+autocorrelation models, or inference. Downstream modeling packages
+should consume `coef_time(x, "analysis")` together with the decoder and
+projection generics.
+
 ## Installation
 
 ``` r
+
 # Install from GitHub
 remotes::install_github("bbuchsbaum/fmrilatent")
 ```
@@ -27,6 +41,7 @@ The package requires [neuroim2](https://github.com/bbuchsbaum/neuroim2)
 for neuroimaging data structures:
 
 ``` r
+
 remotes::install_github("bbuchsbaum/neuroim2")
 ```
 
@@ -35,6 +50,7 @@ remotes::install_github("bbuchsbaum/neuroim2")
 ### Basic Usage
 
 ``` r
+
 library(fmrilatent)
 library(neuroim2)
 library(Matrix)
@@ -74,6 +90,7 @@ The [`encode()`](reference/encode.md) function provides a high-level
 interface for creating latent representations:
 
 ``` r
+
 # Create data matrix (time x voxels)
 X <- matrix(rnorm(n_time * n_voxels), nrow = n_time)
 
@@ -92,6 +109,29 @@ lvec_st <- encode(X,
   mask = mask
 )
 ```
+
+### Transport-Backed Encoding
+
+Transport-backed encoding uses a shared basis asset together with a
+subject-specific field operator. The target mask must describe the field
+operator target domain. Pass it explicitly, or attach it to
+`field_operator$provenance$target_mask`.
+
+### Downstream Handoff
+
+The stable handoff to downstream model-fitting code is:
+
+- `coef_time(x, "analysis")` for the response matrix
+- [`decode_coefficients()`](reference/decode_coefficients.md) /
+  [`project_effect()`](reference/project_effect.md) for
+  coefficient-to-map effects
+- [`decode_covariance()`](reference/decode_covariance.md) /
+  [`project_vcov()`](reference/project_vcov.md) for coefficient-to-map
+  uncertainty
+
+In v1, analysis coordinates are Euclidean by contract. Raw-coordinate
+metrics are only exposed when the raw-to-analysis transform has an
+explicit linear matrix representation.
 
 ### Available Basis Families
 
@@ -117,6 +157,7 @@ spatiotemporal (time × space)
 For memory efficiency, bases can be computed lazily:
 
 ``` r
+
 # Create with handle (lazy evaluation)
 lvec <- encode(X, spec_time_slepian(tr = 2), mask = mask, materialize = "handle")
 
@@ -137,11 +178,33 @@ b <- basis(lvec)  # Materializes and caches the basis
 
 ## Documentation
 
-- [`vignette("intro", package = "fmrilatent")`](articles/intro.md) -
+- [`vignette("fmrilatent", package = "fmrilatent")`](articles/fmrilatent.md) -
   Introduction and concepts
 - [`vignette("encode-factory", package = "fmrilatent")`](articles/encode-factory.md) -
-  Encoding API reference
+  Encoding workflows
+- [`vignette("working-with-latentneurovec", package = "fmrilatent")`](articles/working-with-latentneurovec.md) -
+  Object access and reconstruction
+- [`vignette("choosing-basis-family", package = "fmrilatent")`](articles/choosing-basis-family.md) -
+  Basis-family trade-offs
+- [`vignette("shared-spatial-dictionaries", package = "fmrilatent")`](articles/shared-spatial-dictionaries.md) -
+  Reusable spatial templates
+- [`vignette("transport-aware-encoding", package = "fmrilatent")`](articles/transport-aware-encoding.md) -
+  Transport-aware handoff
+- [`vignette("boldzip", package = "fmrilatent")`](articles/boldzip.md) -
+  BOLDZip-SR matrix codec workflow
+- [`vignette("compression-diagnostics", package = "fmrilatent")`](articles/compression-diagnostics.md) -
+  Reconstruction and storage diagnostics
 
 ## License
 
 GPL (\>= 3)
+
+## Albers theme
+
+This package uses the albersdown theme. Existing vignette theme hooks
+are replaced so `albers.css` and local `albers.js` render consistently
+on CRAN and GitHub Pages. The defaults are configured via
+`params$family` and `params$preset` (family = ‘red’, preset = ‘homage’).
+The pkgdown site uses `template: { package: albersdown }` together with
+generated `pkgdown/extra.css` and `pkgdown/extra.js` so the theme is
+linked and activated on site pages.

@@ -1,15 +1,15 @@
 # Construct a shared LoadingsHandle via diffusion-wavelet lifting
 
-Wraps \`lift(reduction, basis_spec, data)\` so multiple
-\`LatentNeuroVec\` instances can share the same spatial dictionary
-without embedding the full matrix in each object.
+Wraps a diffusion-wavelet \`lift()\` call so multiple \`LatentNeuroVec\`
+instances can share the same spatial dictionary without embedding the
+full matrix in each object.
 
 ## Usage
 
 ``` r
 diffusion_wavelet_loadings_handle(
   reduction,
-  basis_spec,
+  basis_spec = basis_diffusion_wavelet(),
   data = NULL,
   k_neighbors = 6L,
   id = NULL,
@@ -25,11 +25,12 @@ diffusion_wavelet_loadings_handle(
 
 - basis_spec:
 
-  Basis specification, e.g., from \`basis_diffusion_wavelet()\`.
+  Basis specification; defaults to \`basis_diffusion_wavelet()\`.
 
 - data:
 
-  Optional data passed through to \`lift()\` (often NULL).
+  Ignored by diffusion-wavelet lifting; accepted only to keep the
+  lifted-handle constructor signature aligned across families.
 
 - k_neighbors:
 
@@ -38,7 +39,8 @@ diffusion_wavelet_loadings_handle(
 - id:
 
   Optional registry id; provide a stable string to reuse across
-  sessions. If NULL, a random id is generated.
+  sessions. If NULL, a deterministic id is derived from the spec and
+  reduction.
 
 - label:
 

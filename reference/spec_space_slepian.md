@@ -5,14 +5,15 @@ Spatial Slepian spec
 ## Usage
 
 ``` r
-spec_space_slepian(k = 3L, k_neighbors = 6L)
+spec_space_slepian(k = NULL, k_neighbors = 6L)
 ```
 
 ## Arguments
 
 - k:
 
-  Components per cluster.
+  Optional components per cluster. If \`NULL\`, encoders use their
+  family default (\`3L\`).
 
 - k_neighbors:
 

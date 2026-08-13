@@ -7,6 +7,9 @@ which voxels are included in the representation.
 ## Usage
 
 ``` r
+# S4 method for class 'ImplicitLatent'
+mask(x)
+
 # S4 method for class 'LatentNeuroVec'
 mask(x)
 ```

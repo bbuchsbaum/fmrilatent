@@ -36,7 +36,8 @@ slepian_temporal_handle(
 
 - backend:
 
-  Backend passed to \`dpss_time_basis\` ("tridiag" or "dense").
+  Backend passed to \`dpss_time_basis\`; only "tridiag" is currently
+  supported.
 
 - id:
 

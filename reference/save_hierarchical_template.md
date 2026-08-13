@@ -21,3 +21,7 @@ save_hierarchical_template(template, file, compress = "xz")
 - compress:
 
   Compression passed to saveRDS (default "xz")
+
+## Value
+
+The path in \`file\`, invisibly.

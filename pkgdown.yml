@@ -1,7 +1,16 @@
-pandoc: 3.7.0.2
-pkgdown: 2.2.0
+pandoc: 3.8.3
+pkgdown: 2.2.1
 pkgdown_sha: ~
 articles:
+  boldzip: boldzip.html
+  choosing-basis-family: choosing-basis-family.html
+  compression-diagnostics: compression-diagnostics.html
   encode-factory: encode-factory.html
-  intro: intro.html
-last_built: 2026-02-01T15:29Z
+  explicit-vs-implicit-latents: explicit-vs-implicit-latents.html
+  fmrilatent: fmrilatent.html
+  shared-spatial-dictionaries: shared-spatial-dictionaries.html
+  shared-structure-boldzip: shared-structure-boldzip.html
+  standalone-codecs: standalone-codecs.html
+  transport-aware-encoding: transport-aware-encoding.html
+  working-with-latentneurovec: working-with-latentneurovec.html
+last_built: 2026-08-13T12:05Z

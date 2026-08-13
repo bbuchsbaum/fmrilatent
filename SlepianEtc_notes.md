@@ -24,6 +24,7 @@
 - Temporal constructor sketch (`R/slepian.R`)
 
   ``` r
+
   slepian_temporal_latent <- function(X, mask, tr, bandwidth = 0.1, k = NULL) {
     n_time <- nrow(X)
     W  <- bandwidth * tr           # normalized half-bandwidth
@@ -71,6 +72,7 @@
   loadings and natural “lifting” (voxel signal → smooth parcel modes).
 
   ``` r
+
   slepian_cluster_latent <- function(X, mask, clusters, k_per_cluster = 3, tr, bw) {
     cluster_ids <- sort(unique(clusters[clusters > 0]))
     i <- j <- x <- list(); col_off <- 0
@@ -136,6 +138,7 @@
 - Supervoxel constructor sketch
 
   ``` r
+
   slepian_supervoxel_latent <- function(X, mask, n_supervoxels = 500, k_per_voxel = 3) {
     sv <- neuroim2::cluster_voxels(mask, k = n_supervoxels, method = "slic")
     i <- j <- x <- list(); col <- 0
@@ -177,11 +180,12 @@
   `ClusterReduction` (map voxel→cluster, cluster_ids);
   `CoarsenedReduction` (prolongation `P_matrix`, coarse coords). Basis
   specs are light structs: `basis_slepian(k,type)`,
-  `basis_pca(k,whiten)`, [`basis_flat()`](reference/basis_slepian.md).
+  `basis_pca(k,whiten)`, [`basis_flat()`](reference/basis_flat.md).
 
 - Generic lifter
 
   ``` r
+
   setGeneric("lift", function(reduction, basis_spec, data = NULL, ...) standardGeneric("lift"))
   ```
 
@@ -209,6 +213,7 @@
   with no new class. Pattern:
 
   ``` r
+
   B_atoms_vox <- slepian_space_basis(mask, roi_mask, params)   # atoms x vox
   coeff       <- slepian_project_matrix(X, mask, roi_mask, params) # time x atoms
   loadings    <- Matrix::t(B_atoms_vox)

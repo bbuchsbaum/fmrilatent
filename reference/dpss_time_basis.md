@@ -38,7 +38,7 @@ dpss_time_basis(
 
 - backend:
 
-  Either `"tridiag"` (default, O(n^2)) or `"dense"` (O(n^3), debugging).
+  DPSS backend. Only `"tridiag"` is currently supported.
 
 ## Value
 

@@ -1,11 +1,18 @@
 # Encode data using a hierarchical template
 
-Encode data using a hierarchical template
+Note: unlike parcel and AWPT encoding, hierarchical encoding does not
+center the data. The returned offset is always `numeric(0)`.
 
 ## Usage
 
 ``` r
-encode_hierarchical(X, template, label = NULL)
+encode_hierarchical(
+  X,
+  template,
+  label = NULL,
+  mask = NULL,
+  materialize = c("handle", "auto", "matrix")
+)
 ```
 
 ## Arguments
@@ -22,6 +29,15 @@ encode_hierarchical(X, template, label = NULL)
 
   Optional label for the resulting LatentNeuroVec (defaults to template
   label)
+
+- mask:
+
+  Optional mask to validate against the template mask before encoding.
+  When supplied, it must match the template exactly.
+
+- materialize:
+
+  "handle", "matrix", or "auto" for template loadings.
 
 ## Value
 

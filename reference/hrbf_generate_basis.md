@@ -21,7 +21,7 @@ hrbf_reconstruct_matrix(coeff, mask, params)
   List with fields: - \`sigma0\` (numeric, default 6) - \`levels\`
   (integer, default 3) - \`radius_factor\` (numeric, default 2.5) -
   \`num_extra_fine_levels\` (integer, default 0) - \`kernel_type\`
-  (\\gaussian\\ or \\wendland_c6\\, alias \\wendland_c4\\) - \`seed\`
+  (\\gaussian\\, \\wendland_c4\\, or \\wendland_c6\\) - \`seed\`
   (integer) for deterministic Poisson sampling
 
 - mask:

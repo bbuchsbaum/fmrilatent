@@ -29,7 +29,7 @@ spec_time_slepian(
 
 - backend:
 
-  Backend to use ("tridiag" or "dense").
+  Backend to use. Only "tridiag" is currently supported.
 
 ## Value
 

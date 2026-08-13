@@ -13,3 +13,7 @@ is_hierarchical_template(x)
 - x:
 
   object to test
+
+## Value
+
+Logical scalar.

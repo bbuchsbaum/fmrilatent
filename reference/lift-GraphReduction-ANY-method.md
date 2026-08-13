@@ -28,3 +28,8 @@ lift(reduction, basis_spec, data = NULL, ...)
 - ...:
 
   Additional arguments (unused in default method).
+
+## Value
+
+This method does not return; it aborts with a classed
+unsupported-operation error.

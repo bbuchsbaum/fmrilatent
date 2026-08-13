@@ -1,6 +1,6 @@
-# Build an orthonormal DCT-II basis matrix
+# Build a DCT-II temporal basis matrix
 
-Build an orthonormal DCT-II basis matrix
+Build a DCT-II temporal basis matrix
 
 ## Usage
 
@@ -20,8 +20,11 @@ build_dct_basis(n_time, k = n_time, norm = c("ortho", "none"))
 
 - norm:
 
-  Normalization: "ortho" (default) or "none".
+  Normalization: \`"ortho"\` (default) gives orthonormal columns;
+  \`"none"\` returns raw cosine columns with non-unit L2 norms.
 
 ## Value
 
-Dense Matrix (n_time x k).
+Dense Matrix (\`n_time x k\`). Columns are orthonormal only when \`norm
+= "ortho"\`; with \`norm = "none"\` they are unnormalized DCT-II cosine
+columns.
