@@ -20,6 +20,7 @@ Description: Provides S4 classes and methods for representing neuroimaging data
 License: GPL (>= 3)
 URL: https://github.com/bbuchsbaum/fmrilatent
 BugReports: https://github.com/bbuchsbaum/fmrilatent/issues
+Additional_repositories: https://bbuchsbaum.r-universe.dev
 Encoding: UTF-8
 LazyData: false
 RoxygenNote: 7.3.3
@@ -30,7 +31,7 @@ Imports:
     Matrix,
     methods,
     digest,
-    neuroim2,
+    neuroim2 (>= 0.19.0),
     rlang,
     stats,
     utils,
@@ -46,6 +47,11 @@ Suggests:
     rgsp,
     bench,
     ggplot2
+Remotes:
+    bbuchsbaum/neuroim2,
+    bbuchsbaum/neuroatlas,
+    bbuchsbaum/neurosurf,
+    bbuchsbaum/rgsp
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 LinkingTo:
