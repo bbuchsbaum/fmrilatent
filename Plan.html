@@ -204,14 +204,14 @@
 <h1 id="diffusion--heat-wavelets-rgsp-plan">Diffusion / Heat Wavelets (rgsp) Plan<a class="anchor" aria-label="anchor" href="#diffusion--heat-wavelets-rgsp-plan"></a></h1>
 <p>Goal: add a graph-based, multiscale basis that bridges Haar (implicit, blocky) and Slepian (spectral) using diffusion/heat wavelets built via <code>rgsp</code>, while keeping the latent API consistent with existing constructors.</p>
 <p>Conventions (shared): expose user-friendly constructors (<code>*_latent()</code>) that return <code>LatentNeuroVec</code> for explicit bases or <code>ImplicitLatent</code> (with <code>meta$family</code>) for implicit/overcomplete transforms. Avoid requiring users to pass basis/loadings directly.</p>
-<p>Milestones 1) Graph bridge helper - <code>voxel_subset_to_gsp(mask, voxel_indices, k_neighbors = 6)</code> using <code><a href="https://bbuchsbaum.github.io/neuroim2/reference/indices.html" class="external-link">neuroim2::indices</a></code> → <code><a href="https://rdrr.io/pkg/rgsp/man/graph_knn.html" class="external-link">rgsp::graph_knn</a></code>; ensure Laplacian ready for filters.</p>
+<p>Milestones 1) Graph bridge helper - <code>voxel_subset_to_gsp(mask, voxel_indices, k_neighbors = 6)</code> using <code><a href="https://bbuchsbaum.github.io/neuroim2/reference/indices.html" class="external-link">neuroim2::indices</a></code> → <code>rgsp::graph_knn</code>; ensure Laplacian ready for filters.</p>
 <ol start="2" style="list-style-type: decimal"><li>Basis spec
 <ul><li>
 <code>basis_heat_wavelet(scales = c(1,2,4,8), order = 30, threshold = 1e-6)</code>; purely a spec object tagged <code>spec_heat_wavelet</code>.</li>
 </ul></li>
 <li>Supervoxel lift (explicit basis path)
 <ul><li>Method <code>lift(reduction = "ClusterReduction", basis_spec = "spec_heat_wavelet")</code>:
-<ul><li>For each cluster: build local graph, run <code><a href="https://rdrr.io/pkg/rgsp/man/wavelet_heat_transform.html" class="external-link">rgsp::wavelet_heat_transform</a></code> on identity to materialize atoms per scale.</li>
+<ul><li>For each cluster: build local graph, run <code>rgsp::wavelet_heat_transform</code> on identity to materialize atoms per scale.</li>
 <li>Threshold small entries; assemble block-diagonal sparse loadings (global voxel rows, concatenated atoms by scale/cluster).</li>
 </ul></li>
 <li>Constructor <code>heat_wavelet_latent(X, mask, reduction, spec)</code> returning <code>LatentNeuroVec</code> (basis = coeff, loadings = sparse atoms); mirror HRBF pattern.</li>

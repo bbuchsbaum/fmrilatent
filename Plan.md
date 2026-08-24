@@ -217,8 +217,7 @@ requiring users to pass basis/loadings directly.
 Milestones 1) Graph bridge helper -
 `voxel_subset_to_gsp(mask, voxel_indices, k_neighbors = 6)` using
 [`neuroim2::indices`](https://bbuchsbaum.github.io/neuroim2/reference/indices.html)
-→ [`rgsp::graph_knn`](https://rdrr.io/pkg/rgsp/man/graph_knn.html);
-ensure Laplacian ready for filters.
+→ `rgsp::graph_knn`; ensure Laplacian ready for filters.
 
 2.  Basis spec
     - `basis_heat_wavelet(scales = c(1,2,4,8), order = 30, threshold = 1e-6)`;
@@ -227,8 +226,8 @@ ensure Laplacian ready for filters.
     - Method
       `lift(reduction = "ClusterReduction", basis_spec = "spec_heat_wavelet")`:
       - For each cluster: build local graph, run
-        [`rgsp::wavelet_heat_transform`](https://rdrr.io/pkg/rgsp/man/wavelet_heat_transform.html)
-        on identity to materialize atoms per scale.
+        `rgsp::wavelet_heat_transform` on identity to materialize atoms
+        per scale.
       - Threshold small entries; assemble block-diagonal sparse loadings
         (global voxel rows, concatenated atoms by scale/cluster).
     - Constructor `heat_wavelet_latent(X, mask, reduction, spec)`

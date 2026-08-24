@@ -125,7 +125,7 @@ get_encoder("test_enc")
 #> $spec_fn
 #> function (x) 
 #> x
-#> <bytecode: 0x55b1e2ae19a8>
+#> <bytecode: 0x55c56119a2f8>
 #> <environment: namespace:base>
 #> 
 #> $description

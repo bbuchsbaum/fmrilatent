@@ -100,7 +100,7 @@ data.frame(
   rmse = sqrt(mean((as.matrix(lat) - X)^2))
 )
 #>   coefficient_rows coefficient_cols loading_rows loading_cols         rmse
-#> 1                6                3            9            3 1.003728e-16
+#> 1                6                3            9            3 2.440281e-16
 ```
 
 The shared component contract records method-neutral facts about the
@@ -125,7 +125,7 @@ data.frame(
   digest_chars = nchar(component$digest)
 )
 #>            id_prefix     family features components digest_chars
-#> 1 component:add7f59c parcel_pca        9          3           32
+#> 1 component:68e900f2 parcel_pca        9          3           32
 ```
 
 ## In-Session References and Subject Deltas
@@ -292,8 +292,8 @@ data.frame(
   payload_scalars = metrics[["payload_scalars"]],
   finite_reconstruction = all(is.finite(X_hat))
 )
-#>        mse     rmse payload_scalars finite_reconstruction
-#> 1 3.16e-30 1.78e-15             650                  TRUE
+#>        mse    rmse payload_scalars finite_reconstruction
+#> 1 3.25e-30 1.8e-15             650                  TRUE
 ```
 
 The payload summary reports where the stored scalar budget goes. It is
