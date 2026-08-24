@@ -130,3 +130,29 @@ test_that("BilatLatentNeuroSurfaceVector validity compares basis dimensions with
   expect_s4_class(bilat, "BilatLatentNeuroSurfaceVector")
   expect_true(validObject(bilat))
 })
+
+test_that("bilateral decoder identity derives from ordered child identities", {
+  left <- .make_unilateral_blsv("left")
+  right <- .make_unilateral_blsv("right")
+  bilat <- BilatLatentNeuroSurfaceVector(left, right)
+  recreated <- BilatLatentNeuroSurfaceVector(
+    unserialize(serialize(left, NULL, version = 3L)),
+    unserialize(serialize(right, NULL, version = 3L))
+  )
+  swapped <- BilatLatentNeuroSurfaceVector(right, left)
+
+  map <- decoder(bilat)
+  recreated_map <- decoder(recreated)
+  swapped_map <- decoder(swapped)
+  child_ids <- c(
+    left = decoder(left)$target_domain_id,
+    right = decoder(right)$target_domain_id
+  )
+
+  expect_match(map$target_domain_id, "^explicit-composite-target:")
+  expect_named(map$target_support, c("left", "right"))
+  expect_identical(map$provenance$child_target_domain_ids, child_ids)
+  expect_identical(map$target_domain_id, recreated_map$target_domain_id)
+  expect_identical(map$provenance$decoder_id, recreated_map$provenance$decoder_id)
+  expect_false(identical(map$target_domain_id, swapped_map$target_domain_id))
+})

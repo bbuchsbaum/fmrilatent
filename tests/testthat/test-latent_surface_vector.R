@@ -84,3 +84,31 @@ test_that("LatentNeuroSurfaceVector respects support-level ROI masks", {
   )
   expect_error(reconstruct_array(lv), "not defined for surface latent objects")
 })
+
+test_that("surface decoder identity includes geometry and ordered support", {
+  lv <- .make_latent_surface_vector_lsv()
+  same <- unserialize(serialize(lv, NULL, version = 3L))
+  reordered <- LatentNeuroSurfaceVector(
+    basis = lv@basis,
+    loadings = lv@loadings,
+    geometry = lv@geometry,
+    support = rev(lv@support),
+    offset = lv@offset,
+    meta = lv@meta
+  )
+  changed_geometry <- lv
+  changed_geometry@geometry@label <- paste0(changed_geometry@geometry@label, "-changed")
+
+  base_map <- decoder(lv)
+  same_map <- decoder(same)
+  reordered_map <- decoder(reordered)
+  geometry_map <- decoder(changed_geometry)
+
+  expect_match(base_map$target_domain_id, "^explicit-target:")
+  expect_identical(base_map$target_support, 1:3)
+  expect_identical(base_map$target_domain_id, same_map$target_domain_id)
+  expect_identical(base_map$provenance$decoder_id, same_map$provenance$decoder_id)
+  expect_identical(reordered_map$target_support, 3:1)
+  expect_false(identical(base_map$target_domain_id, reordered_map$target_domain_id))
+  expect_false(identical(base_map$target_domain_id, geometry_map$target_domain_id))
+})

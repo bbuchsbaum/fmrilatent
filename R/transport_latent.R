@@ -823,18 +823,316 @@ validate_portable_linear_map <- function(x, context = "portable linear map",
   }
 }
 
-.latent_loadings_map <- function(x) {
-  L <- as.matrix(loadings(x))
-  .linear_map_from_matrix(
-    L,
-    source_domain_id = paste0("latent:", latent_meta(x)$family %||% "explicit"),
-    target_domain_id = "stored_spatial_domain",
-    provenance = list(
-      basis_asset_class = "LatentNeuroVec",
-      basis_family = latent_meta(x)$family %||% "explicit",
-      basis_id = digest::digest(L)
-    )
+.decoder_receipt_hash <- function(payload) {
+  digest::digest(payload, algo = "xxhash64")
+}
+
+.decoder_storage_receipt <- function(value, role) {
+  if (methods::is(value, "BasisHandle") || methods::is(value, "LoadingsHandle")) {
+    return(list(
+      contract = "fmrilatent.decoder-storage.v1",
+      role = role,
+      class = class(value)[1L],
+      id = value@id,
+      dim = as.integer(value@dim),
+      kind = value@kind,
+      fingerprint = .latent_handle_fingerprint(value)
+    ))
+  }
+  if (is.matrix(value) || methods::is(value, "Matrix")) {
+    return(list(
+      contract = "fmrilatent.decoder-storage.v1",
+      role = role,
+      class = class(value),
+      dim = as.integer(dim(value)),
+      content = .decoder_receipt_hash(value)
+    ))
+  }
+  .encoder_cli_abort(
+    paste0("Cannot derive a stable decoder receipt from ", role, " class ",
+           paste(class(value), collapse = "/"), "."),
+    class = "fmrilatent_error_type"
   )
+}
+
+.decoder_function_receipt <- function(fun) {
+  if (!is.function(fun)) {
+    return(NULL)
+  }
+  list(
+    formals = lapply(as.list(formals(fun)), function(x) paste(deparse(x), collapse = "\n")),
+    body = paste(deparse(body(fun), width.cutoff = 500L), collapse = "\n")
+  )
+}
+
+.decoder_analysis_transform_receipt <- function(transform, k) {
+  transform <- transform %||% .transport_identity_transform(k)
+  matrix_value <- transform$matrix %||% NULL
+  if (!is.null(matrix_value)) {
+    matrix_value <- unname(as.matrix(matrix_value))
+  }
+  list(
+    contract = "fmrilatent.analysis-transform.v1",
+    type = transform$type %||% "custom",
+    dim = as.integer(transform$dim %||% k),
+    matrix = matrix_value,
+    to_analysis = .decoder_function_receipt(transform$to_analysis %||% NULL),
+    to_raw = .decoder_function_receipt(transform$to_raw %||% NULL)
+  )
+}
+
+.decoder_target_identity <- function(domain, support) {
+  domain_receipt <- list(
+    class = class(domain),
+    content = .decoder_receipt_hash(domain)
+  )
+  support_receipt <- list(
+    class = class(support),
+    ordered_value = support
+  )
+  list(
+    id = paste0(
+      "explicit-target:",
+      .decoder_receipt_hash(list(
+        contract = "fmrilatent.decoder-target.v1",
+        domain = domain_receipt,
+        support = support_receipt
+      ))
+    ),
+    domain_receipt = domain_receipt,
+    support_order_id = .decoder_receipt_hash(support_receipt)
+  )
+}
+
+.explicit_latent_simple_payload <- function(x) {
+  if (methods::is(x, "LatentNeuroVec")) {
+    return(list(
+      basis = x@basis,
+      loadings = x@loadings,
+      domain = neuroim2::space(x@mask),
+      support = as.integer(x@map@indices)
+    ))
+  }
+  if (methods::is(x, "LatentNeuroSurfaceVector")) {
+    return(list(
+      basis = x@basis,
+      loadings = x@loadings,
+      domain = x@geometry,
+      support = as.integer(x@support)
+    ))
+  }
+  .encoder_cli_abort(
+    paste0("Explicit decoder metadata is not implemented for class ", class(x)[1L], "."),
+    class = "fmrilatent_error_unsupported_operation"
+  )
+}
+
+.explicit_latent_children <- function(x) {
+  if (methods::is(x, "BilatLatentNeuroSurfaceVector")) {
+    return(list(left = x@left, right = x@right))
+  }
+  if (methods::is(x, "BlockLatentNeuroVector")) {
+    return(x@blocks)
+  }
+  NULL
+}
+
+.explicit_simple_loadings_map <- function(x) {
+  payload <- .explicit_latent_simple_payload(x)
+  loadings_dim <- .latent_loadings_dim(payload$loadings)
+  k <- as.integer(loadings_dim[2L])
+  family <- latent_meta(x)$family %||% "explicit"
+  component_receipt <- .decoder_storage_receipt(payload$basis, "component_order")
+  component_order_id <- .decoder_receipt_hash(component_receipt)
+  transform_receipt <- .decoder_analysis_transform_receipt(
+    .explicit_latent_analysis_transform(x, k),
+    k
+  )
+  analysis_transform_id <- .decoder_receipt_hash(transform_receipt)
+  loadings_receipt <- .decoder_storage_receipt(payload$loadings, "loadings")
+  loadings_id <- .decoder_receipt_hash(loadings_receipt)
+  target <- .decoder_target_identity(payload$domain, payload$support)
+  source_domain_id <- paste0(
+    "explicit-source:",
+    .decoder_receipt_hash(list(
+      contract = "fmrilatent.decoder-source.v1",
+      family = family,
+      component_order_id = component_order_id,
+      analysis_transform_id = analysis_transform_id
+    ))
+  )
+  decoder_id <- .decoder_receipt_hash(list(
+    contract = "fmrilatent.explicit-decoder.v1",
+    source_domain_id = source_domain_id,
+    target_domain_id = target$id,
+    loadings_id = loadings_id
+  ))
+
+  apply_loadings <- function(data, adjoint = FALSE) {
+    stored <- loadings_mat(payload$loadings)
+    expected <- if (isTRUE(adjoint)) loadings_dim[1L] else loadings_dim[2L]
+    context <- if (isTRUE(adjoint)) "explicit decoder adjoint" else "explicit decoder"
+    prep <- .transport_vector_or_matrix_input(data, expected, context)
+    result <- if (isTRUE(adjoint)) {
+      Matrix::t(stored) %*% prep$data
+    } else {
+      stored %*% prep$data
+    }
+    .transport_finalize_output(as.matrix(result), prep$input_was_vector)
+  }
+
+  .build_normalized_linear_map(
+    list(
+      mode = if (methods::is(payload$loadings, "LoadingsHandle")) {
+        "handle_callbacks"
+      } else {
+        "callbacks"
+      },
+      contract_version = .PORTABLE_LINEAR_MAP_VERSION,
+      n_source = k,
+      n_target = as.integer(loadings_dim[1L]),
+      source_domain_id = source_domain_id,
+      target_domain_id = target$id,
+      source_support = NULL,
+      target_support = payload$support,
+      adjoint_convention = "euclidean_discrete",
+      provenance = list(
+        basis_asset_class = class(x)[1L],
+        basis_family = family,
+        basis_id = loadings_id,
+        loadings_id = loadings_id,
+        component_order_id = component_order_id,
+        analysis_transform_id = analysis_transform_id,
+        decoder_id = decoder_id,
+        target_domain_receipt = target$domain_receipt,
+        target_support_order_id = target$support_order_id
+      ),
+      materialize = function(...) as.matrix(loadings_mat(payload$loadings))
+    ),
+    forward_fn = function(data, ...) apply_loadings(data, adjoint = FALSE),
+    adjoint_fn = function(data, ...) apply_loadings(data, adjoint = TRUE)
+  )
+}
+
+.stack_explicit_loadings_maps <- function(x, children) {
+  child_names <- names(children)
+  if (is.null(child_names)) {
+    child_names <- as.character(seq_along(children))
+  }
+  maps <- lapply(children, .latent_loadings_map)
+  names(maps) <- child_names
+  n_sources <- vapply(maps, `[[`, integer(1), "n_source")
+  if (length(unique(n_sources)) != 1L) {
+    .encoder_cli_abort(
+      "Composite explicit decoder children must have the same source dimension.",
+      class = "fmrilatent_error_dimension_mismatch"
+    )
+  }
+  sizes <- vapply(maps, `[[`, integer(1), "n_target")
+  child_target_ids <- stats::setNames(
+    vapply(maps, `[[`, character(1), "target_domain_id"),
+    child_names
+  )
+  child_source_ids <- stats::setNames(
+    vapply(maps, `[[`, character(1), "source_domain_id"),
+    child_names
+  )
+  child_decoder_ids <- stats::setNames(
+    vapply(maps, function(map) map$provenance$decoder_id, character(1)),
+    child_names
+  )
+  target_support <- stats::setNames(lapply(maps, `[[`, "target_support"), child_names)
+  source_domain_id <- paste0(
+    "explicit-composite-source:",
+    .decoder_receipt_hash(list(
+      contract = "fmrilatent.composite-source.v1",
+      class = class(x)[1L],
+      child_names = child_names,
+      child_source_domain_ids = child_source_ids
+    ))
+  )
+  target_domain_id <- paste0(
+    "explicit-composite-target:",
+    .decoder_receipt_hash(list(
+      contract = "fmrilatent.composite-target.v1",
+      class = class(x)[1L],
+      child_names = child_names,
+      child_target_domain_ids = child_target_ids
+    ))
+  )
+  loadings_id <- .decoder_receipt_hash(list(
+    contract = "fmrilatent.composite-loadings.v1",
+    child_names = child_names,
+    child_decoder_ids = child_decoder_ids
+  ))
+  decoder_id <- .decoder_receipt_hash(list(
+    contract = "fmrilatent.explicit-decoder.v1",
+    source_domain_id = source_domain_id,
+    target_domain_id = target_domain_id,
+    loadings_id = loadings_id
+  ))
+
+  .build_normalized_linear_map(
+    list(
+      mode = "stacked_callbacks",
+      contract_version = .PORTABLE_LINEAR_MAP_VERSION,
+      n_source = n_sources[1L],
+      n_target = sum(sizes),
+      source_domain_id = source_domain_id,
+      target_domain_id = target_domain_id,
+      source_support = NULL,
+      target_support = target_support,
+      adjoint_convention = "euclidean_discrete",
+      provenance = list(
+        basis_asset_class = class(x)[1L],
+        basis_family = latent_meta(x)$family %||% "composite_explicit",
+        basis_id = loadings_id,
+        loadings_id = loadings_id,
+        decoder_id = decoder_id,
+        child_names = child_names,
+        child_source_domain_ids = child_source_ids,
+        child_target_domain_ids = child_target_ids,
+        child_decoder_ids = child_decoder_ids
+      ),
+      materialize = function(...) {
+        do.call(rbind, lapply(maps, .materialize_linear_map))
+      }
+    ),
+    forward_fn = function(data, ...) {
+      prep <- .transport_vector_or_matrix_input(
+        data,
+        n_sources[1L],
+        "composite explicit decoder"
+      )
+      result <- do.call(rbind, lapply(maps, function(map) {
+        as.matrix(map$forward(prep$data, ...))
+      }))
+      .transport_finalize_output(result, prep$input_was_vector)
+    },
+    adjoint_fn = function(data, ...) {
+      prep <- .transport_vector_or_matrix_input(
+        data,
+        sum(sizes),
+        "composite explicit decoder adjoint"
+      )
+      ends <- cumsum(sizes)
+      starts <- c(1L, utils::head(ends, -1L) + 1L)
+      child_results <- lapply(seq_along(maps), function(i) {
+        rows <- seq.int(starts[i], ends[i])
+        as.matrix(maps[[i]]$adjoint_apply(prep$data[rows, , drop = FALSE], ...))
+      })
+      result <- Reduce(`+`, child_results)
+      .transport_finalize_output(result, prep$input_was_vector)
+    }
+  )
+}
+
+.latent_loadings_map <- function(x) {
+  children <- .explicit_latent_children(x)
+  if (is.null(children)) {
+    return(.explicit_simple_loadings_map(x))
+  }
+  .stack_explicit_loadings_maps(x, children)
 }
 
 #' Construct a transport-backed implicit latent object

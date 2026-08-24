@@ -95,6 +95,138 @@ make_transport_operator_no_materialize <- function() {
   )
 }
 
+make_explicit_decoder_volume <- function(origin = c(0, 0, 0),
+                                         component_order = 1:2,
+                                         analysis_transform = NULL) {
+  mask_vol <- LogicalNeuroVol(
+    array(TRUE, dim = c(2, 2, 1)),
+    NeuroSpace(c(2, 2, 1), origin = origin)
+  )
+  basis_value <- matrix(c(
+    1, 0,
+    0, 1
+  ), nrow = 2, byrow = TRUE)[, component_order, drop = FALSE]
+  loadings_value <- matrix(c(
+    1, 0,
+    0, 1,
+    1, 1,
+    0, 1
+  ), nrow = 4, byrow = TRUE)[, component_order, drop = FALSE]
+  meta <- list(family = "explicit_decoder_identity")
+  if (!is.null(analysis_transform)) {
+    meta$analysis_transform <- analysis_transform
+  }
+  LatentNeuroVec(
+    basis = Matrix(basis_value, sparse = FALSE),
+    loadings = Matrix(loadings_value, sparse = FALSE),
+    space = NeuroSpace(c(2, 2, 1, 2), origin = origin),
+    mask = mask_vol,
+    meta = meta
+  )
+}
+
+test_that("explicit volume decoder identity separates domain, support, components, and transform", {
+  baseline <- make_explicit_decoder_volume()
+  equivalent <- make_explicit_decoder_volume()
+  changed_domain <- make_explicit_decoder_volume(origin = c(4, 0, 0))
+  changed_support <- baseline
+  changed_support@map@indices <- rev(changed_support@map@indices)
+  changed_components <- make_explicit_decoder_volume(component_order = 2:1)
+  transform_matrix <- diag(c(2, 0.5), nrow = 2)
+  changed_transform <- make_explicit_decoder_volume(
+    analysis_transform = list(
+      type = "linear",
+      dim = 2L,
+      matrix = transform_matrix,
+      to_analysis = function(x) transform_matrix %*% as.matrix(x),
+      to_raw = function(x) solve(transform_matrix, as.matrix(x))
+    )
+  )
+
+  base_map <- decoder(baseline)
+  equivalent_map <- decoder(equivalent)
+  domain_map <- decoder(changed_domain)
+  support_map <- decoder(changed_support)
+  component_map <- decoder(changed_components)
+  transform_map <- decoder(changed_transform)
+
+  expect_match(base_map$target_domain_id, "^explicit-target:")
+  expect_identical(base_map$target_support, 1:4)
+  expect_identical(base_map$target_domain_id, equivalent_map$target_domain_id)
+  expect_identical(base_map$source_domain_id, equivalent_map$source_domain_id)
+  expect_identical(base_map$provenance$decoder_id, equivalent_map$provenance$decoder_id)
+
+  expect_false(identical(base_map$target_domain_id, domain_map$target_domain_id))
+  expect_identical(base_map$target_support, domain_map$target_support)
+  expect_false(identical(base_map$target_domain_id, support_map$target_domain_id))
+  expect_identical(support_map$target_support, 4:1)
+
+  expect_identical(base_map$target_domain_id, component_map$target_domain_id)
+  expect_false(identical(
+    base_map$provenance$component_order_id,
+    component_map$provenance$component_order_id
+  ))
+  expect_false(identical(
+    base_map$provenance$loadings_id,
+    component_map$provenance$loadings_id
+  ))
+
+  expect_identical(base_map$target_domain_id, transform_map$target_domain_id)
+  expect_identical(
+    base_map$provenance$component_order_id,
+    transform_map$provenance$component_order_id
+  )
+  expect_false(identical(
+    base_map$provenance$analysis_transform_id,
+    transform_map$provenance$analysis_transform_id
+  ))
+  expect_false(identical(base_map$source_domain_id, transform_map$source_domain_id))
+})
+
+test_that("explicit decoder identity survives serialization and recreation", {
+  original <- make_explicit_decoder_volume()
+  recreated <- unserialize(serialize(original, NULL, version = 3L))
+
+  original_map <- decoder(original)
+  recreated_map <- decoder(recreated)
+
+  expect_identical(original_map$target_domain_id, recreated_map$target_domain_id)
+  expect_identical(original_map$source_domain_id, recreated_map$source_domain_id)
+  expect_identical(original_map$provenance$decoder_id, recreated_map$provenance$decoder_id)
+  expect_identical(original_map$target_support, recreated_map$target_support)
+})
+
+test_that("handle-backed explicit decoder metadata does not materialize loadings", {
+  kind <- "test_decoder_identity_no_materialize_loadings"
+  register_handle_kind(kind, function(handle) {
+    stop("loadings materialization forbidden", call. = FALSE)
+  }, type = "loadings")
+  handle <- new(
+    "LoadingsHandle",
+    id = "decoder-identity-no-materialize",
+    dim = as.integer(c(4L, 2L)),
+    kind = kind,
+    spec = list(derivation = "throwing-test-receipt"),
+    label = "throwing decoder test"
+  )
+  mask_vol <- make_transport_mask()
+  latent <- LatentNeuroVec(
+    basis = Matrix(diag(2), sparse = FALSE),
+    loadings = handle,
+    space = NeuroSpace(c(2, 2, 1, 2)),
+    mask = mask_vol,
+    meta = list(family = "handle_identity_test")
+  )
+
+  expect_no_error(map <- decoder(latent))
+  expect_identical(map$mode, "handle_callbacks")
+  expect_identical(map$n_source, 2L)
+  expect_identical(map$n_target, 4L)
+  expect_identical(map$target_support, 1:4)
+  expect_true(nzchar(map$provenance$loadings_id))
+  expect_error(map$forward(c(1, 0)), "loadings materialization forbidden")
+})
+
 test_that("parcel template exposes basis decoder protocol", {
   tmpl <- make_transport_template()
   dec <- basis_decoder(tmpl)

@@ -241,3 +241,25 @@ test_that("BlockLatentNeuroVector reports is_explicit_latent dispatch failures",
     "ForeignLatentBlock"
   )
 })
+
+test_that("block decoder identity derives from named child order", {
+  hybrid <- .make_bilateral_block_block()
+  recreated <- unserialize(serialize(hybrid, NULL, version = 3L))
+  reordered <- BlockLatentNeuroVector(hybrid@blocks[c("subcortex", "cortex")])
+
+  map <- decoder(hybrid)
+  recreated_map <- decoder(recreated)
+  reordered_map <- decoder(reordered)
+  child_ids <- vapply(
+    hybrid@blocks,
+    function(block) decoder(block)$target_domain_id,
+    character(1)
+  )
+
+  expect_match(map$target_domain_id, "^explicit-composite-target:")
+  expect_named(map$target_support, c("cortex", "subcortex"))
+  expect_identical(map$provenance$child_target_domain_ids, child_ids)
+  expect_identical(map$target_domain_id, recreated_map$target_domain_id)
+  expect_identical(map$provenance$decoder_id, recreated_map$provenance$decoder_id)
+  expect_false(identical(map$target_domain_id, reordered_map$target_domain_id))
+})
