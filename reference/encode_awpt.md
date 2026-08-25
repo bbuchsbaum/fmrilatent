@@ -23,6 +23,7 @@ encode_awpt(
   center = TRUE,
   run_info = NULL,
   label = "",
+  units = NULL,
   ...
 )
 ```
@@ -97,6 +98,11 @@ encode_awpt(
 - label:
 
   Optional label stored in metadata.
+
+- units:
+
+  Optional declared \[latent_units_record()\] captured on the encoded
+  object.
 
 - ...:
 

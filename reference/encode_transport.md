@@ -25,6 +25,7 @@ encode_transport(
   max_iter = 200L,
   tol = 1e-06,
   label = "",
+  units = NULL,
   ...
 )
 ```
@@ -107,6 +108,11 @@ encode_transport(
 - label:
 
   Optional label stored in metadata.
+
+- units:
+
+  Optional declared \[latent_units_record()\] captured on the encoded
+  object.
 
 - ...:
 

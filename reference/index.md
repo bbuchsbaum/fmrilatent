@@ -227,6 +227,10 @@
   coordinates and decoder domains
 - [`latent_support()`](latent_support.md) : Extract the decoded support
   associated with a latent object
+- [`latent_units()`](latent_units.md) : Describe Latent Response and
+  Coordinate Units
+- [`latent_units_record()`](latent_units_record.md) : Declare a Latent
+  Units Contract
 - [`lift(`*`<ClusterReduction>`*`,`*`<spec_diffusion_wavelet>`*`)`](lift-ClusterReduction-spec_diffusion_wavelet-method.md)
   : Lift diffusion wavelets for clustered reduction
 - [`lift(`*`<ClusterReduction>`*`,`*`<spec_heat_wavelet>`*`)`](lift-ClusterReduction-spec_heat_wavelet-method.md)

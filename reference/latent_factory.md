@@ -12,7 +12,8 @@ latent_factory(
   reduction = NULL,
   ...,
   materialize = "auto",
-  label = ""
+  label = "",
+  units = NULL
 )
 ```
 
@@ -47,6 +48,11 @@ latent_factory(
 - label:
 
   Optional label for the resulting object.
+
+- units:
+
+  Optional declared \[latent_units_record()\] captured on the encoded
+  object.
 
 ## Value
 

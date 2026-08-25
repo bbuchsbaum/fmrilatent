@@ -70,6 +70,7 @@
 <span>  reduction <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  materialize <span class="op">=</span> <span class="fu"><a href="https://rdrr.io/r/base/c.html" class="external-link">c</a></span><span class="op">(</span><span class="st">"auto"</span>, <span class="st">"handle"</span>, <span class="st">"matrix"</span><span class="op">)</span>,</span>
 <span>  label <span class="op">=</span> <span class="st">""</span>,</span>
+<span>  units <span class="op">=</span> <span class="cn">NULL</span>,</span>
 <span>  <span class="va">...</span></span>
 <span><span class="op">)</span></span></code></pre></div>
     </div>
@@ -104,6 +105,12 @@ transport-backed AWPT fits.</p></dd>
 
 <dt id="arg-label">label<a class="anchor" aria-label="anchor" href="#arg-label"></a></dt>
 <dd><p>Optional label.</p></dd>
+
+
+<dt id="arg-units">units<a class="anchor" aria-label="anchor" href="#arg-units"></a></dt>
+<dd><p>Optional declared [latent_units_record()] captured on the
+encoded object. When omitted, [latent_units()] truthfully reports
+`status = "undeclared"`.</p></dd>
 
 
 <dt id="arg--">...<a class="anchor" aria-label="anchor" href="#arg--"></a></dt>

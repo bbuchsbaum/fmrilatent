@@ -12,6 +12,7 @@ encode(
   reduction = NULL,
   materialize = c("auto", "handle", "matrix"),
   label = "",
+  units = NULL,
   ...
 )
 ```
@@ -45,6 +46,12 @@ encode(
 - label:
 
   Optional label.
+
+- units:
+
+  Optional declared \[latent_units_record()\] captured on the encoded
+  object. When omitted, \[latent_units()\] truthfully reports \`status =
+  "undeclared"\`.
 
 - ...:
 
