@@ -1,3 +1,9 @@
+# fmrilatent 0.2.1
+
+* Deferred optional `neurosurf` namespace loading until bilateral surface
+  wrapping is requested. A broken or incompatible optional installation can no
+  longer prevent core volume and latent APIs from loading.
+
 # fmrilatent 0.2.0
 
 * Added layered `latent_space_id()` records that distinguish analysis-coordinate

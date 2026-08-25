@@ -172,7 +172,7 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
               .encoder_cli_abort("wrap_decoded() requires the 'neurosurf' package.",
                          class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
             }
-            .require_bilat_neurosurfacevector_class("wrap_decoded()")
+            .register_bilat_neurosurfacevector_methods("wrap_decoded()")
             if (is.atomic(values) && is.null(dim(values))) {
               n_left <- length(latent_support(x@left))
               n_right <- length(latent_support(x@right))

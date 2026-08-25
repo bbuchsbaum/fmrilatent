@@ -32,7 +32,4 @@
   register_encoder("space_parcel", spec_space_parcel,
                    description = "Shared parcel basis template (project-only)",
                    package = pkgname)
-  if (requireNamespace("neurosurf", quietly = TRUE)) {
-    .register_bilat_neurosurfacevector_methods("bilateral surface support")
-  }
 }
