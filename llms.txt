@@ -434,6 +434,8 @@ linked and activated on site pages.
   latent object
 - [`latent_searchlight()`](latent_searchlight.md) : Apply a user-defined
   function in latent space over neighborhoods
+- [`latent_space_id()`](latent_space_id.md) : Identify latent
+  coordinates and decoder domains
 - [`latent_support()`](latent_support.md) : Extract the decoded support
   associated with a latent object
 - [`lift(`*`<ClusterReduction>`*`,`*`<spec_diffusion_wavelet>`*`)`](lift-ClusterReduction-spec_diffusion_wavelet-method.md)
