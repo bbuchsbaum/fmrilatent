@@ -11,13 +11,13 @@ Source:
 [`DESCRIPTION`](https://github.com/bbuchsbaum/fmrilatent/blob/main/DESCRIPTION)
 
 Buchsbaum B (2026). *fmrilatent: Latent Space Representations of fMRI
-Data*. R package version 0.2.0,
+Data*. R package version 0.2.1,
 <https://github.com/bbuchsbaum/fmrilatent>.
 
     @Manual{,
       title = {fmrilatent: Latent Space Representations of fMRI Data},
       author = {Bradley Buchsbaum},
       year = {2026},
-      note = {R package version 0.2.0},
+      note = {R package version 0.2.1},
       url = {https://github.com/bbuchsbaum/fmrilatent},
     }

@@ -7,7 +7,7 @@
 
     <a class="navbar-brand me-2" href="../index.html">fmrilatent</a>
 
-    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.0</small>
+    <small class="nav-text text-muted me-auto" data-bs-toggle="tooltip" data-bs-placement="bottom" title="">0.2.1</small>
 
 
     <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbar" aria-controls="navbar" aria-expanded="false" aria-label="Toggle navigation">
@@ -57,6 +57,10 @@
     </div>
 
     <div class="section level2">
+<h2 class="pkg-version" data-toc-text="0.2.1" id="fmrilatent-021">fmrilatent 0.2.1<a class="anchor" aria-label="anchor" href="#fmrilatent-021"></a></h2>
+<ul><li>Deferred optional <code>neurosurf</code> namespace loading until bilateral surface wrapping is requested. A broken or incompatible optional installation can no longer prevent core volume and latent APIs from loading.</li>
+</ul></div>
+    <div class="section level2">
 <h2 class="pkg-version" data-toc-text="0.2.0" id="fmrilatent-020">fmrilatent 0.2.0<a class="anchor" aria-label="anchor" href="#fmrilatent-020"></a></h2>
 <ul><li><p>Added layered <code><a href="../reference/latent_space_id.html">latent_space_id()</a></code> records that distinguish analysis-coordinate identity, decoder-domain identity, and decoder support while preserving a compatibility identifier for downstream consumers.</p></li>
 <li><p>Added immutable <code><a href="../reference/latent_units_record.html">latent_units_record()</a></code> declarations and <code><a href="../reference/latent_units.html">latent_units()</a></code> accessors. Legacy representations fail closed with explicitly undeclared units instead of receiving inferred scientific semantics.</p></li>
@@ -70,7 +74,8 @@
 <li><p>Derived hierarchical-template and spatial PCA component counts from returned eigensolver columns rather than requested ranks.</p></li>
 <li><p>Guarded bilateral surface wrapping by checking the <code>BilatNeuroSurfaceVector</code> class before construction.</p></li>
 </ul></div>
-  </main></div>
+  </main><aside class="col-md-3"><nav id="toc" aria-label="Table of contents"><h2>On this page</h2>
+    </nav></aside></div>
 
 
     <footer><div class="pkgdown-footer-left">

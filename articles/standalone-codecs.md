@@ -3,9 +3,6 @@
 ``` r
 
 library(fmrilatent)
-#> Warning in rgl.init(initValue, onlyNULL): RGL: unable to open X11 display
-#> Warning: 'rgl.init' failed, will use the null device.
-#> See '?rgl.useNULL' for ways to avoid this warning.
 #> 
 #> Attaching package: 'fmrilatent'
 #> The following object is masked from 'package:stats':
