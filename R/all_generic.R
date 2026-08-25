@@ -283,6 +283,42 @@ setGeneric("analysis_transform", function(x, ...) standardGeneric("analysis_tran
 #' @export
 setGeneric("basis_asset", function(x, ...) standardGeneric("basis_asset"))
 
+#' Identify latent coordinates and decoder domains
+#'
+#' Returns a structured, deterministic identity record for the coefficient
+#' coordinates and decoded output domain of a latent object. Coefficient
+#' identity excludes observation values and observation count so objects made
+#' from one fitted basis can be reused across independent data collections.
+#'
+#' @details
+#' The three identity layers have distinct meanings:
+#' \itemize{
+#'   \item `coordinate_id` identifies the ordered fitted latent axes and the
+#'   requested raw-to-analysis transform.
+#'   \item `decoder_domain_id` identifies the selected decoded domain,
+#'   ordered support, and decoder contract, independently of coefficient
+#'   values.
+#'   \item `decoder_id` identifies the complete mapping from the selected
+#'   coefficient coordinates to that decoded domain.
+#' }
+#' Identity is derived from stored receipts where possible, so handle-backed
+#' basis or loading assets are not materialized. A plain `ImplicitLatent`
+#' does not retain enough structured decoder provenance and is rejected;
+#' transport-backed implicit objects satisfy the contract.
+#'
+#' @param x A latent object.
+#' @param coordinates Coefficient coordinate system to identify.
+#' @param space Decoder output space to identify.
+#' @param ... Additional arguments passed to methods.
+#' @return A structured `fmrilatent_latent_space_id` record containing at least
+#'   `coordinate_id`, `decoder_domain_id`, and `decoder_id`.
+#' @export
+setGeneric("latent_space_id", function(x,
+                                        coordinates = c("analysis", "raw"),
+                                        space = c("native", "template"), ...) {
+  standardGeneric("latent_space_id")
+})
+
 #' Get a decoder view for a latent object
 #'
 #' @param x A latent object.

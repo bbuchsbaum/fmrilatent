@@ -1514,6 +1514,288 @@ setMethod("decode_covariance", "LatentNeuroVec",
                                            diag_only = diag_only, ...)
           })
 
+.latent_identity_hash <- function(payload) {
+  digest::digest(payload, algo = "xxhash64")
+}
+
+.latent_identity_map_receipt <- function(map) {
+  provenance <- map$provenance %||% list()
+  list(
+    contract_version = map$contract_version %||% "",
+    mode = map$mode %||% "",
+    n_source = as.integer(map$n_source),
+    n_target = as.integer(map$n_target),
+    source_domain_id = map$source_domain_id %||% "",
+    target_domain_id = map$target_domain_id %||% "",
+    target_support_order_id = provenance$target_support_order_id %||%
+      .latent_identity_hash(list(
+        class = class(map$target_support),
+        ordered_value = map$target_support
+      )),
+    decoder_id = provenance$decoder_id %||%
+      .latent_identity_hash(list(
+        basis_id = provenance$basis_id %||% "",
+        loadings_id = provenance$loadings_id %||% "",
+        source_domain_id = map$source_domain_id %||% "",
+        target_domain_id = map$target_domain_id %||% ""
+      )),
+    adjoint_convention = map$adjoint_convention %||% ""
+  )
+}
+
+.new_latent_space_id <- function(class_name, coordinates, space,
+                                 dimension, coordinate_payload,
+                                 decoder_map, decoder_payload = NULL,
+                                 child_ids = NULL) {
+  map_receipt <- .latent_identity_map_receipt(decoder_map)
+  coordinate_id <- paste0(
+    "latent-coordinate:",
+    .latent_identity_hash(list(
+      contract = "fmrilatent.coordinate-identity.v1",
+      coordinates = coordinates,
+      dimension = as.integer(dimension),
+      payload = coordinate_payload
+    ))
+  )
+  decoder_domain_id <- paste0(
+    "latent-decoder-domain:",
+    .latent_identity_hash(list(
+      contract = "fmrilatent.decoder-domain-identity.v1",
+      space = space,
+      contract_version = map_receipt$contract_version,
+      n_target = map_receipt$n_target,
+      target_domain_id = map_receipt$target_domain_id,
+      target_support_order_id = map_receipt$target_support_order_id,
+      adjoint_convention = map_receipt$adjoint_convention
+    ))
+  )
+  stable_map_decoder_id <- if (is.null(decoder_payload)) {
+    map_receipt$decoder_id
+  } else {
+    .latent_identity_hash(decoder_payload)
+  }
+  decoder_id <- paste0(
+    "latent-decoder:",
+    .latent_identity_hash(list(
+      contract = "fmrilatent.decoder-identity.v1",
+      coordinates = coordinates,
+      space = space,
+      coordinate_id = coordinate_id,
+      decoder_domain_id = decoder_domain_id,
+      map_decoder_id = stable_map_decoder_id
+    ))
+  )
+
+  structure(
+    list(
+      contract = "fmrilatent.latent-space-id.v1",
+      class = class_name,
+      coordinates = coordinates,
+      space = space,
+      dimension = as.integer(dimension),
+      coordinate_id = coordinate_id,
+      decoder_domain_id = decoder_domain_id,
+      decoder_id = decoder_id,
+      source_domain_id = coordinate_id,
+      target_domain_id = map_receipt$target_domain_id,
+      target_support_order_id = map_receipt$target_support_order_id,
+      child_ids = child_ids
+    ),
+    class = c("fmrilatent_latent_space_id", "list")
+  )
+}
+
+.explicit_simple_latent_space_id <- function(x, coordinates, space) {
+  raw_map <- .latent_loadings_map(x)
+  decoder_map <- .transform_linear_map_coordinates(
+    raw_map,
+    analysis_transform(x),
+    coordinates = coordinates
+  )
+  provenance <- raw_map$provenance %||% list()
+  coordinate_payload <- list(
+    representation = "explicit_decoder_columns",
+    class = class(x)[1L],
+    family = latent_meta(x)$family %||% "explicit",
+    loadings_id = provenance$loadings_id %||% provenance$basis_id %||% "",
+    analysis_transform_id = if (coordinates == "analysis") {
+      provenance$analysis_transform_id %||% ""
+    } else {
+      "raw_coordinates"
+    }
+  )
+
+  .new_latent_space_id(
+    class_name = class(x)[1L],
+    coordinates = coordinates,
+    space = space,
+    dimension = raw_map$n_source,
+    coordinate_payload = coordinate_payload,
+    decoder_map = decoder_map,
+    decoder_payload = list(
+      contract = "fmrilatent.explicit-stable-decoder.v1",
+      class = class(x)[1L],
+      coordinates = coordinates,
+      loadings_id = provenance$loadings_id %||% provenance$basis_id %||% "",
+      analysis_transform_id = if (coordinates == "analysis") {
+        provenance$analysis_transform_id %||% ""
+      } else {
+        "raw_coordinates"
+      },
+      target_domain_id = decoder_map$target_domain_id %||% "",
+      target_support_order_id =
+        decoder_map$provenance$target_support_order_id %||% ""
+    )
+  )
+}
+
+.explicit_composite_latent_space_id <- function(x, coordinates, space) {
+  children <- .explicit_latent_children(x)
+  child_names <- names(children)
+  if (is.null(child_names)) {
+    child_names <- as.character(seq_along(children))
+  }
+  child_ids <- stats::setNames(lapply(children, function(child) {
+    latent_space_id(child, coordinates = coordinates, space = space)
+  }), child_names)
+  coordinate_ids <- stats::setNames(
+    vapply(child_ids, `[[`, character(1), "coordinate_id"),
+    child_names
+  )
+  child_decoder_ids <- stats::setNames(
+    vapply(child_ids, `[[`, character(1), "decoder_id"),
+    child_names
+  )
+  map <- decoder(x, coordinates = coordinates, space = space)
+
+  .new_latent_space_id(
+    class_name = class(x)[1L],
+    coordinates = coordinates,
+    space = space,
+    dimension = map$n_source,
+    coordinate_payload = list(
+      representation = "ordered_explicit_composite",
+      class = class(x)[1L],
+      child_names = child_names,
+      child_coordinate_ids = coordinate_ids
+    ),
+    decoder_map = map,
+    decoder_payload = list(
+      contract = "fmrilatent.composite-stable-decoder.v1",
+      class = class(x)[1L],
+      coordinates = coordinates,
+      space = space,
+      child_names = child_names,
+      child_decoder_ids = child_decoder_ids,
+      target_domain_id = map$target_domain_id %||% ""
+    ),
+    child_ids = child_ids
+  )
+}
+
+.transport_latent_space_id <- function(x, coordinates, space) {
+  selected_map <- decoder(x, coordinates = coordinates, space = space)
+  template_map <- decoder(x, coordinates = coordinates, space = "template")
+  transform_receipt <- .decoder_analysis_transform_receipt(
+    analysis_transform(x),
+    selected_map$n_source
+  )
+  template_receipt <- .latent_identity_map_receipt(template_map)
+
+  .new_latent_space_id(
+    class_name = class(x)[1L],
+    coordinates = coordinates,
+    space = space,
+    dimension = selected_map$n_source,
+    coordinate_payload = list(
+      representation = "transport_basis_coordinates",
+      class = class(x)[1L],
+      family = latent_meta(x)$family %||% "transport",
+      template_source_domain_id = template_receipt$source_domain_id,
+      template_target_domain_id = template_receipt$target_domain_id,
+      template_decoder_id = template_receipt$decoder_id,
+      analysis_transform_id = if (coordinates == "analysis") {
+        .latent_identity_hash(transform_receipt)
+      } else {
+        "raw_coordinates"
+      }
+    ),
+    decoder_map = selected_map
+  )
+}
+
+#' @export
+#' @rdname latent_space_id
+setMethod("latent_space_id", "LatentNeuroVec",
+          function(x, coordinates = c("analysis", "raw"),
+                   space = c("native", "template"), ...) {
+            coordinates <- match.arg(coordinates)
+            space <- match.arg(space)
+            .explicit_simple_latent_space_id(x, coordinates, space)
+          })
+
+#' @export
+#' @rdname latent_space_id
+setMethod("latent_space_id", "LatentNeuroSurfaceVector",
+          function(x, coordinates = c("analysis", "raw"),
+                   space = c("native", "template"), ...) {
+            coordinates <- match.arg(coordinates)
+            space <- match.arg(space)
+            .explicit_simple_latent_space_id(x, coordinates, space)
+          })
+
+#' @export
+#' @rdname latent_space_id
+setMethod("latent_space_id", "BilatLatentNeuroSurfaceVector",
+          function(x, coordinates = c("analysis", "raw"),
+                   space = c("native", "template"), ...) {
+            coordinates <- match.arg(coordinates)
+            space <- match.arg(space)
+            .explicit_composite_latent_space_id(x, coordinates, space)
+          })
+
+#' @export
+#' @rdname latent_space_id
+setMethod("latent_space_id", "BlockLatentNeuroVector",
+          function(x, coordinates = c("analysis", "raw"),
+                   space = c("native", "template"), ...) {
+            coordinates <- match.arg(coordinates)
+            space <- match.arg(space)
+            .explicit_composite_latent_space_id(x, coordinates, space)
+          })
+
+#' @export
+#' @rdname latent_space_id
+setMethod("latent_space_id", "ImplicitLatent",
+          function(x, coordinates = c("analysis", "raw"),
+                   space = c("native", "template"), ...) {
+            if (!.is_transport_latent(x)) {
+              .encoder_cli_abort(
+                paste0(
+                  "latent_space_id() is only defined for transport-backed ",
+                  "ImplicitLatent objects."
+                ),
+                class = "fmrilatent_error_unsupported_operation"
+              )
+            }
+            coordinates <- match.arg(coordinates)
+            space <- match.arg(space)
+            .transport_latent_space_id(x, coordinates, space)
+          })
+
+#' @export
+print.fmrilatent_latent_space_id <- function(x, ...) {
+  cat("Latent space identity\n")
+  cat("  class: ", x$class, "\n", sep = "")
+  cat("  coordinates: ", x$coordinates, "\n", sep = "")
+  cat("  decoder space: ", x$space, "\n", sep = "")
+  cat("  dimension: ", x$dimension, "\n", sep = "")
+  cat("  coordinate_id: ", x$coordinate_id, "\n", sep = "")
+  cat("  decoder_domain_id: ", x$decoder_domain_id, "\n", sep = "")
+  cat("  decoder_id: ", x$decoder_id, "\n", sep = "")
+  invisible(x)
+}
+
 #' @export
 #' @rdname project_effect
 setMethod("project_effect", "LatentNeuroVec",
