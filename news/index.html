@@ -61,6 +61,8 @@
 <ul><li><p>Added layered <code><a href="../reference/latent_space_id.html">latent_space_id()</a></code> records that distinguish analysis-coordinate identity, decoder-domain identity, and decoder support while preserving a compatibility identifier for downstream consumers.</p></li>
 <li><p>Added immutable <code><a href="../reference/latent_units_record.html">latent_units_record()</a></code> declarations and <code><a href="../reference/latent_units.html">latent_units()</a></code> accessors. Legacy representations fail closed with explicitly undeclared units instead of receiving inferred scientific semantics.</p></li>
 <li><p>Made decoder-domain metadata explicit so integration layers can validate spatial identity from the latent object rather than placeholder transport labels.</p></li>
+<li><p>Updated decoded surface matrices to the current <code>neurosurf</code> full-domain row contract while retaining the ordered support indices.</p></li>
+<li><p>Corrected the <code>rgsp</code> remote source and made the hierarchical Laplacian solver use its symmetric smallest-magnitude path for stable low modes.</p></li>
 <li><p>Fixed active-pencil wavelet round-trips for sparse, non-contiguous masks by lifting compact active runs rather than padded full-grid pencils.</p></li>
 <li><p>Fixed HRBF tiny-ROI sparse fallback construction for non-contiguous masks.</p></li>
 <li><p>Clamped inferred temporal Slepian handle ranks to the valid <code>[1, n_time]</code> range.</p></li>
