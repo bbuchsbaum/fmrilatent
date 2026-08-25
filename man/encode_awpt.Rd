@@ -22,6 +22,7 @@ encode_awpt(
   center = TRUE,
   run_info = NULL,
   label = "",
+  units = NULL,
   ...
 )
 }
@@ -60,6 +61,9 @@ encode_awpt(
 \item{run_info}{Optional run metadata; \code{run_lengths} control temporal blocks.}
 
 \item{label}{Optional label stored in metadata.}
+
+\item{units}{Optional declared [latent_units_record()] captured on the
+encoded object.}
 
 \item{...}{Reserved for future extensions.}
 }

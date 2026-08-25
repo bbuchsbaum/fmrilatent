@@ -11,7 +11,8 @@ latent_factory(
   reduction = NULL,
   ...,
   materialize = "auto",
-  label = ""
+  label = "",
+  units = NULL
 )
 }
 \arguments{
@@ -30,6 +31,9 @@ supported aliases.}
 \item{materialize}{"handle", "matrix", or "auto" (default "handle").}
 
 \item{label}{Optional label for the resulting object.}
+
+\item{units}{Optional declared [latent_units_record()] captured on the
+encoded object.}
 }
 \value{
 The class follows the same per-family contract as [encode()]:

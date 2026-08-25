@@ -111,6 +111,7 @@ Collate:
     'latent_neurovector.R'
     'latent_indexing.R'
     'latent_methods.R'
+    'latent_units.R'
     'parcel_basis.R'
     'pca_spatial.R'
     'searchlight_utils.R'

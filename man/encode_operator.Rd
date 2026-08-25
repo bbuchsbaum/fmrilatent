@@ -24,6 +24,7 @@ encode_operator(
   max_iter = 200L,
   tol = 1e-06,
   label = "",
+  units = NULL,
   ...
 )
 }
@@ -71,6 +72,9 @@ explicitly or via \code{field_operator$provenance}.}
 \item{tol}{Relative convergence tolerance for sparse AWPT optimization.}
 
 \item{label}{Optional label stored in metadata.}
+
+\item{units}{Optional declared [latent_units_record()] captured on the
+encoded object.}
 
 \item{...}{Reserved for future extensions.}
 }

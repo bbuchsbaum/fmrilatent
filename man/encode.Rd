@@ -11,6 +11,7 @@ encode(
   reduction = NULL,
   materialize = c("auto", "handle", "matrix"),
   label = "",
+  units = NULL,
   ...
 )
 }
@@ -30,6 +31,10 @@ transport-backed AWPT fits.}
 \item{materialize}{"handle", "matrix", or "auto" (default "handle").}
 
 \item{label}{Optional label.}
+
+\item{units}{Optional declared [latent_units_record()] captured on the
+encoded object. When omitted, [latent_units()] truthfully reports
+`status = "undeclared"`.}
 
 \item{...}{Additional arguments passed to methods.}
 }

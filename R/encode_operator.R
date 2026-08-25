@@ -45,6 +45,8 @@ NULL
 #' @param center Logical; if \code{TRUE}, center target samples before solving.
 #' @param run_info Optional run metadata carried on the resulting latent object.
 #' @param label Optional label stored in metadata.
+#' @param units Optional declared [latent_units_record()] captured on the
+#'   encoded object.
 #' @param ... Reserved for future extensions.
 #' @return A \code{TransportLatent} object.
 #' @export
@@ -59,7 +61,7 @@ encode_operator <- function(x, template, field_operator = NULL, observation_oper
                             sparse_mode = c("none", "group_l2", "lasso"),
                             max_iter = 200L,
                             tol = 1e-6,
-                            label = "", ...) {
+                            label = "", units = NULL, ...) {
   sparse_mode <- match.arg(sparse_mode)
   field_operator <- .resolve_field_operator(
     field_operator = field_operator,
@@ -171,7 +173,7 @@ encode_operator <- function(x, template, field_operator = NULL, observation_oper
   }
   coeff_raw <- t(analysis_transform_use$to_raw(t(coeff_analysis)))
 
-  transport_latent(
+  value <- transport_latent(
     coeff_raw = coeff_raw,
     coeff_analysis = coeff_analysis,
     basis_asset = template,
@@ -196,6 +198,7 @@ encode_operator <- function(x, template, field_operator = NULL, observation_oper
       target_mask_source = target_info$source
     )
   )
+  .with_latent_units(value, units)
 }
 
 #' Encode data using transport-backed latent semantics
@@ -220,6 +223,8 @@ encode_operator <- function(x, template, field_operator = NULL, observation_oper
 #' @param center Logical; if \code{TRUE}, center target samples before solving.
 #' @param run_info Optional run metadata carried on the resulting latent object.
 #' @param label Optional label stored in metadata.
+#' @param units Optional declared [latent_units_record()] captured on the
+#'   encoded object.
 #' @param ... Reserved for future extensions.
 #' @return A \code{TransportLatent} object.
 #' @export
@@ -234,7 +239,7 @@ encode_transport <- function(x, basis_asset, field_operator = NULL, observation_
                              sparse_mode = c("none", "group_l2", "lasso"),
                              max_iter = 200L,
                              tol = 1e-6,
-                             label = "", ...) {
+                             label = "", units = NULL, ...) {
   encode_operator(
     x = x,
     template = basis_asset,
@@ -255,6 +260,7 @@ encode_transport <- function(x, basis_asset, field_operator = NULL, observation_
     center = center,
     run_info = run_info,
     label = label,
+    units = units,
     ...
   )
 }
@@ -279,6 +285,8 @@ encode_transport <- function(x, basis_asset, field_operator = NULL, observation_
 #' @param center Logical; if \code{TRUE}, center target samples before solving.
 #' @param run_info Optional run metadata; \code{run_lengths} control temporal blocks.
 #' @param label Optional label stored in metadata.
+#' @param units Optional declared [latent_units_record()] captured on the
+#'   encoded object.
 #' @param ... Reserved for future extensions.
 #' @details
 #' AWPT does not expose a separate ridge penalty. The returned metadata records
@@ -295,7 +303,7 @@ encode_awpt <- function(x, basis_asset, field_operator = NULL, observation_opera
                         max_iter = 200L,
                         tol = 1e-6,
                         center = TRUE,
-                        run_info = NULL, label = "", ...) {
+                        run_info = NULL, label = "", units = NULL, ...) {
   sparse_mode <- match.arg(sparse_mode)
   if (!is_awpt_template(basis_asset)) {
     .encoder_cli_abort(
@@ -327,6 +335,7 @@ encode_awpt <- function(x, basis_asset, field_operator = NULL, observation_opera
     center = center,
     run_info = run_info,
     label = label,
+    units = units,
     ...
   )
 }

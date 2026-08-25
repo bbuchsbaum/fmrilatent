@@ -265,6 +265,9 @@
 #' @param reduction Optional GraphReduction (for spatial specs).
 #' @param materialize "handle", "matrix", or "auto" (default "handle").
 #' @param label Optional label.
+#' @param units Optional declared [latent_units_record()] captured on the
+#'   encoded object. When omitted, [latent_units()] truthfully reports
+#'   `status = "undeclared"`.
 #' @param ... Additional arguments passed to methods.
 #' @return The return class depends on the spec family:
 #'   \describe{
@@ -322,14 +325,14 @@
 #' @export
 encode <- function(x, spec, mask, reduction = NULL,
                    materialize = c("auto", "handle", "matrix"),
-                   label = "", ...) {
+                   label = "", units = NULL, ...) {
   UseMethod("encode")
 }
 
 #' @export
 encode.default <- function(x, spec, mask, reduction = NULL,
                            materialize = c("auto", "handle", "matrix"),
-                           label = "", ...) {
+                           label = "", units = NULL, ...) {
   .encoder_cli_abort(
     paste0("No encode method for class: ", paste(class(x), collapse = ",")),
     class = "fmrilatent_error_unsupported_encode_input"
@@ -339,9 +342,9 @@ encode.default <- function(x, spec, mask, reduction = NULL,
 #' @export
 encode.matrix <- function(x, spec, mask, reduction = NULL,
                           materialize = c("auto", "handle", "matrix"),
-                          label = "", ...) {
+                          label = "", units = NULL, ...) {
   materialize <- match.arg(materialize)
-  encode_spec(
+  value <- encode_spec(
     x, spec,
     mask = mask,
     reduction = reduction,
@@ -349,16 +352,17 @@ encode.matrix <- function(x, spec, mask, reduction = NULL,
     label = label,
     ...
   )
+  .with_latent_units(value, units)
 }
 
 #' @export
 encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
                             materialize = c("handle", "auto", "matrix"),
-                            label = "", ...) {
+                            label = "", units = NULL, ...) {
   materialize <- match.arg(materialize)
   X <- t(neuroim2::series(x, mask != 0))  # series returns voxels x time, transpose to time x voxels
   encode(X, spec, mask = mask, reduction = reduction,
-         materialize = materialize, label = label, ...)
+         materialize = materialize, label = label, units = units, ...)
 }
 
 # --- Factory helper -----------------------------------------------------------
@@ -374,6 +378,8 @@ encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
 #' @param ... Passed to spec constructors and encode().
 #' @param materialize "handle", "matrix", or "auto" (default "handle").
 #' @param label Optional label for the resulting object.
+#' @param units Optional declared [latent_units_record()] captured on the
+#'   encoded object.
 #' @return The class follows the same per-family contract as [encode()]:
 #'   explicit spatial families and explicit temporal families return a
 #'   [LatentNeuroVec] (a concrete `ExplicitLatent`); the spatiotemporal
@@ -400,7 +406,8 @@ encode.NeuroVec <- function(x, spec, mask, reduction = NULL,
 #' shared `basis_asset` and a subject `field_operator`; use [encode_awpt()] or
 #' [encode_operator()] for AWPT subject fitting.
 #' @export
-latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize = "auto", label = "") {
+latent_factory <- function(family, x, mask, reduction = NULL, ...,
+                           materialize = "auto", label = "", units = NULL) {
   if (identical(family, "awpt")) {
     .encoder_cli_abort(
       paste0("latent_factory() does not support AWPT because AWPT requires a shared ",
@@ -476,7 +483,14 @@ latent_factory <- function(family, x, mask, reduction = NULL, ..., materialize =
       spec_st(time = time_spec, space = space_spec)
     }
   )
-  encode(x, spec, mask = mask, reduction = reduction, materialize = materialize, label = label)
+  encode(
+    x, spec,
+    mask = mask,
+    reduction = reduction,
+    materialize = materialize,
+    label = label,
+    units = units
+  )
 }
 #' Dispatch standard encoding based on spec type
 #'

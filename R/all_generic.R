@@ -319,6 +319,20 @@ setGeneric("latent_space_id", function(x,
   standardGeneric("latent_space_id")
 })
 
+#' Describe Latent Response and Coordinate Units
+#'
+#' Returns the truthful unit and normalization contract retained on a latent
+#' object. Legacy objects that predate encode-time capture return a structured
+#' record with `status = "undeclared"`; no units are inferred from numeric
+#' values or representation class.
+#'
+#' @param x A latent object.
+#' @param ... Additional arguments passed to methods.
+#' @return An `fmrilatent_units` record with a deterministic
+#'   `compatibility_id` and human-readable fields.
+#' @export
+setGeneric("latent_units", function(x, ...) standardGeneric("latent_units"))
+
 #' Get a decoder view for a latent object
 #'
 #' @param x A latent object.
