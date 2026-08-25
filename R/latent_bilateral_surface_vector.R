@@ -2,7 +2,9 @@
 #' @importFrom methods setMethod setValidity new
 NULL
 
-.bilat_neurosurfacevector_as_matrix <- function(x, ...) {
+#' @rawNamespace S3method(as.matrix,BilatNeuroSurfaceVector)
+#' @noRd
+as.matrix.BilatNeuroSurfaceVector <- function(x, ...) {
   left_obj <- neurosurf::left(x)
   right_obj <- neurosurf::right(x)
   mat_left <- Matrix::Matrix(as.matrix(left_obj), sparse = FALSE)
@@ -23,9 +25,6 @@ NULL
   out
 }
 
-.bilat_neurosurfacevector_registry <- new.env(parent = emptyenv())
-.bilat_neurosurfacevector_registry$as_matrix <- FALSE
-
 .require_bilat_neurosurfacevector_class <- function(context) {
   caller <- rlang::caller_env()
   tryCatch(
@@ -38,16 +37,6 @@ NULL
       )
     }
   )
-}
-
-.register_bilat_neurosurfacevector_methods <- function(context) {
-  .require_bilat_neurosurfacevector_class(context)
-  if (!isTRUE(.bilat_neurosurfacevector_registry$as_matrix)) {
-    methods::setMethod("as.matrix", "BilatNeuroSurfaceVector",
-                       .bilat_neurosurfacevector_as_matrix)
-    .bilat_neurosurfacevector_registry$as_matrix <- TRUE
-  }
-  invisible(TRUE)
 }
 
 #' Construct a bilateral surface latent object
@@ -172,7 +161,7 @@ setMethod("wrap_decoded", "BilatLatentNeuroSurfaceVector",
               .encoder_cli_abort("wrap_decoded() requires the 'neurosurf' package.",
                          class = "fmrilatent_error_missing_dependency", call = rlang::caller_env())
             }
-            .register_bilat_neurosurfacevector_methods("wrap_decoded()")
+            .require_bilat_neurosurfacevector_class("wrap_decoded()")
             if (is.atomic(values) && is.null(dim(values))) {
               n_left <- length(latent_support(x@left))
               n_right <- length(latent_support(x@right))

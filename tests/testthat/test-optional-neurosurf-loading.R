@@ -5,15 +5,13 @@ test_that("package load does not probe the optional neurosurf namespace", {
   expect_false(grepl("requireNamespace", on_load_source, fixed = TRUE))
 })
 
-test_that("bilateral wrapping owns lazy neurosurf method registration", {
-  method_source <- paste(
-    deparse(body(methods::selectMethod(
-      "wrap_decoded", "BilatLatentNeuroSurfaceVector"
-    ))),
-    collapse = "\n"
-  )
-
-  expect_true(grepl(
-    ".register_bilat_neurosurfacevector_methods", method_source, fixed = TRUE
+test_that("optional bilateral surface conversion uses registered S3 dispatch", {
+  expect_true(is.function(getS3method(
+    "as.matrix", "BilatNeuroSurfaceVector", optional = TRUE
+  )))
+  expect_false(exists(
+    ".register_bilat_neurosurfacevector_methods",
+    envir = asNamespace("fmrilatent"),
+    inherits = FALSE
   ))
 })
