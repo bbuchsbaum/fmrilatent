@@ -9,6 +9,10 @@
 * Made decoder-domain metadata explicit so integration layers can validate
   spatial identity from the latent object rather than placeholder transport
   labels.
+* Updated decoded surface matrices to the current `neurosurf` full-domain row
+  contract while retaining the ordered support indices.
+* Corrected the `rgsp` remote source and made the hierarchical Laplacian solver
+  use its symmetric smallest-magnitude path for stable low modes.
 
 * Fixed active-pencil wavelet round-trips for sparse, non-contiguous masks by
   lifting compact active runs rather than padded full-grid pencils.

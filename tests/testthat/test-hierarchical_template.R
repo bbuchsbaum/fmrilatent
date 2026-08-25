@@ -169,12 +169,14 @@ test_that("hierarchical Laplacian eigensolver returns finite low modes", {
     sparse = TRUE
   )
 
-  eig <- fmrilatent:::.hierarchical_laplacian_eigs(L, k = 2L)
+  for (iteration in seq_len(20L)) {
+    eig <- fmrilatent:::.hierarchical_laplacian_eigs(L, k = 2L)
 
-  expect_equal(dim(eig$vectors), c(4L, 2L))
-  expect_true(all(is.finite(eig$values)))
-  expect_equal(eig$values, sort(eig$values), tolerance = 1e-8)
-  expect_lt(abs(eig$values[[1L]]), 1e-6)
+    expect_equal(dim(eig$vectors), c(4L, 2L))
+    expect_true(all(is.finite(eig$values)))
+    expect_equal(eig$values, sort(eig$values), tolerance = 1e-8)
+    expect_lt(abs(eig$values[[1L]]), 1e-6)
+  }
 })
 
 test_that("build_hierarchical_template creates valid template with single level", {

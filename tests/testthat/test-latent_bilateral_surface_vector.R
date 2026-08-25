@@ -44,11 +44,19 @@ test_that("BilatLatentNeuroSurfaceVector reconstructs bilateral outputs", {
 
   wrapped <- wrap_decoded(bilat, mat)
   expect_s4_class(wrapped, "BilatNeuroSurfaceVector")
-  expect_equal(as.matrix(as.matrix(wrapped)), t(mat), tolerance = 1e-8)
+  wrapped_values <- as.matrix(as.matrix(wrapped))
+  represented <- c(1:3, 5:7)
+  expect_equal(wrapped_values[represented, , drop = FALSE], t(mat), tolerance = 1e-8)
+  expect_equal(wrapped_values[c(4, 8), , drop = FALSE], matrix(0, 2, nrow(mat)),
+               tolerance = 1e-8)
 
   wrapped_one <- wrap_decoded(bilat, mat[1, ])
   expect_s4_class(wrapped_one, "BilatNeuroSurfaceVector")
-  expect_equal(as.matrix(as.matrix(wrapped_one)), matrix(mat[1, ], ncol = 1), tolerance = 1e-8)
+  wrapped_one_values <- as.matrix(as.matrix(wrapped_one))
+  expect_equal(wrapped_one_values[represented, , drop = FALSE],
+               matrix(mat[1, ], ncol = 1), tolerance = 1e-8)
+  expect_equal(wrapped_one_values[c(4, 8), , drop = FALSE], matrix(0, 2, 1),
+               tolerance = 1e-8)
 })
 
 test_that("BilatLatentNeuroSurfaceVector supports decode and ROI splitting", {

@@ -147,5 +147,7 @@ test_that("ImplicitLatent can wrap decoded surface outputs", {
   expect_s4_class(wrapped_vector, "NeuroSurface")
   expect_equal(as.integer(neuroim2::indices(wrapped_matrix)), support)
   expect_equal(as.integer(neuroim2::indices(wrapped_vector)), support)
-  expect_equal(as.matrix(wrapped_matrix), t(full), tolerance = 1e-8)
+  wrapped_values <- as.matrix(wrapped_matrix)
+  expect_equal(wrapped_values[support, , drop = FALSE], t(full), tolerance = 1e-8)
+  expect_equal(wrapped_values[4, ], rep(0, nrow(full)), tolerance = 1e-8)
 })

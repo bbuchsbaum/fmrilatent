@@ -25,7 +25,10 @@ fake_surface_geometry <- function(n_nodes = 4L) {
       ),
       class = c("mesh3d", "shape3d")
     )
-    graph <- structure(list(), class = "igraph")
+    graph <- getExportedValue("igraph", "make_empty_graph")(
+      n = n_nodes,
+      directed = FALSE
+    )
     geom <- methods::new(
       "SurfaceGeometry",
       mesh = mesh,

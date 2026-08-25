@@ -47,7 +47,9 @@ test_that("LatentNeuroSurfaceVector reconstructs and wraps surface outputs", {
   expect_s4_class(wrapped_matrix, "NeuroSurfaceVector")
   expect_s4_class(wrapped_vector, "NeuroSurface")
   expect_equal(as.integer(neuroim2::indices(wrapped_matrix)), 1:3)
-  expect_equal(as.matrix(wrapped_matrix), t(mat), tolerance = 1e-8)
+  wrapped_values <- as.matrix(wrapped_matrix)
+  expect_equal(wrapped_values[1:3, , drop = FALSE], t(mat), tolerance = 1e-8)
+  expect_equal(wrapped_values[4, ], rep(0, nrow(mat)), tolerance = 1e-8)
 })
 
 test_that("LatentNeuroSurfaceVector supports coefficient decoding and covariance pushforward", {

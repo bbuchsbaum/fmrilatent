@@ -124,7 +124,10 @@ NULL
     )
   }
 
-  neurosurf::NeuroSurfaceVector(domain, support, t(values))
+  n_nodes <- .surface_node_count(domain, context = context)
+  full_values <- matrix(0, nrow = n_nodes, ncol = nrow(values))
+  full_values[support, ] <- t(values)
+  neurosurf::NeuroSurfaceVector(domain, support, full_values)
 }
 
 #' Construct an ImplicitLatent object

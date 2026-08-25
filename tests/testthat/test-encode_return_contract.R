@@ -40,6 +40,7 @@ test_that("wavelet_active seam aborts if the inner latent has the wrong class", 
 })
 
 test_that("diffusion-global latent emits no dense warning (expect_dense)", {
+  skip_if_not_installed("rgsp")
   set.seed(1)
   dims <- c(6, 6, 4)
   mask <- neuroim2::LogicalNeuroVol(array(TRUE, dims), neuroim2::NeuroSpace(dims))

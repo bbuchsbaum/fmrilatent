@@ -448,13 +448,25 @@ setMethod("save_template", signature(template = "HierarchicalBasisTemplate"),
     .encoder_cli_abort("RSpectra is required to build hierarchical templates",
                        class = "fmrilatent_error_missing_dependency")
   }
+  solver_matrix <- if (inherits(L, "symmetricMatrix")) {
+    methods::as(L, "generalMatrix")
+  } else {
+    L
+  }
   eig <- tryCatch(
-    RSpectra::eigs(L, k = k, which = "LM", sigma = 0),
+    RSpectra::eigs_sym(solver_matrix, k = k, which = "SM"),
     error = function(e) e
   )
   if (!.hierarchical_eigs_is_usable(eig, k)) {
+    shifted <- solver_matrix + Matrix::Diagonal(
+      n,
+      x = rep(sqrt(.Machine$double.eps), n)
+    )
+    if (inherits(shifted, "symmetricMatrix")) {
+      shifted <- methods::as(shifted, "generalMatrix")
+    }
     eig <- tryCatch(
-      RSpectra::eigs(L, k = k, which = "LM", sigma = sqrt(.Machine$double.eps)),
+      RSpectra::eigs_sym(shifted, k = k, which = "SM"),
       error = function(e) e
     )
   }

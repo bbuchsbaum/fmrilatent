@@ -11,7 +11,13 @@
     V <- prod(dim3)
     parcels <- rep(seq_len(3L), length.out = V)
     red <- make_cluster_reduction(mask_vol, parcels)
-    tpl <- parcel_basis_template(red, basis_slepian(k = 2))
+    T <- 8L
+    Y <- outer(
+      seq_len(T),
+      seq_len(V),
+      function(i, j) sin(i * j / 3) + cos((i + 2 * j) / 5)
+    )
+    tpl <- parcel_basis_template(red, basis_pca(k = 2), data = Y)
     k <- template_rank(tpl)
     I_op <- diag(V)
     obs <- list(
@@ -22,8 +28,6 @@
       source_domain_id = "template",
       target_domain_id = "native"
     )
-    T <- 8L
-    Y <- matrix(rnorm(T * V), nrow = T, ncol = V)
     lat <- encode_transport(Y, basis_asset = tpl, field_operator = obs,
                             lambda = 1e-3, center = TRUE)
     cache <<- list(Y = Y, mask_vol = mask_vol, V = V, k = k, lat = lat)

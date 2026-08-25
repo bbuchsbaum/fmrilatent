@@ -51,7 +51,7 @@ Remotes:
     bbuchsbaum/neuroim2,
     bbuchsbaum/neuroatlas,
     bbuchsbaum/neurosurf,
-    bbuchsbaum/rgsp
+    rgsp=bbuchsbaum/graphsp
 VignetteBuilder: knitr
 Config/testthat/edition: 3
 LinkingTo:
