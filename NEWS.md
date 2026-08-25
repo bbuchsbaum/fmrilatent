@@ -1,6 +1,14 @@
-# fmrilatent 0.1.0
+# fmrilatent 0.2.0
 
-## Development
+* Added layered `latent_space_id()` records that distinguish analysis-coordinate
+  identity, decoder-domain identity, and decoder support while preserving a
+  compatibility identifier for downstream consumers.
+* Added immutable `latent_units_record()` declarations and `latent_units()`
+  accessors. Legacy representations fail closed with explicitly undeclared
+  units instead of receiving inferred scientific semantics.
+* Made decoder-domain metadata explicit so integration layers can validate
+  spatial identity from the latent object rather than placeholder transport
+  labels.
 
 * Fixed active-pencil wavelet round-trips for sparse, non-contiguous masks by
   lifting compact active runs rather than padded full-grid pencils.
