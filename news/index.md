@@ -2,6 +2,12 @@
 
 ## fmrilatent 0.2.1
 
+- `src/Makevars` now links `$(LAPACK_LIBS) $(BLAS_LIBS) $(FLIBS)`,
+  matching `src/Makevars.win`. Builds against an R that uses an external
+  LAPACK (e.g. Debian/Ubuntu `r-base-core`) no longer fail to load with
+  `undefined symbol: dstev_`
+  ([\#1](https://github.com/bbuchsbaum/fmrilatent/issues/1)).
+
 - Deferred optional `neurosurf` namespace loading until bilateral
   surface wrapping is requested. A broken or incompatible optional
   installation can no longer prevent core volume and latent APIs from

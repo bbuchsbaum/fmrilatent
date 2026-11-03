@@ -333,7 +333,7 @@ data.frame(
   max_gram_error = signif(gram_error, 3)
 )
 #>   coarse_atoms detail_atoms max_gram_error
-#> 1            2            3       1.07e-15
+#> 1            2            3       2.15e-15
 ```
 
 ## What to Use When
